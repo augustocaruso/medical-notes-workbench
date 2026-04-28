@@ -56,6 +56,19 @@ def main() -> int:
             "with locally downloaded Obsidian image embeds."
         ),
         "contextFileName": "GEMINI.md",
+        "settings": [
+            {
+                "name": "SerpAPI key",
+                "envVar": "SERPAPI_KEY",
+                "description": (
+                    "Optional Google Images search key. Get one at "
+                    "https://serpapi.com/ by creating an account and copying "
+                    "the API key from your dashboard. Leave blank to use only "
+                    "Wikimedia."
+                ),
+                "sensitive": False,
+            }
+        ],
     }
     (DIST / "gemini-extension.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",

@@ -134,6 +134,15 @@ Instalação auto-updatable para usuários:
 gemini extensions install https://github.com/augustocaruso/medical-notes-enricher.git --ref=gemini-cli-extension --auto-update --consent
 ```
 
+Configuração da SerpAPI:
+
+```bash
+gemini extensions config medical-notes-enricher SERPAPI_KEY
+```
+
+A chave vem do dashboard em https://serpapi.com/. Sem ela, `web_search` devolve
+`[]` e a extensão usa apenas as outras fontes habilitadas.
+
 Como `dist/` é artefato gerado, não versionar no `main`.
 
 ### Adaptando pra outro orquestrador (Claude Code skill, Cursor, etc.)

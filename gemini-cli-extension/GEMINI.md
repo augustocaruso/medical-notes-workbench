@@ -19,6 +19,10 @@ Operational rules:
   Obsidian vault path before running the orchestrator.
 - If `SERPAPI_KEY` is present in `.env`, web image search can complement
   Wikimedia. Without it, `web_search` returns an empty list by design.
+- If the user asks where to get SerpAPI, direct them to
+  https://serpapi.com/ and tell them to create an account, open the dashboard,
+  copy the API key, then run
+  `gemini extensions config medical-notes-enricher SERPAPI_KEY`.
 
 Useful extension commands:
 

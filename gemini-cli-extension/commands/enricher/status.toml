@@ -9,7 +9,7 @@ Cheque:
 2. Se `config.toml` existe.
 3. Se `[vault].path` esta preenchido.
 4. Se `.venv` existe e `.venv/bin/python -m enricher --help` funciona.
-5. Se `.env` tem `SERPAPI_KEY` preenchida, sem imprimir a chave.
+5. Se `.env` tem `SERPAPI_KEY` preenchida, sem imprimir a chave. Se faltar, instrua: crie uma conta em https://serpapi.com/, copie a API key no dashboard e rode `gemini extensions config medical-notes-enricher SERPAPI_KEY`.
 
 Responda em portugues com pronto / pendente e proximas acoes concretas.
 """

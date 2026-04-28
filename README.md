@@ -111,6 +111,16 @@ Instalação auto-updatable para usuários:
 gemini extensions install https://github.com/augustocaruso/medical-notes-enricher.git --ref=gemini-cli-extension --auto-update --consent
 ```
 
+Durante/apos a instalação, configure a SerpAPI para busca web:
+
+```bash
+gemini extensions config medical-notes-enricher SERPAPI_KEY
+```
+
+Para obter a chave, crie uma conta em [SerpAPI](https://serpapi.com/), abra o
+dashboard e copie a API key. Sem essa chave, a extensão ainda funciona com
+Wikimedia, mas `web_search` fica desativado.
+
 ## Estrutura
 
 ```

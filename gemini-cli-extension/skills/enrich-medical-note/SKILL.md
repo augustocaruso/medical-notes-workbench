@@ -80,5 +80,8 @@ Reporte ao usuário:
 - **Vault não configurado**: peça o caminho e atualize `config.toml`.
 - **Gemini CLI sem login**: peça para autenticar o Gemini CLI.
 - **Sem `SERPAPI_KEY`**: `web_search` retorna `[]`; Wikimedia ainda funciona.
+  Para habilitar, peça ao usuário criar conta em https://serpapi.com/, copiar a
+  API key do dashboard e rodar
+  `gemini extensions config medical-notes-enricher SERPAPI_KEY`.
 - **Downloads 403**: o downloader tenta headers browser-like e fallback de
   thumbnail SerpAPI quando disponível; se ainda falhar, pule a candidata.
