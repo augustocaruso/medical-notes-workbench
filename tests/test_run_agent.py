@@ -5,6 +5,7 @@ gemini CLI, e (2) ``httpx.Client`` que serve bytes/JSON canned. Sem rede.
 """
 import io
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -41,9 +42,11 @@ class GeminiQueue:
     def __init__(self, responses: list[str]):
         self._responses = list(responses)
         self.calls: list[list[str]] = []
+        self.timeouts: list[int] = []
 
-    def __call__(self, cmd: list[str]) -> str:
+    def __call__(self, cmd: list[str], *, timeout_seconds: int = 120) -> str:
         self.calls.append(cmd)
+        self.timeouts.append(timeout_seconds)
         if not self._responses:
             raise AssertionError(f"GeminiQueue exausta. Última cmd: {cmd}")
         return self._responses.pop(0)
@@ -80,7 +83,7 @@ def _write_config(tmp_path: Path, *, vault: Path, cache_db: Path) -> Path:
         f'preferred_language = "any"\n'
         f'[sources]\nenabled = ["wikimedia"]\ntop_k_per_source = 4\n'
         f'[gemini]\nbinary = "gemini"\nmodel_anchors = "x"\nmodel_rerank = "y"\n'
-        f'max_candidates_per_anchor = 8\n'
+        f'max_candidates_per_anchor = 8\ntimeout_seconds = 42\n'
         f'[cache]\npath = "{cache_db}"\ncandidates_ttl_days = 30\n',
         encoding="utf-8",
     )
@@ -147,6 +150,16 @@ def test_parse_rerank_aceita_chosen_index_null():
     assert out["chosen_index"] is None
 
 
+def test_invoke_gemini_timeout_vira_gemini_error(monkeypatch):
+    def fake_run(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired(cmd=["gemini"], timeout=3)
+
+    monkeypatch.setattr(run_agent.subprocess, "run", fake_run)
+
+    with pytest.raises(run_agent.GeminiError, match="timeout de 3s"):
+        run_agent._invoke_gemini(["gemini"], timeout_seconds=3)
+
+
 def test_call_gemini_json_retry_corrige_resposta_invalida(monkeypatch):
     valid = json.dumps([{
         "section_path": ["T"],
@@ -166,6 +179,7 @@ def test_call_gemini_json_retry_corrige_resposta_invalida(monkeypatch):
     )
 
     assert len(queue.calls) == 2
+    assert queue.timeouts == [120, 120]
     assert anchors[0]["concept"] == "sinapse serotoninérgica"
     assert raw == valid
 
@@ -224,6 +238,7 @@ def test_orquestrador_e2e_anchors_e_rerank(monkeypatch, tmp_path, capsys):
 
     # 2 chamadas ao gemini: anchors + rerank
     assert len(queue.calls) == 2
+    assert queue.timeouts == [42, 42]
     # Modelos diferentes nas duas chamadas (anchors=Pro, rerank=Flash)
     assert "x" in queue.calls[0]
     assert "y" in queue.calls[1]
@@ -374,4 +389,21 @@ def test_orquestrador_falha_se_gemini_devolve_lixo(monkeypatch, tmp_path, capsys
     rc = run_agent.main([str(note), "--config", str(cfg)])
     assert rc == 7
     assert len(queue.calls) == 2
-    assert "âncoras inválidas" in capsys.readouterr().err
+    assert "gemini falhou ao gerar âncoras" in capsys.readouterr().err
+
+
+def test_orquestrador_timeout_de_anchors_retorna_7(monkeypatch, tmp_path, capsys):
+    vault = tmp_path / "vault"
+    cache_db = tmp_path / "c.db"
+    cfg = _write_config(tmp_path, vault=vault, cache_db=cache_db)
+    note = tmp_path / "n.md"
+    note.write_text("# T\n\n## S\n\nbody.\n", encoding="utf-8")
+
+    def timeout(*_args, **_kwargs):
+        raise run_agent.GeminiError("gemini CLI excedeu timeout de 42s")
+
+    monkeypatch.setattr(run_agent, "_invoke_gemini", timeout)
+
+    rc = run_agent.main([str(note), "--config", str(cfg)])
+    assert rc == 7
+    assert "timeout de 42s" in capsys.readouterr().err

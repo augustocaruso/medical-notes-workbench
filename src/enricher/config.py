@@ -38,6 +38,7 @@ _DEFAULTS: dict[str, Any] = {
         "model_anchors": "gemini-2.5-pro",
         "model_rerank": "gemini-2.5-flash",
         "max_candidates_per_anchor": 8,
+        "timeout_seconds": 120,
     },
     "download": {
         # User-Agent pra fetch de bytes em `download.py`.

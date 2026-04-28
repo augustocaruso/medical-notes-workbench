@@ -55,17 +55,33 @@ _SOURCE_REGISTRY: dict[str, Any] = {
     wikimedia.NAME: wikimedia,
     web_search.NAME: web_search,
 }
+_DEFAULT_GEMINI_TIMEOUT_SECONDS = 120
 
 
 # --- Gemini CLI seam ------------------------------------------------
 
 
-def _invoke_gemini(cmd: list[str]) -> str:
+def _invoke_gemini(
+    cmd: list[str],
+    *,
+    timeout_seconds: int = _DEFAULT_GEMINI_TIMEOUT_SECONDS,
+) -> str:
     """Roda o gemini CLI e devolve stdout. Levanta GeminiError em rc != 0.
 
     Seam pra teste: monkeypatch isso pra fingir respostas.
     """
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise GeminiError(
+            f"gemini CLI excedeu timeout de {timeout_seconds}s"
+        ) from e
     if proc.returncode != 0:
         raise GeminiError(
             f"gemini CLI falhou (rc={proc.returncode}): {proc.stderr.strip()}"
@@ -80,6 +96,7 @@ def call_gemini(
     model: str | None = None,
     include_dirs: list[Path] | None = None,
     skip_trust: bool = True,
+    timeout_seconds: int = _DEFAULT_GEMINI_TIMEOUT_SECONDS,
 ) -> str:
     """Chama o gemini CLI em modo headless. Multimodal via `@arquivo` no
     próprio prompt + `--include-directories` pra dar acesso ao path."""
@@ -92,7 +109,7 @@ def call_gemini(
     if model:
         cmd.extend(["-m", model])
     cmd.extend(["-p", prompt])
-    return _invoke_gemini(cmd)
+    return _invoke_gemini(cmd, timeout_seconds=timeout_seconds)
 
 
 def call_gemini_json_with_retry(
@@ -102,6 +119,7 @@ def call_gemini_json_with_retry(
     binary: str,
     model: str | None = None,
     include_dirs: list[Path] | None = None,
+    timeout_seconds: int = _DEFAULT_GEMINI_TIMEOUT_SECONDS,
     label: str,
 ) -> tuple[Any, str]:
     """Chama o Gemini e dá uma chance de autocorreção quando ele responde
@@ -111,6 +129,7 @@ def call_gemini_json_with_retry(
         binary=binary,
         model=model,
         include_dirs=include_dirs,
+        timeout_seconds=timeout_seconds,
     )
     try:
         return parser(raw), raw
@@ -130,6 +149,7 @@ def call_gemini_json_with_retry(
             binary=binary,
             model=model,
             include_dirs=include_dirs,
+            timeout_seconds=timeout_seconds,
         )
         try:
             return parser(retry_raw), retry_raw
@@ -446,6 +466,9 @@ def main(argv: list[str] | None = None) -> int:
         return 6
 
     pref_lang = cfg["enrichment"].get("preferred_language", "any")
+    gemini_timeout = cfg["gemini"].get(
+        "timeout_seconds", _DEFAULT_GEMINI_TIMEOUT_SECONDS
+    )
     print(
         f"[1/3] gemini decide âncoras (até {cfg['enrichment']['max_anchors_per_note']}, "
         f"idioma preferido: {pref_lang})…"
@@ -462,10 +485,11 @@ def main(argv: list[str] | None = None) -> int:
             parse_anchors_json,
             binary=cfg["gemini"]["binary"],
             model=cfg["gemini"]["model_anchors"],
+            timeout_seconds=gemini_timeout,
             label="âncoras",
         )
-    except ValueError as e:
-        print(f"erro: gemini devolveu âncoras inválidas: {e}", file=sys.stderr)
+    except (GeminiError, ValueError) as e:
+        print(f"erro: gemini falhou ao gerar âncoras: {e}", file=sys.stderr)
         return 7
     print(f"  → {len(anchors)} âncora(s)")
     for a in anchors:
@@ -514,9 +538,10 @@ def main(argv: list[str] | None = None) -> int:
                     binary=cfg["gemini"]["binary"],
                     model=cfg["gemini"]["model_rerank"],
                     include_dirs=[tmp_dir],
+                    timeout_seconds=gemini_timeout,
                     label="rerank",
                 )
-            except ValueError as e:
+            except (GeminiError, ValueError) as e:
                 print(f"    ! rerank inválido: {e}; pulo.", file=sys.stderr)
                 continue
             idx = choice.get("chosen_index")

@@ -42,6 +42,8 @@ model_anchors = "gemini-2.5-pro"
 model_rerank = "gemini-2.5-flash"
 # Teto de candidatas (somadas de todas as fontes) que vão pra rerank.
 max_candidates_per_anchor = 8
+# Timeout por chamada ao gemini CLI (anchors e rerank), em segundos.
+timeout_seconds = 120
 # (Multimodal: orquestrador anexa miniaturas via @arquivo no prompt +
 #  --include-directories. Funciona com gemini CLI 0.39+ oficial.)
 

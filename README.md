@@ -35,8 +35,8 @@ Pré-requisitos:
 
 Ajustes em `[gemini]` do `config.toml`:
 - `binary`, `model_anchors`, `model_rerank`
-- `image_flag` (default `--image`) — adapte se seu CLI usa outro flag pra anexar imagens
 - `max_candidates_per_anchor` — teto de candidatas que vão pro rerank
+- `timeout_seconds` — timeout por chamada ao gemini CLI (default: 120)
 
 ## Setup
 
