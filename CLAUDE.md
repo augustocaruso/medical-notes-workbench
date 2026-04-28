@@ -35,7 +35,7 @@ O repo inclui um orquestrador-exemplo que dirige o gemini CLI ponta a ponta:
 python scripts/run_agent.py path/da/nota.md [--config config.toml] [--force]
 ```
 
-Fluxo: anchors prompt → fan-out de `search` → baixa thumbs (256px, sem cache) → rerank visual com gemini multimodal → `download` (full size, com cache) → `insert_images` em batch no fim.
+Fluxo: anchors prompt → fan-out de `search` → baixa thumbs (256px, sem cache) → rerank visual com gemini multimodal → `download` (full size, com cache) → `insert_images` em batch no fim. Se o gemini devolver texto em vez de JSON, o orquestrador tenta uma autocorreção antes de falhar.
 
 A configuração específica do orquestrador vive em `[gemini]` no `config.toml` (binary, model_anchors, model_rerank, image_flag). O **toolbox em si não invoca LLM** — esse script é uma camada acima e pode ser substituído por outro orquestrador (Claude Code skill, sistema próprio etc.) sem mudar o enricher.
 
@@ -100,7 +100,7 @@ Convenções:
 python scripts/run_agent.py path/da/nota.md [--config config.toml] [--force]
 ```
 
-Saída é log estruturado em stderr/stdout (etapas numeradas, decisões do gemini). Exit codes: `0` ok / `4` sem vault / `6` nota sem headings / `7` gemini retornou JSON inválido / `8` seção fantasma.
+Saída é log estruturado em stderr/stdout (etapas numeradas, decisões do gemini). Exit codes: `0` ok / `4` sem vault / `6` nota sem headings / `7` gemini retornou JSON inválido mesmo após retry / `8` seção fantasma.
 
 Idempotente: pula notas com `images_enriched: true`. `--force` ignora.
 

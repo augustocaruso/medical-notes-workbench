@@ -147,6 +147,29 @@ def test_parse_rerank_aceita_chosen_index_null():
     assert out["chosen_index"] is None
 
 
+def test_call_gemini_json_retry_corrige_resposta_invalida(monkeypatch):
+    valid = json.dumps([{
+        "section_path": ["T"],
+        "concept": "sinapse serotoninérgica",
+        "visual_type": "diagram",
+        "search_queries": ["serotonin synapse"],
+    }])
+    queue = GeminiQueue(["vou responder em JSON daqui a pouco", valid])
+    monkeypatch.setattr(run_agent, "_invoke_gemini", queue)
+
+    anchors, raw = run_agent.call_gemini_json_with_retry(
+        "prompt original",
+        run_agent.parse_anchors_json,
+        binary="gemini",
+        model="x",
+        label="âncoras",
+    )
+
+    assert len(queue.calls) == 2
+    assert anchors[0]["concept"] == "sinapse serotoninérgica"
+    assert raw == valid
+
+
 # --- orquestração end-to-end (mocks) --------------------------------
 
 
@@ -345,9 +368,10 @@ def test_orquestrador_falha_se_gemini_devolve_lixo(monkeypatch, tmp_path, capsys
     note = tmp_path / "n.md"
     note.write_text("# T\n\n## S\n\nbody.\n", encoding="utf-8")
 
-    queue = GeminiQueue(["isso não é JSON nenhum"])
+    queue = GeminiQueue(["isso não é JSON nenhum", "continua sem JSON"])
     monkeypatch.setattr(run_agent, "_invoke_gemini", queue)
 
     rc = run_agent.main([str(note), "--config", str(cfg)])
     assert rc == 7
+    assert len(queue.calls) == 2
     assert "âncoras inválidas" in capsys.readouterr().err

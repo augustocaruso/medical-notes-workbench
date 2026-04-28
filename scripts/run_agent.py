@@ -95,6 +95,50 @@ def call_gemini(
     return _invoke_gemini(cmd)
 
 
+def call_gemini_json_with_retry(
+    prompt: str,
+    parser: Callable[[str], Any],
+    *,
+    binary: str,
+    model: str | None = None,
+    include_dirs: list[Path] | None = None,
+    label: str,
+) -> tuple[Any, str]:
+    """Chama o Gemini e dá uma chance de autocorreção quando ele responde
+    prose em vez do JSON contratado."""
+    raw = call_gemini(
+        prompt,
+        binary=binary,
+        model=model,
+        include_dirs=include_dirs,
+    )
+    try:
+        return parser(raw), raw
+    except (json.JSONDecodeError, ValueError) as first_error:
+        retry_prompt = (
+            "Sua resposta anterior para a tarefa abaixo foi inválida: "
+            f"{first_error}.\n\n"
+            "Responda novamente com APENAS JSON válido, sem comentários, sem Markdown, "
+            "sem texto antes ou depois.\n\n"
+            "TAREFA ORIGINAL:\n"
+            f"{prompt}\n\n"
+            "RESPOSTA ANTERIOR INVÁLIDA:\n"
+            f"{raw}"
+        )
+        retry_raw = call_gemini(
+            retry_prompt,
+            binary=binary,
+            model=model,
+            include_dirs=include_dirs,
+        )
+        try:
+            return parser(retry_raw), retry_raw
+        except (json.JSONDecodeError, ValueError) as retry_error:
+            raise ValueError(
+                f"{label} inválido após retry: {retry_error}"
+            ) from retry_error
+
+
 # --- Prompts --------------------------------------------------------
 
 
@@ -412,16 +456,16 @@ def main(argv: list[str] | None = None) -> int:
         max_anchors=cfg["enrichment"]["max_anchors_per_note"],
         preferred_language=pref_lang,
     )
-    raw = call_gemini(
-        anchors_prompt,
-        binary=cfg["gemini"]["binary"],
-        model=cfg["gemini"]["model_anchors"],
-    )
     try:
-        anchors = parse_anchors_json(raw)
-    except (json.JSONDecodeError, ValueError) as e:
+        anchors, raw = call_gemini_json_with_retry(
+            anchors_prompt,
+            parse_anchors_json,
+            binary=cfg["gemini"]["binary"],
+            model=cfg["gemini"]["model_anchors"],
+            label="âncoras",
+        )
+    except ValueError as e:
         print(f"erro: gemini devolveu âncoras inválidas: {e}", file=sys.stderr)
-        print(f"---raw---\n{raw}\n---", file=sys.stderr)
         return 7
     print(f"  → {len(anchors)} âncora(s)")
     for a in anchors:
@@ -463,15 +507,16 @@ def main(argv: list[str] | None = None) -> int:
                 thumb_basenames=thumb_basenames,
                 preferred_language=pref_lang,
             )
-            raw = call_gemini(
-                rerank_prompt,
-                binary=cfg["gemini"]["binary"],
-                model=cfg["gemini"]["model_rerank"],
-                include_dirs=[tmp_dir],
-            )
             try:
-                choice = parse_rerank_json(raw)
-            except (json.JSONDecodeError, ValueError) as e:
+                choice, raw = call_gemini_json_with_retry(
+                    rerank_prompt,
+                    parse_rerank_json,
+                    binary=cfg["gemini"]["binary"],
+                    model=cfg["gemini"]["model_rerank"],
+                    include_dirs=[tmp_dir],
+                    label="rerank",
+                )
+            except ValueError as e:
                 print(f"    ! rerank inválido: {e}; pulo.", file=sys.stderr)
                 continue
             idx = choice.get("chosen_index")

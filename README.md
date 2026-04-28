@@ -27,7 +27,7 @@ O repo inclui `scripts/run_agent.py` — um orquestrador end-to-end que dirige o
 python scripts/run_agent.py ~/Obsidian/Medicina/isrs.md
 ```
 
-Faz: gemini decide âncoras → busca em todas as fontes habilitadas → baixa thumbs → gemini ranqueia visualmente → baixa imagens escolhidas → insere blocos. Idempotente: se a nota já tem `images_enriched: true`, pula (use `--force` pra refazer).
+Faz: gemini decide âncoras → busca em todas as fontes habilitadas → baixa thumbs → gemini ranqueia visualmente → baixa imagens escolhidas → insere blocos. Se o Gemini devolver texto em vez de JSON, o orquestrador tenta uma autocorreção antes de falhar. Idempotente: se a nota já tem `images_enriched: true`, pula (use `--force` pra refazer).
 
 Pré-requisitos:
 - `gemini` no PATH (ou ajuste `[gemini].binary` em `config.toml`)
