@@ -101,7 +101,7 @@ Convenções:
 python scripts/run_agent.py path/da/nota.md [--config config.toml] [--force]
 ```
 
-Saída é log estruturado em stderr/stdout (etapas numeradas, decisões do gemini). Exit codes: `0` ok / `4` sem vault / `6` nota sem headings / `7` gemini falhou ou retornou JSON inválido mesmo após retry / `8` seção fantasma.
+Saída é log estruturado e flushado em tempo real em stderr/stdout: configuração carregada, âncoras, contagem por fonte, miniaturas, escolha do rerank, download e resumo final. Exit codes: `0` ok / `4` sem vault / `6` nota sem headings / `7` gemini falhou ou retornou JSON inválido mesmo após retry / `8` seção fantasma.
 
 Idempotente: pula notas com `images_enriched: true`. `--force` ignora.
 

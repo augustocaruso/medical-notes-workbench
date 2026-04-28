@@ -58,6 +58,48 @@ _SOURCE_REGISTRY: dict[str, Any] = {
 _DEFAULT_GEMINI_TIMEOUT_SECONDS = 120
 
 
+@dataclass
+class CandidateReport:
+    candidates: list[ImageCandidate]
+    counts_by_source: dict[str, int]
+    failed_queries: list[tuple[str, str, str]]
+    capped: bool = False
+
+
+def _log(message: str = "", *, err: bool = False) -> None:
+    print(message, file=sys.stderr if err else sys.stdout, flush=True)
+
+
+def _format_list(values: list[str]) -> str:
+    return ", ".join(values) if values else "(nenhuma)"
+
+
+def _section_label(section_path: list[str]) -> str:
+    return " > ".join(section_path) if section_path else "(raiz)"
+
+
+def _short(text: str | None, *, limit: int = 96) -> str:
+    if not text:
+        return ""
+    text = " ".join(str(text).split())
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "..."
+
+
+def _format_bytes(n: int | None) -> str:
+    if n is None:
+        return "tamanho desconhecido"
+    units = ["B", "KB", "MB", "GB"]
+    value = float(n)
+    for unit in units:
+        if value < 1024 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(value)} {unit}"
+            return f"{value:.1f} {unit}"
+        value /= 1024
+
+
 # --- Gemini CLI seam ------------------------------------------------
 
 
@@ -367,11 +409,31 @@ def gather_candidates(
     max_total: int,
     preferred_language: str = "any",
 ) -> list[ImageCandidate]:
+    return gather_candidate_report(
+        anchor,
+        sources_enabled=sources_enabled,
+        top_k_per_source=top_k_per_source,
+        max_total=max_total,
+        preferred_language=preferred_language,
+    ).candidates
+
+
+def gather_candidate_report(
+    anchor: dict,
+    *,
+    sources_enabled: list[str],
+    top_k_per_source: int,
+    max_total: int,
+    preferred_language: str = "any",
+) -> CandidateReport:
     seen_urls: set[str] = set()
     out: list[ImageCandidate] = []
+    counts_by_source = {source_name: 0 for source_name in sources_enabled}
+    failed_queries: list[tuple[str, str, str]] = []
     for source_name in sources_enabled:
         adapter = _SOURCE_REGISTRY.get(source_name)
         if adapter is None:
+            failed_queries.append((source_name, "(adapter)", "fonte desconhecida"))
             continue
         for query in anchor["search_queries"]:
             try:
@@ -383,16 +445,28 @@ def gather_candidates(
                     kwargs["language"] = preferred_language
                 cs = adapter.search(query, anchor["visual_type"], **kwargs)
             except Exception as e:
-                print(f"  ! source {source_name} falhou na query {query!r}: {e}", file=sys.stderr)
+                failed_queries.append((source_name, query, str(e)))
                 continue
             for c in cs:
                 if c.image_url in seen_urls:
                     continue
                 seen_urls.add(c.image_url)
                 out.append(c)
+                counts_by_source[source_name] = (
+                    counts_by_source.get(source_name, 0) + 1
+                )
                 if len(out) >= max_total:
-                    return out
-    return out
+                    return CandidateReport(
+                        candidates=out,
+                        counts_by_source=counts_by_source,
+                        failed_queries=failed_queries,
+                        capped=True,
+                    )
+    return CandidateReport(
+        candidates=out,
+        counts_by_source=counts_by_source,
+        failed_queries=failed_queries,
+    )
 
 
 def _candidate_image_urls(c: ImageCandidate) -> list[str]:
@@ -432,7 +506,7 @@ def fetch_thumbs(
             except DownloadError as e:
                 last_error = e
         if thumb_path is None:
-            print(f"  ! thumb {i} falhou: {last_error}", file=sys.stderr)
+            _log(f"    [warn] thumb #{i} falhou: {last_error}", err=True)
         out.append(thumb_path)
     return out
 
@@ -466,31 +540,54 @@ def main(argv: list[str] | None = None) -> int:
 
     meta, _ = frontmatter.read(text)
     if meta.get("images_enriched") and not args.force:
-        print("nota já enriquecida — use --force pra refazer.", file=sys.stderr)
+        _log("nota já enriquecida - use --force pra refazer.", err=True)
         return 0
 
     vault = _resolve_vault(cfg)
     if vault is None:
-        print("erro: configure [vault].path no config.toml.", file=sys.stderr)
+        _log("erro: configure [vault].path no config.toml.", err=True)
         return 4
 
     sections = insert.parse_sections(text)
     if not sections:
-        print("erro: nota sem headings — nada a enriquecer.", file=sys.stderr)
+        _log("erro: nota sem headings - nada a enriquecer.", err=True)
         return 6
 
     pref_lang = cfg["enrichment"].get("preferred_language", "any")
     gemini_timeout = cfg["gemini"].get(
         "timeout_seconds", _DEFAULT_GEMINI_TIMEOUT_SECONDS
     )
-    print(
-        f"[1/3] gemini decide âncoras (até {cfg['enrichment']['max_anchors_per_note']}, "
-        f"idioma preferido: {pref_lang})…"
+    max_anchors = cfg["enrichment"]["max_anchors_per_note"]
+    max_candidates = cfg["gemini"]["max_candidates_per_anchor"]
+    max_dim = cfg["enrichment"]["max_image_dimension"]
+
+    _log("medical-notes-enricher")
+    _log(f"Nota: {args.note}")
+    _log(f"Config: {args.config if args.config else '(auto)'}")
+    _log(f"Vault: {vault}")
+    _log(f"Fontes: {_format_list(cfg['sources']['enabled'])}")
+    _log(f"Idioma preferido: {pref_lang}")
+    _log(
+        "Gemini: "
+        f"{cfg['gemini']['binary']} "
+        f"(anchors={cfg['gemini']['model_anchors']}, "
+        f"rerank={cfg['gemini']['model_rerank']}, "
+        f"timeout={gemini_timeout}s)"
     )
+    _log(
+        "Limites: "
+        f"até {max_anchors} âncora(s), "
+        f"até {max_candidates} candidata(s) por rerank, "
+        f"imagem final <= {max_dim}px"
+    )
+    _log("")
+
+    _log("[1/3] Escolhendo pontos da nota que merecem imagem")
+    _log(f"  Seções detectadas: {len(sections)}")
     anchors_prompt = build_anchors_prompt(
         text,
         sections,
-        max_anchors=cfg["enrichment"]["max_anchors_per_note"],
+        max_anchors=max_anchors,
         preferred_language=pref_lang,
     )
     try:
@@ -503,42 +600,66 @@ def main(argv: list[str] | None = None) -> int:
             label="âncoras",
         )
     except (GeminiError, ValueError) as e:
-        print(f"erro: gemini falhou ao gerar âncoras: {e}", file=sys.stderr)
+        _log(f"erro: gemini falhou ao gerar âncoras: {e}", err=True)
         return 7
-    print(f"  → {len(anchors)} âncora(s)")
-    for a in anchors:
-        print(f"    • {a['concept']} @ {' > '.join(a['section_path'])}")
+    _log(f"  Âncoras encontradas: {len(anchors)}")
+    for i, a in enumerate(anchors, start=1):
+        _log(f"  [a{i}] {_short(a['concept'])}")
+        _log(f"       seção: {_section_label(a['section_path'])}")
+        _log(f"       tipo: {a['visual_type']}")
+        _log(f"       queries: {_format_list(a['search_queries'])}")
 
     inserted: list[insert.InsertedImage] = []
 
-    print(f"[2/3] busca + rerank por âncora…")
+    _log("")
+    _log("[2/3] Buscando, baixando miniaturas e ranqueando")
     cache_path = expand_path(cfg["cache"]["path"])
     with Cache(cache_path) as cache, tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)
-        for anchor in anchors:
-            print(f"  ◆ {anchor['concept']}")
-            candidates = gather_candidates(
+        for anchor_index, anchor in enumerate(anchors, start=1):
+            _log(f"  [a{anchor_index}] {_short(anchor['concept'])}")
+            search_report = gather_candidate_report(
                 anchor,
                 sources_enabled=cfg["sources"]["enabled"],
                 top_k_per_source=cfg["sources"]["top_k_per_source"],
-                max_total=cfg["gemini"]["max_candidates_per_anchor"],
+                max_total=max_candidates,
                 preferred_language=pref_lang,
             )
+            candidates = search_report.candidates
+            counts = ", ".join(
+                f"{source}={search_report.counts_by_source.get(source, 0)}"
+                for source in cfg["sources"]["enabled"]
+            )
+            cap_note = " (limite atingido)" if search_report.capped else ""
+            _log(f"    busca: {counts or '0'}{cap_note}")
+            for source, query, error in search_report.failed_queries:
+                _log(
+                    f"    [warn] {source} falhou em {_short(query, limit=48)!r}: "
+                    f"{_short(error, limit=90)}",
+                    err=True,
+                )
             if not candidates:
-                print("    sem candidatas, pulo.")
+                _log("    sem candidatas, pulo.")
                 continue
-            print(f"    {len(candidates)} candidata(s); baixando thumbs…")
+            _log(f"    candidatas únicas: {len(candidates)}")
+            _log("    baixando miniaturas...")
             thumbs = fetch_thumbs(
                 candidates, tmp_dir=tmp_dir, user_agent=cfg["download"]["user_agent"]
             )
             valid_thumbs = [(c, t) for c, t in zip(candidates, thumbs) if t is not None]
+            failed_thumbs = len(thumbs) - len(valid_thumbs)
+            _log(f"    miniaturas: {len(valid_thumbs)} ok, {failed_thumbs} falharam")
             if not valid_thumbs:
-                print("    todos os thumbs falharam, pulo.")
+                _log("    todos os thumbs falharam, pulo.")
                 continue
             ranked_candidates = [c for c, _ in valid_thumbs]
             ranked_thumbs = [t for _, t in valid_thumbs]
             thumb_basenames = [t.name for t in ranked_thumbs]
 
+            _log(
+                f"    rerank: chamando {cfg['gemini']['model_rerank']} "
+                f"com {len(ranked_candidates)} miniatura(s)"
+            )
             rerank_prompt = build_rerank_prompt(
                 anchor,
                 ranked_candidates,
@@ -556,17 +677,19 @@ def main(argv: list[str] | None = None) -> int:
                     label="rerank",
                 )
             except (GeminiError, ValueError) as e:
-                print(f"    ! rerank inválido: {e}; pulo.", file=sys.stderr)
+                _log(f"    [warn] rerank inválido: {e}; pulo.", err=True)
                 continue
             idx = choice.get("chosen_index")
             if idx is None:
-                print(f"    nenhuma serve ({choice.get('reason', '')[:80]})")
+                reason = _short(choice.get("reason", ""), limit=90)
+                _log(f"    nenhuma serve ({reason})")
                 continue
             if not (0 <= idx < len(ranked_candidates)):
-                print(f"    ! chosen_index {idx} fora do range; pulo.", file=sys.stderr)
+                _log(f"    [warn] chosen_index {idx} fora do range; pulo.", err=True)
                 continue
             chosen = ranked_candidates[idx]
-            print(f"    ✓ escolhida #{idx}: {chosen.title}")
+            _log(f"    escolhida: #{idx} {_short(chosen.title)}")
+            _log(f"    fonte: {chosen.source} - {_short(chosen.source_url)}")
 
             dl = None
             last_error = None
@@ -586,8 +709,14 @@ def main(argv: list[str] | None = None) -> int:
                 except DownloadError as e:
                     last_error = e
             if dl is None:
-                print(f"    ! download falhou: {last_error}; pulo.", file=sys.stderr)
+                _log(f"    [warn] download falhou: {last_error}; pulo.", err=True)
                 continue
+            cached_label = "cache" if dl.get("cached") else "novo download"
+            dims = "x".join(str(dl.get(k, "?")) for k in ("width", "height"))
+            _log(
+                f"    download: {dl['filename']} ({dims}, "
+                f"{_format_bytes(dl.get('bytes'))}, {cached_label})"
+            )
 
             inserted.append(
                 insert.InsertedImage(
@@ -600,17 +729,30 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
 
-    print(f"[3/3] insere {len(inserted)} bloco(s) na nota…")
+    _log("")
+    _log("[3/3] Atualizando nota")
     if inserted:
         try:
             new_text = insert.insert_images(text, inserted)
         except insert.SectionNotFound as e:
-            print(f"erro: {e}", file=sys.stderr)
+            _log(f"erro: {e}", err=True)
             return 8
         args.note.write_text(new_text, encoding="utf-8")
-        print(f"  ✓ nota atualizada in-place: {args.note}")
+        sources_count: dict[str, int] = {}
+        for item in inserted:
+            sources_count[item.source] = sources_count.get(item.source, 0) + 1
+        sources_summary = ", ".join(
+            f"{source}={count}" for source, count in sorted(sources_count.items())
+        )
+        _log(f"  Inseridos: {len(inserted)} bloco(s)")
+        _log(f"  Fontes: {sources_summary}")
+        _log(f"  Arquivo: {args.note}")
+        _log("")
+        _log("Concluído.")
     else:
-        print("  (nada inserido)")
+        _log("  Nada inserido.")
+        _log("")
+        _log("Concluído sem alterar a nota.")
     return 0
 
 
