@@ -52,14 +52,17 @@ Operational rules:
 - For chat-processing catalog work, the operational default is
   `~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json`, outside the
   auto-updated extension directory.
-- For flashcards, the extension declares an `anki` MCP server using
-  `@ankimcp/anki-mcp-server` in STDIO mode. It requires Anki Desktop with
-  AnkiConnect reachable at `http://127.0.0.1:8765`. The MCP exposes the
-  `/twenty_rules` prompt; use that prompt as the card-writing methodology.
+- For flashcards, the extension uses the user's existing global `anki-mcp` MCP
+  server from `~/.gemini/settings.json`. It deliberately does not declare
+  another Anki MCP server in the extension manifest, to avoid duplicates. The
+  MCP requires Anki Desktop with AnkiConnect reachable at
+  `http://127.0.0.1:8765`. It exposes the `/twenty_rules` prompt; use that
+  prompt as the card-writing methodology.
   Its package source path is
   `@ankimcp/anki-mcp-server/dist/mcp/primitives/essential/prompts/twenty-rules.prompt/content.md`;
   treat that path as provenance only, not as a local file to read.
-  Gemini exposes Anki MCP tools as `mcp_anki_*`, not as bare tool names.
+  Gemini exposes the existing `anki-mcp` tools as `mcp_anki-mcp_*`, not as bare
+  tool names.
   `/flashcards` may resolve folders/globs/tag filters, but selected source
   content remains the only factual base and Obsidian tags must not become Anki
   tags. Use `scripts/mednotes/obsidian_note_utils.py deeplink <note.md>` to

@@ -172,8 +172,8 @@ em notas Obsidian:
 - Subagents: `med-chat-triager`, `med-knowledge-architect`,
   `med-catalog-curator`, `med-publish-guard`.
 - Hooks: somente `BeforeTool` com matchers estreitos. `ensure_anki.mjs` roda
-  apenas para ferramentas `mcp_anki_*`; `med_guard.mjs` roda apenas para
-  `run_shell_command`.
+  apenas para ferramentas `mcp_anki-mcp_*`/`mcp_anki_*`; `med_guard.mjs` roda
+  apenas para `run_shell_command`.
 
 `med_ops.py` é deliberadamente uma CLI determinística, não um hook: hooks só
 guardam contexto/segurança. Toda alteração de YAML/status em `Chats_Raw`, todo
@@ -215,7 +215,9 @@ A extensão empacota um módulo de criação de flashcards:
   `/mednotes:twenty_rules <path>` é o wrapper da extensão para um arquivo local;
   `/mednotes:flashcards` é o caminho namespaced equivalente.
 - Subagent: `med-flashcard-maker`.
-- MCP: `anki`, via `@ankimcp/anki-mcp-server` em modo STDIO.
+- MCP: usar o servidor global existente `anki-mcp`, via
+  `@ankimcp/anki-mcp-server` em modo STDIO. A extensão não declara outro Anki
+  MCP no manifest, para evitar duplicação com `~/.gemini/settings.json`.
 - Prompt primário: `/twenty_rules`, exposto pelo próprio Anki MCP. Não manter
   cópia local da metodologia; referenciar o prompt MCP.
 - Path de origem do prompt no pacote MCP:

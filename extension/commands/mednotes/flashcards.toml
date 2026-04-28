@@ -7,12 +7,13 @@ flashcards diretamente.
 
 Argumentos do usuario: {{args}}
 
-Use o subagent `med-flashcard-maker` desta extensao. A extensao declara o MCP
-`anki`, baseado em `@ankimcp/anki-mcp-server` + AnkiConnect local. Esse MCP
-expoe o prompt `/twenty_rules`; use esse prompt como guia primario para a
-formulacao dos cards quando ele ja estiver carregado no contexto. O prompt MCP
-e um slash command, nao uma ferramenta; as ferramentas Anki autorizadas aparecem
-como `mcp_anki_*`. A referencia de origem do prompt no pacote MCP e
+Use o subagent `med-flashcard-maker` desta extensao. A extensao usa o MCP global
+existente `anki-mcp`, baseado em `@ankimcp/anki-mcp-server` + AnkiConnect local,
+e nao declara outro servidor Anki MCP no bundle. Esse MCP expoe o prompt
+`/twenty_rules`; use esse prompt como guia primario para a formulacao dos cards
+quando ele ja estiver carregado no contexto. O prompt MCP e um slash command,
+nao uma ferramenta; as ferramentas Anki autorizadas aparecem como
+`mcp_anki-mcp_*`. A referencia de origem do prompt no pacote MCP e
 `@ankimcp/anki-mcp-server/dist/mcp/primitives/essential/prompts/twenty-rules.prompt/content.md`;
 use esse path como proveniencia, nao como arquivo local a ser lido pelo
 `read_file`. O hook `mednotes-ensure-anki` deve tentar abrir o Anki antes de
@@ -38,17 +39,17 @@ Fluxo:
    desse caminho conforme `flashcard-ingestion.md`; se nao houver caminho nem
    deck indicado, use `Medicina::Inbox`.
 5. Peça ao subagent `med-flashcard-maker` para usar o prompt MCP `/twenty_rules`
-   do servidor `anki`. Se esse prompt nao estiver carregado/presente no contexto,
-   pare e peça ao usuario para executar `/twenty_rules` primeiro. Nao substitua
-   por uma copia local.
+   do servidor global `anki-mcp`. Se esse prompt nao estiver carregado/presente
+   no contexto, pare e peça ao usuario para executar `/twenty_rules` primeiro.
+   Nao substitua por uma copia local.
 6. Leia e siga `${extensionPath}/knowledge/flashcard-ingestion.md` para as
    especificacoes locais de ingestao: deck espelhando o Obsidian, campo
    `Obsidian` com deeplink, sem tags Anki, marcacao Obsidian `anki` apos
    sucesso e `Verso Extra` com quebra inicial.
-7. O subagent deve listar/criar o deck com `mcp_anki_listDecks`/
-   `mcp_anki_createDeck`, inspecionar modelos com `mcp_anki_modelNames`/
-   `mcp_anki_modelFieldNames` e criar cards com `mcp_anki_addNotes` em lote
-   quando possivel.
+7. O subagent deve listar/criar o deck com `mcp_anki-mcp_listDecks`/
+   `mcp_anki-mcp_createDeck`, inspecionar modelos com
+   `mcp_anki-mcp_modelNames`/`mcp_anki-mcp_modelFieldNames` e criar cards com
+   `mcp_anki-mcp_addNotes` em lote quando possivel.
 8. Para escopos acima de 10 arquivos ou lotes acima de 40 cards, gere uma previa
    e peça confirmacao antes de gravar no Anki.
 9. Depois de criados os cards, rode

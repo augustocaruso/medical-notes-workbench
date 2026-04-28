@@ -56,15 +56,6 @@ def main() -> int:
             "medical Markdown notes for Obsidian."
         ),
         "contextFileName": "GEMINI.md",
-        "mcpServers": {
-            "anki": {
-                "command": "npx",
-                "args": ["-y", "@ankimcp/anki-mcp-server@0.18.5", "--stdio"],
-                "env": {
-                    "ANKI_CONNECT_URL": "http://127.0.0.1:8765",
-                },
-            }
-        },
         "settings": [
             {
                 "name": "SerpAPI key",

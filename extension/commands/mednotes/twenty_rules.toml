@@ -9,7 +9,8 @@ Este comando espera `/mednotes:twenty_rules <path>`.
 
 Referencia obrigatoria ao prompt:
 - `/twenty_rules` sem namespace pertence ao prompt MCP `twenty_rules` exposto
-  pelo servidor `anki` de `@ankimcp/anki-mcp-server`; ele nao e uma ferramenta.
+  pelo servidor global `anki-mcp` de `@ankimcp/anki-mcp-server`; ele nao e uma
+  ferramenta.
 - Referencia de origem do prompt no pacote MCP:
   `@ankimcp/anki-mcp-server/dist/mcp/primitives/essential/prompts/twenty-rules.prompt/content.md`.
   Esse path documenta a origem do prompt, mas o carregamento operacional deve
@@ -32,8 +33,8 @@ Fluxo obrigatorio:
    com deeplink da nota, sem tags Anki, marcacao Obsidian `anki` apos sucesso
    e campo `Verso Extra` com quebra inicial.
 5. Use o subagent `med-flashcard-maker` para executar a criacao no Anki. Ao
-   chama-lo, informe que as ferramentas Anki autorizadas sao `mcp_anki_*` e que
-   a metodologia vem do prompt MCP `/twenty_rules` ja carregado. Antes de
+   chama-lo, informe que as ferramentas Anki autorizadas sao `mcp_anki-mcp_*` e
+   que a metodologia vem do prompt MCP `/twenty_rules` ja carregado. Antes de
    chama-lo, gere o deeplink com:
    `python ${extensionPath}/scripts/mednotes/obsidian_note_utils.py deeplink <path>`.
 6. Depois que o Anki MCP aceitar pelo menos um card, marque a nota-fonte com:

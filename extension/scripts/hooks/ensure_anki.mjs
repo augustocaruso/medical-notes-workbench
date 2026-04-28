@@ -21,7 +21,7 @@ function writeOutput(output) {
 
 function isAnkiRelevant(payload) {
   const toolName = String(payload.tool_name || payload.toolName || payload.name || "");
-  if (/^mcp_anki_/.test(toolName)) return true;
+  if (/^mcp_anki(?:-mcp)?_/.test(toolName)) return true;
 
   const likelyToolFields = [
     payload.tool_name,

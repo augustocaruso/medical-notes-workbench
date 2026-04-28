@@ -99,8 +99,9 @@ A extensão inclui:
 - Skills `create-medical-note` e `enrich-medical-note`.
 - Subagents Gemini para triagem, arquitetura clínica, curadoria de catálogo, guarda de publicação e criação de flashcards.
 - Knowledge docs preservando a redação original das skills médicas funcionais.
-- Hooks Gemini leves para contexto, guardrails do `med_ops.py` e inicialização do Anki antes de ferramentas Anki MCP.
-- MCP `anki` via `@ankimcp/anki-mcp-server`, incluindo o prompt MCP `twenty_rules`.
+- Hooks Gemini leves e estreitos: guardrails do `med_ops.py` em `run_shell_command` e inicialização do Anki apenas antes de ferramentas Anki MCP.
+- MCP global existente `anki-mcp` via `@ankimcp/anki-mcp-server`, incluindo o
+  prompt MCP `twenty_rules`.
 - Runtime Python mínimo (`src/`, `scripts/run_agent.py`, `pyproject.toml`).
 
 ### Med Chat Processor
@@ -152,9 +153,10 @@ Subagents do pipeline:
 
 ### Anki Flashcards
 
-O módulo de flashcards usa o MCP `anki` empacotado pela extensão com
-`@ankimcp/anki-mcp-server` em modo STDIO. Ele depende do Anki Desktop com o
-add-on AnkiConnect respondendo em `http://127.0.0.1:8765`; o hook
+O módulo de flashcards usa o MCP global existente `anki-mcp` configurado em
+`~/.gemini/settings.json` com `@ankimcp/anki-mcp-server`. A extensão não declara
+outro servidor Anki MCP no manifest, para evitar duplicação. Ele depende do Anki
+Desktop com o add-on AnkiConnect respondendo em `http://127.0.0.1:8765`; o hook
 `mednotes-ensure-anki` tenta abrir/minimizar o Anki antes de ferramentas Anki.
 
 O prompt MCP puro é `/twenty_rules`. Ele fica reservado para o Anki MCP; a

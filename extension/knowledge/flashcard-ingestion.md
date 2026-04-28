@@ -2,7 +2,7 @@
 
 Este documento e a fonte unica das regras locais de ingestao para criacao de
 flashcards medicos no Anki. O prompt MCP `/twenty_rules`, fornecido pelo
-servidor Anki MCP, continua sendo a metodologia de formulacao dos cards. Este
+servidor Anki MCP global `anki-mcp`, continua sendo a metodologia de formulacao dos cards. Este
 documento define as decisoes de design da extensao Medical Notes Workbench.
 
 ## Especificacoes De Design
@@ -22,10 +22,10 @@ documento define as decisoes de design da extensao Medical Notes Workbench.
    `.md` como folha do deck.
 
    Nao reduza nem achate a hierarquia para caber em limitacoes de uma
-   ferramenta. Se `mcp_anki_createDeck` recusar mais de dois niveis, tente criar
-   os cards diretamente no deck completo com `mcp_anki_addNotes`/
-   `mcp_anki_addNote`; se o MCP/Anki ainda recusar, reporte a falha sem trocar
-   o deck por outro.
+   ferramenta. Se `mcp_anki-mcp_createDeck` recusar mais de dois niveis, tente
+   criar os cards diretamente no deck completo com `mcp_anki-mcp_addNotes`/
+   `mcp_anki-mcp_addNote`; se o MCP/Anki ainda recusar, reporte a falha sem
+   trocar o deck por outro.
 
 2. Tags Anki: nao adicionar tags por enquanto. Omita o campo `tags` ou envie
    lista vazia quando a ferramenta exigir esse campo. Tags Obsidian podem ser
@@ -78,7 +78,8 @@ documento define as decisoes de design da extensao Medical Notes Workbench.
 ## Regra De Base De Conhecimento
 
 `/twenty_rules` sem namespace e reservado para o prompt MCP `twenty_rules` do
-servidor `anki`. O wrapper da extensao para um arquivo local e
+servidor global `anki-mcp`. A extensao nao declara outro Anki MCP no manifest,
+para evitar duplicacao com `~/.gemini/settings.json`. O wrapper da extensao para um arquivo local e
 `/mednotes:twenty_rules <path>` para evitar colisao com o prompt MCP.
 Referencia de origem do prompt no pacote MCP:
 `@ankimcp/anki-mcp-server/dist/mcp/primitives/essential/prompts/twenty-rules.prompt/content.md`.

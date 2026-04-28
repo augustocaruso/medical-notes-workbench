@@ -64,7 +64,10 @@ def test_hooks_are_node_based_for_windows_installations():
     assert "ensure_anki.mjs" in serialized
     assert "SessionStart" not in hooks["hooks"]
     assert "AfterAgent" not in hooks["hooks"]
-    assert {entry["matcher"] for entry in before_tool} == {"^mcp_anki_.*", "run_shell_command"}
+    assert {entry["matcher"] for entry in before_tool} == {
+        "^mcp_anki(?:-mcp)?_.*",
+        "run_shell_command",
+    }
     assert "*" not in {entry["matcher"] for entry in before_tool}
     assert not list((EXTENSION / "scripts" / "hooks").glob("*.py"))
     assert not (EXTENSION / "scripts" / "hooks" / "med_context.mjs").exists()
@@ -89,8 +92,9 @@ def test_flashcard_module_references_anki_mcp_prompt_and_ingestion_design():
     build = (ROOT / "scripts" / "build_gemini_cli_extension.py").read_text(encoding="utf-8")
 
     assert note_utils.exists()
-    assert "@ankimcp/anki-mcp-server@0.18.5" in build
-    assert "--stdio" in build
+    assert '"mcpServers"' not in build
+    assert "@ankimcp/anki-mcp-server" in agent + top_flashcards + med_command + file_command + design
+    assert "servidor global `anki-mcp`" in file_command + design
     assert '"envVar": "SERPAPI_KEY"' in build
     assert '"sensitive": True' in build
     assert not (EXTENSION / "commands" / "twenty_rules.toml").exists()
@@ -104,7 +108,7 @@ def test_flashcard_module_references_anki_mcp_prompt_and_ingestion_design():
     assert "Este comando aceita" in top_flashcards
     assert "filtro por tag Obsidian" in top_flashcards
     assert "mais de 10 arquivos" in top_flashcards
-    assert "mcp_anki_*" in top_flashcards
+    assert "mcp_anki-mcp_*" in top_flashcards
     assert "twenty_rules" in agent + top_flashcards + med_command + file_command + design
     assert "flashcard-ingestion.md" in agent + top_flashcards + med_command + file_command
     assert "nao adicionar tags" in design
@@ -117,10 +121,10 @@ def test_flashcard_module_references_anki_mcp_prompt_and_ingestion_design():
     assert "remove-tag --tag anki" in top_flashcards + med_command + file_command + design
     assert "Wiki_Medicina::Cardiologia::Ponte_Miocardica" in design
     assert "Verso Extra" in design + agent
-    assert "mcp_anki_addNotes" in agent
-    assert "mcp_anki_modelFieldNames" in agent
+    assert "mcp_anki-mcp_addNotes" in agent
+    assert "mcp_anki-mcp_modelFieldNames" in agent
     assert "  - addNotes" not in agent
-    assert "mcp_anki_" in hook
+    assert "mcp_anki(?:-mcp)?_" in hook
     assert "manage_flashcards" not in agent
 
 
