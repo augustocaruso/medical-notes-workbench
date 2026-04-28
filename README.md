@@ -108,8 +108,12 @@ Isso força o conteúdo de `dist/gemini-cli-extension` para a branch
 Instalação auto-updatable para usuários:
 
 ```bash
-gemini extensions install https://github.com/augustocaruso/medical-notes-enricher.git --ref=gemini-cli-extension --auto-update --consent
+gemini extensions install https://www.github.com/augustocaruso/medical-notes-enricher.git --ref=gemini-cli-extension --auto-update --consent
 ```
+
+O `www.github.com` força o Gemini CLI a instalar via `git clone` direto. Sem
+isso, algumas versões tentam buscar uma GitHub Release para o `--ref` antes de
+cair para clone e mostram um 404 inofensivo.
 
 Durante/apos a instalação, configure a SerpAPI para busca web:
 
