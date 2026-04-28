@@ -12,6 +12,8 @@ description: Cria notas médicas didáticas em Markdown para estudo, com estrutu
 - O usuário quer uma nota Markdown organizada para estudo no Obsidian.
 - O usuário quer preparar uma nota que depois possa receber figuras com
   `enrich-medical-note`.
+- O usuário quer uma Mini-Aula no padrão da Wiki_Medicina. Nesse caso, siga
+  também o documento preservado `knowledge/knowledge-architect.md`.
 
 Não usar para:
 
@@ -52,7 +54,13 @@ status: rascunho
 ## Pontos visuais sugeridos
 ```
 
-Adapte a estrutura ao tema. Para farmacologia, prefira mecanismo, indicações,
+Adapte a estrutura ao tema. Quando a nota for destinada ao Wiki_Medicina,
+prefira o Padrão Ouro definido em `knowledge/knowledge-architect.md`: título médico
+preciso, epidemiologia, etiologia/fisiopatologia, apresentação clínica,
+diferenciais, diagnóstico, manejo/tratamento, fechamento com resumo e Key
+Points, notas relacionadas e `[[_Índice_Medicina]]`.
+
+Para farmacologia, prefira mecanismo, indicações,
 efeitos adversos, contraindicações e interações. Para anatomia, prefira marcos,
 relações, irrigação, inervação e correlações clínicas.
 

@@ -1,16 +1,18 @@
 description = "Prepara o ambiente Python local do Medical Notes Workbench."
-prompt = """
+prompt = '''
 Prepare o Medical Notes Workbench para uso nesta maquina.
 
 Use a extensao instalada em `~/.gemini/extensions/medical-notes-workbench` como raiz padrao. Se esse caminho nao existir, procure um diretorio contendo `gemini-extension.json` com `"name": "medical-notes-workbench"` ou pergunte ao usuario onde a extensao foi instalada.
 
 Passos:
-1. Rode `python3 -m venv .venv` na raiz da extensao, se `.venv` ainda nao existir.
-2. Rode `.venv/bin/python -m pip install -e .`.
+1. Rode `py -3 -m venv .venv` no Windows ou `python3 -m venv .venv` em macOS/Linux na raiz da extensao, se `.venv` ainda nao existir.
+2. Rode `.\.venv\Scripts\python.exe -m pip install -e .` no Windows ou `.venv/bin/python -m pip install -e .` em macOS/Linux.
 3. Se `config.toml` nao existir, copie `config.example.toml` para `config.toml`.
 4. Confira se `[vault].path` esta preenchido. Se estiver vazio, pergunte ao usuario o caminho do vault Obsidian e atualize `config.toml`.
-5. Se o usuario quiser SerpAPI, explique: crie uma conta em https://serpapi.com/, abra o dashboard e copie a API key. Depois rode `gemini extensions config medical-notes-workbench SERPAPI_KEY` para salvar a chave no `.env` da extensao. Como alternativa manual, copie `.env.example` para `.env` e preencha `SERPAPI_KEY=...`.
-6. Rode `.venv/bin/python -m pytest` apenas se o usuario pedir validacao completa; para setup normal, basta testar `.venv/bin/python -m enricher --help`.
+5. Para processamento de chats, confira `[chat_processor]` em `config.toml` se o usuario estiver fora do Windows real. No Windows real, raw/wiki/linker ja tem defaults especificos, e o catalogo usa `~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json`.
+6. Teste o Python da venv com `-m enricher --help`, depois `scripts/mednotes/med_ops.py validate` e `scripts/mednotes/med_linker.py --help`.
+7. Se o usuario quiser SerpAPI, explique: crie uma conta em https://serpapi.com/, abra o dashboard e copie a API key. Depois rode `gemini extensions config medical-notes-workbench SERPAPI_KEY`; a chave fica no escopo user/keychain do Gemini CLI e nao precisa ser digitada a cada update. Como alternativa manual de desenvolvimento local, copie `.env.example` para `.env` e preencha `SERPAPI_KEY=...`.
+8. Rode o Python da venv com `-m pytest` apenas se o usuario pedir validacao completa.
 
 Explique em portugues o que foi configurado e o que ainda falta.
-"""
+'''

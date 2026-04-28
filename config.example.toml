@@ -65,3 +65,19 @@ user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36
 path = "~/Documents/medical-notes-workbench/cache.db"
 # TTL em dias para o cache de candidatas por (source, query).
 candidates_ttl_days = 30
+
+[chat_processor]
+# Caminhos usados pelo pipeline de subagents `/mednotes:process-chats`.
+# Defaults internos preservam o ambiente Windows real do usuario para raw/wiki/linker.
+# O catalogo fica em dados persistentes do Gemini, fora da pasta auto-updatable da extensao:
+#   C:\Users\leona\OneDrive\Chats_Raw
+#   C:\Users\leona\iCloudDrive\iCloud~md~obsidian\Wiki_Medicina
+#   ~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json
+#   C:\Users\leona\.gemini\skills\med-auto-linker\med_linker.py
+# Preencha aqui apenas quando quiser sobrescrever os defaults ou testar fora do Windows.
+# Se `linker_path` ficar vazio, `med_ops.py` usa `scripts/mednotes/med_linker.py`
+# empacotado na extensao quando disponivel, antes de cair para o default Windows.
+raw_dir = ""
+wiki_dir = ""
+catalog_path = "~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json"
+linker_path = ""

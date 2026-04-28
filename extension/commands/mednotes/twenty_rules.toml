@@ -1,0 +1,38 @@
+description = "Cria flashcards no Anki a partir de um arquivo usando o prompt MCP /twenty_rules."
+prompt = '''
+Crie flashcards no Anki a partir de um arquivo local usando a metodologia
+Twenty Rules carregada pelo prompt MCP `/twenty_rules`.
+
+Argumentos do usuario: {{args}}
+
+Este comando espera `/mednotes:twenty_rules <path>`.
+
+Referencia obrigatoria ao prompt:
+- `/twenty_rules` sem namespace pertence ao prompt MCP `twenty_rules` exposto
+  pelo servidor `anki` de `@ankimcp/anki-mcp-server`; ele nao e uma ferramenta.
+- Nao crie nem use copia local da metodologia Twenty Rules. Se o prompt MCP
+  `/twenty_rules` ainda nao estiver carregado no contexto desta sessao, pare e
+  peça ao usuario: "Execute `/twenty_rules` primeiro e depois rode
+  `/mednotes:twenty_rules <path>`."
+- Quando o prompt MCP estiver carregado/presente no contexto, use-o como a
+  metodologia de formulacao dos cards ("COMO").
+
+Fluxo obrigatorio:
+1. Extraia o `<path>` de `{{args}}`. Se o caminho estiver ausente, peça o caminho
+   do arquivo antes de continuar.
+2. Use `read_file` para ler o arquivo indicado.
+3. Use exclusivamente o conteudo lido desse arquivo como base de conhecimento
+   ("O QUE"). Nao acrescente fatos externos.
+4. Leia e siga `${extensionPath}/knowledge/flashcard-ingestion.md` para as
+   especificacoes locais: hierarquia de decks do Obsidian, sem tags, e campo
+   `Verso Extra` com quebra inicial.
+5. Use o subagent `med-flashcard-maker` para executar a criacao no Anki. Ao
+   chama-lo, informe que as ferramentas Anki autorizadas sao `mcp_anki_*` e que
+   a metodologia vem do prompt MCP `/twenty_rules` ja carregado.
+6. Responda em portugues com o deck final, quantidade criada, modelo/campos
+   usados e qualquer item omitido por falta de suporte no arquivo.
+
+Se o prompt MCP `/twenty_rules` nao estiver disponivel no cliente, nao substitua
+por uma copia local: explique a limitacao e peça para habilitar/atualizar o
+Anki MCP.
+'''

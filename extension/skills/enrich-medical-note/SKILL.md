@@ -38,6 +38,11 @@ Se faltar ambiente Python:
 
 ```bash
 cd "${extensionPath}"
+# Windows
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e .
+
+# macOS/Linux
 python3 -m venv .venv
 .venv/bin/python -m pip install -e .
 ```
@@ -55,6 +60,10 @@ Depois peça o caminho do vault Obsidian e preencha `[vault].path`.
 
 ```bash
 cd "${extensionPath}"
+# Windows
+.\.venv\Scripts\python.exe scripts/run_agent.py "<caminho-da-nota.md>" --config config.toml
+
+# macOS/Linux
 .venv/bin/python scripts/run_agent.py "<caminho-da-nota.md>" --config config.toml
 ```
 
@@ -62,6 +71,10 @@ Para refazer uma nota já enriquecida:
 
 ```bash
 cd "${extensionPath}"
+# Windows
+.\.venv\Scripts\python.exe scripts/run_agent.py "<caminho-da-nota.md>" --config config.toml --force
+
+# macOS/Linux
 .venv/bin/python scripts/run_agent.py "<caminho-da-nota.md>" --config config.toml --force
 ```
 
@@ -83,5 +96,7 @@ Reporte ao usuário:
   Para habilitar, peça ao usuário criar conta em https://serpapi.com/, copiar a
   API key do dashboard e rodar
   `gemini extensions config medical-notes-workbench SERPAPI_KEY`.
+  A chave é uma setting sensível da extensão e não precisa ser digitada a cada
+  update normal.
 - **Downloads 403**: o downloader tenta headers browser-like e fallback de
   thumbnail SerpAPI quando disponível; se ainda falhar, pule a candidata.

@@ -56,6 +56,15 @@ def main() -> int:
             "medical Markdown notes for Obsidian."
         ),
         "contextFileName": "GEMINI.md",
+        "mcpServers": {
+            "anki": {
+                "command": "npx",
+                "args": ["-y", "@ankimcp/anki-mcp-server@0.18.5", "--stdio"],
+                "env": {
+                    "ANKI_CONNECT_URL": "http://127.0.0.1:8765",
+                },
+            }
+        },
         "settings": [
             {
                 "name": "SerpAPI key",
@@ -66,7 +75,7 @@ def main() -> int:
                     "the API key from your dashboard. Leave blank to use only "
                     "Wikimedia."
                 ),
-                "sensitive": False,
+                "sensitive": True,
             }
         ],
     }
@@ -85,7 +94,7 @@ def main() -> int:
         _copy_file(ROOT / filename, DIST / filename)
 
     _copy_file(SOURCE / "GEMINI.md", DIST / "GEMINI.md")
-    for dirname in ("commands", "skills", "agents", "hooks", "policies", "mcp"):
+    for dirname in ("commands", "skills", "agents", "knowledge", "hooks", "policies", "mcp"):
         src_dir = SOURCE / dirname
         if src_dir.exists():
             _copy_tree(src_dir, DIST / dirname)

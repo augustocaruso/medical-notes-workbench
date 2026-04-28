@@ -1,0 +1,25 @@
+description = "Processa backlog de chats medicos brutos para notas Obsidian."
+prompt = """
+Processe chats medicos brutos de Chats_Raw para Wiki_Medicina.
+
+Argumentos do usuario: {{args}}
+
+Use os subagents Gemini CLI desta extensao. A raiz padrao instalada e `~/.gemini/extensions/medical-notes-workbench`; se `${extensionPath}` estiver disponivel, prefira esse valor.
+
+Fluxo:
+1. Localize o script `${extensionPath}/scripts/mednotes/med_ops.py`.
+2. Rode `python "<script>" validate` e resuma pendencias de configuracao.
+3. Rode `list-pending` e `list-triados`.
+4. Para raw chats pendentes, use `med-chat-triager` em paralelo, um raw chat por agente. O agente principal aplica `triage` ou `discard` via `med_ops.py`.
+5. Para raw chats triados do lote, use `med-knowledge-architect` em paralelo, um raw chat por agente, com temp dir isolado por raw chat.
+6. O `med-knowledge-architect` deve seguir os documentos preservados em `${extensionPath}/knowledge/`, especialmente `knowledge-architect.md`.
+7. Consolide os outputs no agente principal e monte manifest com `stage-note`.
+8. Rode `med-catalog-curator` em serie para atualizar/validar `CATALOGO_WIKI.json` e aliases. Use o catalogo configurado ou o default `~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json`.
+9. Rode `publish-batch --dry-run`.
+10. Rode `med-publish-guard`; avance apenas se retornar `approve`.
+11. Rode `publish-batch`.
+12. Rode `${extensionPath}/scripts/mednotes/med_linker.py` uma unica vez ao final do lote.
+13. Responda em portugues com resumo de triados, descartados, notas criadas, raw chats processados, colisões e linker.
+
+Nunca edite YAML/status manualmente. Nunca sobrescreva nota existente. Se houver colisao, prefira abortar e explicar, a menos que o usuario tenha pedido sufixo. Nao use `commit-batch` em instrucoes novas; ele existe apenas como alias temporario de compatibilidade.
+"""

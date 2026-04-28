@@ -1,10 +1,13 @@
 # medical-notes-workbench
 
-Workbench para criar, organizar e processar notas médicas didáticas em Markdown/Obsidian. O primeiro módulo empacotado é o `enricher`, uma toolbox Python que dá a um **agente externo** (Gemini CLI hoje, qualquer outro amanhã) primitivas pra enriquecer notas com imagens. Fontes: Wikimedia Commons, busca web (SerpAPI); futuramente Radiopaedia, OpenStax, NIH Open-i, biblioteca PDF.
+Workbench para criar, organizar e processar notas médicas didáticas em Markdown/Obsidian. O primeiro módulo empacotado é o `enricher`, uma toolbox Python que dá a um **agente externo** (Gemini CLI hoje, qualquer outro amanhã) primitivas pra enriquecer notas com imagens. A extensão também empacota um pipeline de subagents Gemini CLI que converte chats médicos brutos de `Chats_Raw` em notas no `Wiki_Medicina` usando uma CLI determinística (`med_ops.py`) para YAML, staging, publicação e linkagem.
 
 Uso pessoal/estudo (fair use). Imagens são baixadas localmente para o vault Obsidian e referenciadas via `![[...]]`.
 
-> **Fluxo geral**: `chat Gemini → /mednotes:create ou nota existente → /mednotes:enrich → enricher (chamado pelo agente)`.
+> **Fluxos gerais**:
+> - `chat Gemini → /mednotes:create ou nota existente → /mednotes:enrich → enricher (chamado pelo agente)`.
+> - `Chats_Raw → /mednotes:process-chats → subagents médicos → Wiki_Medicina → linker semântico`.
+> - `nota/arquivo → /twenty_rules (prompt MCP) → /mednotes:twenty_rules <path> ou /mednotes:flashcards → med-flashcard-maker → Anki MCP → Anki`.
 
 ## Subcomandos (toolbox)
 
@@ -92,9 +95,87 @@ gemini extensions link dist/gemini-cli-extension
 A extensão inclui:
 
 - `GEMINI.md` com contexto operacional.
-- Slash commands `/mednotes:setup`, `/mednotes:create`, `/mednotes:enrich` e `/mednotes:status`.
+- Slash commands `/mednotes:setup`, `/mednotes:create`, `/mednotes:enrich`, `/mednotes:process-chats`, `/mednotes:link`, `/mednotes:flashcards`, `/mednotes:twenty_rules` e `/mednotes:status`.
 - Skills `create-medical-note` e `enrich-medical-note`.
+- Subagents Gemini para triagem, arquitetura clínica, curadoria de catálogo, guarda de publicação e criação de flashcards.
+- Knowledge docs preservando a redação original das skills médicas funcionais.
+- Hooks Gemini leves para contexto, guardrails do `med_ops.py` e inicialização do Anki antes de ferramentas Anki MCP.
+- MCP `anki` via `@ankimcp/anki-mcp-server`, incluindo o prompt MCP `twenty_rules`.
 - Runtime Python mínimo (`src/`, `scripts/run_agent.py`, `pyproject.toml`).
+
+### Med Chat Processor
+
+O comando `/mednotes:process-chats` usa subagents Gemini CLI para transformar arquivos `.md` brutos de `Chats_Raw` em notas Obsidian no `Wiki_Medicina`.
+
+Os subagents fazem raciocínio clínico e escrita; o script `scripts/mednotes/med_ops.py` faz as operações mecânicas:
+
+```bash
+python scripts/mednotes/med_ops.py validate
+python scripts/mednotes/med_ops.py list-pending
+python scripts/mednotes/med_ops.py list-triados
+python scripts/mednotes/med_ops.py triage --raw-file chat.md --titulo "..."
+python scripts/mednotes/med_ops.py stage-note --manifest batch.json --raw-file chat.md --taxonomy "Psiquiatria/ISRS" --title "ISRS" --content nota-temp.md
+python scripts/mednotes/med_ops.py publish-batch --manifest batch.json --dry-run
+python scripts/mednotes/med_ops.py publish-batch --manifest batch.json
+python scripts/mednotes/med_ops.py run-linker
+```
+
+Defaults internos preservam os caminhos Windows reais de raw/wiki/linker. O catálogo fica em `~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json`, fora da pasta auto-updatable da extensão. Para testar em macOS/Linux, use flags, variáveis `MED_RAW_DIR`/`MED_WIKI_DIR`/`MED_CATALOG_PATH`/`MED_LINKER_PATH`, ou `[chat_processor]` no `config.toml`.
+
+O subagent `med-knowledge-architect` segue o Padrão Ouro preservado em
+`extension/knowledge/knowledge-architect.md`; o linker roda no final do lote. O
+linker também pode ser chamado diretamente:
+
+```bash
+python scripts/mednotes/med_linker.py --wiki-dir ~/Wiki_Medicina
+python scripts/mednotes/med_linker.py ~/Wiki_Medicina/Cardiologia/Arritmias/Fibrilacao_Atrial.md
+```
+
+Para auditoria antes de alterar o grafo, use:
+
+```bash
+python scripts/mednotes/med_linker.py \
+  --wiki-dir ~/Wiki_Medicina \
+  --catalog ~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json \
+  --dry-run --json
+```
+
+O catálogo é a fonte primária de vocabulário; nomes de arquivos e aliases YAML
+entram como fallback.
+
+Subagents do pipeline:
+
+- `med-chat-triager`
+- `med-knowledge-architect`
+- `med-catalog-curator`
+- `med-publish-guard`
+
+### Anki Flashcards
+
+O módulo de flashcards usa o MCP `anki` empacotado pela extensão com
+`@ankimcp/anki-mcp-server` em modo STDIO. Ele depende do Anki Desktop com o
+add-on AnkiConnect respondendo em `http://127.0.0.1:8765`; o hook
+`mednotes-ensure-anki` tenta abrir/minimizar o Anki antes de ferramentas Anki.
+
+O prompt MCP puro é `/twenty_rules`. Ele fica reservado para o Anki MCP; a
+extensão não cria um comando local com esse nome para não causar colisão. Para
+arquivo único, carregue o prompt MCP e depois use o wrapper da extensão:
+
+```bash
+/twenty_rules
+/mednotes:twenty_rules ~/Wiki_Medicina/Cardiologia/Ponte_Miocardica.md
+```
+
+Fluxo obrigatório: o agente lê o arquivo com `read_file`, usa somente esse
+conteúdo como base factual, aplica o prompt MCP `/twenty_rules` como metodologia
+e segue `extension/knowledge/flashcard-ingestion.md` para as regras locais:
+
+- deck do Anki espelha o caminho Obsidian, por exemplo `Wiki_Medicina::Cardiologia::Ponte_Miocardica`;
+- sem tags por enquanto;
+- campo `Verso Extra` começa com uma quebra visual antes do conteúdo.
+
+O comando mais geral `/mednotes:flashcards` usa o mesmo subagent
+`med-flashcard-maker`, mas aceita briefing, trecho colado ou fonte sem caminho.
 
 Para publicar uma branch auto-updatable:
 
@@ -122,8 +203,10 @@ gemini extensions config medical-notes-workbench SERPAPI_KEY
 ```
 
 Para obter a chave, crie uma conta em [SerpAPI](https://serpapi.com/), abra o
-dashboard e copie a API key. Sem essa chave, a extensão ainda funciona com
-Wikimedia, mas `web_search` fica desativado.
+dashboard e copie a API key. A setting é sensível e fica no escopo user/keychain
+do Gemini CLI; updates normais da extensão não pedem a chave de novo. Sem essa
+chave, a extensão ainda funciona com Wikimedia, mas `web_search` fica
+desativado.
 
 ## Estrutura
 
@@ -144,7 +227,13 @@ Fontes da extensão Gemini CLI:
 extension/
 ├── GEMINI.md
 ├── commands/mednotes/*.toml
-└── skills/*/SKILL.md
+├── skills/*/SKILL.md
+├── knowledge/*.md
+├── agents/*.md
+├── hooks/hooks.json
+└── scripts/
+    ├── hooks/*.mjs
+    └── mednotes/*.py
 ```
 
 ## Status
@@ -159,8 +248,10 @@ Em construção:
 - [x] Etapa 6: orquestrador `scripts/run_agent.py` (gemini CLI)
 - [x] Etapa 7: empacotamento como extensão Gemini CLI
 - [x] Etapa 8: migração para Medical Notes Workbench
-- [ ] Etapa 9: adapters médicos curados (Radiopaedia, OpenStax, NIH Open-i)
-- [ ] Etapa 10: biblioteca PDF como source adapter
+- [x] Etapa 9: pipeline Gemini CLI com subagents, knowledge docs e `med_ops.py` seguro
+- [x] Etapa 10: módulo de flashcards Anki MCP (`/twenty_rules`, `/mednotes:twenty_rules`, `/mednotes:flashcards`)
+- [ ] Etapa 11: adapters médicos curados (Radiopaedia, OpenStax, NIH Open-i)
+- [ ] Etapa 12: biblioteca PDF como source adapter
 
 ## Testes
 

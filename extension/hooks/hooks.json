@@ -1,0 +1,58 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "name": "mednotes-chat-context",
+            "type": "command",
+            "command": "node \"${extensionPath}${/}scripts${/}hooks${/}med_context.mjs\" \"${extensionPath}\"",
+            "timeout": 10000,
+            "description": "Adds short Medical Notes Workbench chat-processing context."
+          }
+        ]
+      }
+    ],
+    "BeforeTool": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "name": "mednotes-ensure-anki",
+            "type": "command",
+            "command": "node \"${extensionPath}${/}scripts${/}hooks${/}ensure_anki.mjs\"",
+            "timeout": 30000,
+            "description": "Starts Anki when an Anki MCP tool is about to be used."
+          }
+        ]
+      },
+      {
+        "matcher": "run_shell_command",
+        "hooks": [
+          {
+            "name": "mednotes-med-ops-guard",
+            "type": "command",
+            "command": "node \"${extensionPath}${/}scripts${/}hooks${/}med_guard.mjs\"",
+            "timeout": 10000,
+            "description": "Blocks legacy unsafe med_ops commit calls and nudges batch dry-runs."
+          }
+        ]
+      }
+    ],
+    "AfterAgent": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "name": "mednotes-final-report-check",
+            "type": "command",
+            "command": "node \"${extensionPath}${/}scripts${/}hooks${/}med_after_agent.mjs\"",
+            "timeout": 10000,
+            "description": "Requests a clearer report when chat processing is claimed without commit/linker status."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -6,7 +6,9 @@ Uso pessoal/estudo do usuário (estudante/profissional de medicina) — fair use
 
 ## Contexto
 
-- **Fluxo geral**: `chat Gemini → /mednotes:create ou nota existente → /mednotes:enrich → enricher (chamado pelo agente)`.
+- **Fluxo geral do enricher**: `chat Gemini → /mednotes:create ou nota existente → /mednotes:enrich → enricher (chamado pelo agente)`.
+- **Fluxo geral do chat processor**: `Chats_Raw → /mednotes:process-chats → subagents médicos → Wiki_Medicina → med_linker`.
+- **Fluxo geral dos flashcards**: `nota/arquivo → /twenty_rules (prompt MCP) → /mednotes:twenty_rules <path> ou /mednotes:flashcards → med-flashcard-maker → Anki MCP → Anki`.
 - **Entrada**: arquivo `.md` da nota didática. Schema do frontmatter é **livre** — o enricher é agnóstico. Pode até não ter frontmatter.
 - **Saída**: o mesmo `.md`, in-place, com:
   - Imagens inseridas via `![[...]]` no fim das seções alvo, com caption (`*Figura: <conceito>.* *Fonte: <source> — <url>*`).
@@ -117,8 +119,13 @@ gemini extensions validate dist/gemini-cli-extension
 Fontes versionadas:
 
 - `extension/GEMINI.md`
+- `extension/commands/*.toml`
 - `extension/commands/mednotes/*.toml`
 - `extension/skills/*/SKILL.md`
+- `extension/knowledge/*.md`
+- `extension/agents/*.md`
+- `extension/hooks/hooks.json`
+- `extension/scripts/hooks/*.mjs`
 - `scripts/build_gemini_cli_extension.py`
 - `scripts/publish_gemini_cli_extension_branch.py`
 
@@ -144,10 +151,91 @@ Configuração da SerpAPI:
 gemini extensions config medical-notes-workbench SERPAPI_KEY
 ```
 
-A chave vem do dashboard em https://serpapi.com/. Sem ela, `web_search` devolve
-`[]` e a extensão usa apenas as outras fontes habilitadas.
+A chave vem do dashboard em https://serpapi.com/. Ela é uma setting sensível da
+extensão no escopo user/keychain do Gemini CLI, então updates normais não
+pedem a chave novamente. Sem ela, `web_search` devolve `[]` e a extensão usa
+apenas as outras fontes habilitadas.
 
 Como `dist/` é artefato gerado, não versionar no `main`.
+
+### Pipeline Gemini CLI: `process-chats`
+
+A extensão empacota um pipeline de subagents para converter chats brutos médicos
+em notas Obsidian:
+
+- Comando: `/mednotes:process-chats`.
+- Knowledge docs preservados: `extension/knowledge/factory.md`,
+  `extension/knowledge/knowledge-architect.md`,
+  `extension/knowledge/semantic-linker.md`.
+- CLI mecânica: `extension/scripts/mednotes/med_ops.py`.
+- Linker: `extension/scripts/mednotes/med_linker.py`.
+- Subagents: `med-chat-triager`, `med-knowledge-architect`,
+  `med-catalog-curator`, `med-publish-guard`.
+- Hooks: contexto em `SessionStart`, guardrail de `med_ops.py` em
+  `BeforeTool`, checagem de relatório em `AfterAgent`.
+
+`med_ops.py` é deliberadamente uma CLI determinística, não um hook: hooks só
+guardam contexto/segurança. Toda alteração de YAML/status em `Chats_Raw`, todo
+staging e todo publish real devem passar por `med_ops.py`.
+
+O conteúdo original das skills médicas funcionais deve ficar preservado ao
+máximo em `extension/knowledge/`. Se uma instrução comum for fatorada em agente
+ou comando, preserve o sentido e evite reescrever sem necessidade.
+
+Defaults preservados:
+
+- `C:\Users\leona\OneDrive\Chats_Raw`
+- `C:\Users\leona\iCloudDrive\iCloud~md~obsidian\Wiki_Medicina`
+- `~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json`
+- `C:\Users\leona\.gemini\skills\med-auto-linker\med_linker.py`
+
+Overrides aceitos por flags, variáveis `MED_RAW_DIR`, `MED_WIKI_DIR`,
+`MED_CATALOG_PATH`, `MED_LINKER_PATH`, ou `[chat_processor]` em `config.toml`.
+
+Regras de segurança do chat processor:
+
+- Nunca sobrescrever nota existente silenciosamente.
+- Sempre rodar `publish-batch --dry-run` antes do publish real.
+- Só marcar raw chat como `processado` depois que todas as notas derivadas do
+  manifest forem escritas.
+- Não criar `.bak` por padrão; usar `--backup` apenas quando solicitado.
+- Rejeitar taxonomia absoluta, com `..`, drive letter ou caracteres inseguros.
+- Rodar o linker semântico uma vez ao final do lote.
+- Preservar aliases exatos, notas relacionadas, callouts e `[[_Índice_Medicina]]`
+  conforme `med-knowledge-architect`.
+
+### Pipeline Gemini CLI: flashcards Anki
+
+A extensão empacota um módulo de criação de flashcards:
+
+- Comandos: `/twenty_rules` é o prompt MCP puro do Anki MCP;
+  `/mednotes:twenty_rules <path>` é o wrapper da extensão para um arquivo local;
+  `/mednotes:flashcards` cobre pedidos mais gerais.
+- Subagent: `med-flashcard-maker`.
+- MCP: `anki`, via `@ankimcp/anki-mcp-server` em modo STDIO.
+- Prompt primário: `/twenty_rules`, exposto pelo próprio Anki MCP. Não manter
+  cópia local da metodologia; referenciar o prompt MCP.
+- Regras locais fatoradas: `extension/knowledge/flashcard-ingestion.md`.
+- Hook: `extension/scripts/hooks/ensure_anki.mjs`, que tenta abrir/minimizar o
+  Anki antes de ferramentas Anki MCP.
+
+Contrato do `/mednotes:twenty_rules <path>`:
+
+1. Ler o arquivo com `read_file`.
+2. Usar exclusivamente o conteúdo desse arquivo como base factual ("O QUÊ").
+3. Aplicar o prompt MCP `/twenty_rules` e as regras locais de ingestão como
+   metodologia ("COMO").
+
+Regras locais atuais dos flashcards:
+
+- O deck do Anki espelha o caminho Obsidian. Exemplo:
+  `Wiki_Medicina/Cardiologia/Ponte_Miocardica.md` vira
+  `Wiki_Medicina::Cardiologia::Ponte_Miocardica`.
+- Não adicionar tags por enquanto.
+- Ao preencher `Verso Extra`, prefixar o campo com uma quebra visual antes do
+  conteúdo (`\n\n` em texto puro ou `<br><br>` em HTML).
+- Anki Desktop precisa estar instalado e o add-on AnkiConnect precisa responder
+  em `http://127.0.0.1:8765`.
 
 ### Adaptando pra outro orquestrador (Claude Code skill, Cursor, etc.)
 
@@ -172,6 +260,8 @@ O **enricher core não muda** quando o agente muda — esse é o ponto da arquit
 
 - **Mínimo de dependências de runtime.** Hoje: `httpx`, `Pillow`, `PyYAML`. PDF (`pdfplumber`, `pdf2image`, `pytesseract`) é extra opcional `[pdf]`. Enricher **não chama LLM** — a inteligência semântica é do agente externo. Adicionar deps exige justificativa.
 - Toda mudança em `frontmatter.py`, `insert.py` e `cli.py` precisa de teste em `tests/`.
+- Toda mudança em `extension/scripts/mednotes/med_ops.py`
+  precisa de teste em `tests/`.
 - Adapters de fonte precisam de teste com fixture (HTTP/JSON gravado, via `httpx.MockTransport`).
 - Cada subcomando do CLI deve emitir JSON parseável na stdout em sucesso, e mensagem humana em stderr + exit code != 0 em erro.
 - Commits em português, Conventional Commits.

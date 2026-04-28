@@ -1,5 +1,5 @@
 description = "Verifica configuracao local do Medical Notes Workbench."
-prompt = """
+prompt = '''
 Verifique o status local do Medical Notes Workbench.
 
 Use a raiz padrao `~/.gemini/extensions/medical-notes-workbench`, a menos que o usuario indique outro caminho.
@@ -8,8 +8,10 @@ Cheque:
 1. Se a extensao esta instalada/listada pelo Gemini CLI (`gemini extensions list`).
 2. Se `config.toml` existe.
 3. Se `[vault].path` esta preenchido.
-4. Se `.venv` existe e `.venv/bin/python -m enricher --help` funciona.
-5. Se `.env` tem `SERPAPI_KEY` preenchida, sem imprimir a chave. Se faltar, instrua: crie uma conta em https://serpapi.com/, copie a API key no dashboard e rode `gemini extensions config medical-notes-workbench SERPAPI_KEY`.
+4. Se `.venv` existe e o Python dela funciona: Windows `.\.venv\Scripts\python.exe -m enricher --help`; macOS/Linux `.venv/bin/python -m enricher --help`.
+5. Se `scripts/mednotes/med_ops.py validate` funciona.
+6. Se `scripts/mednotes/med_linker.py --help` funciona.
+7. Se `SERPAPI_KEY` esta configurada por setting da extensao, ambiente ou `.env`, sem imprimir a chave. Se faltar, instrua: crie uma conta em https://serpapi.com/, copie a API key no dashboard e rode `gemini extensions config medical-notes-workbench SERPAPI_KEY`.
 
 Responda em portugues com pronto / pendente e proximas acoes concretas.
-"""
+'''
