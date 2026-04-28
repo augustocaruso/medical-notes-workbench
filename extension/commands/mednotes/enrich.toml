@@ -4,7 +4,7 @@ Enriqueça a nota medica Markdown indicada pelo usuario.
 
 Argumentos do usuario: {{args}}
 
-Use a skill `enrich-medical-note` desta extensao. A raiz padrao da extensao instalada e `~/.gemini/extensions/medical-notes-enricher`; se ela nao existir, localize a extensao ou pergunte ao usuario.
+Use a skill `enrich-medical-note` desta extensao. A raiz padrao da extensao instalada e `~/.gemini/extensions/medical-notes-workbench`; se ela nao existir, localize a extensao ou pergunte ao usuario.
 
 Fluxo:
 1. Identifique o caminho da nota `.md` em `{{args}}`. Se ausente, peça o caminho.

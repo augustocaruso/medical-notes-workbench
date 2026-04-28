@@ -103,7 +103,7 @@ def test_search_envia_parametros_corretos_pra_api():
     assert captured["params"]["gsrsearch"] == "ácido fólico"
     assert captured["params"]["gsrnamespace"] == "6"
     assert captured["params"]["prop"] == "imageinfo"
-    assert "medical-notes-enricher" in captured["ua"]
+    assert "medical-notes-workbench" in captured["ua"]
 
 
 def test_search_resposta_vazia_devolve_lista_vazia():

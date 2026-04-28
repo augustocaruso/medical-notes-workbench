@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the Gemini CLI extension bundle under dist/gemini-cli-extension."""
+"""Build the Medical Notes Workbench Gemini CLI extension bundle."""
 from __future__ import annotations
 
 import json
@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist" / "gemini-cli-extension"
-SOURCE = ROOT / "gemini-cli-extension"
+SOURCE = ROOT / "extension"
 
 
 def _project_version() -> str:
@@ -49,11 +49,11 @@ def main() -> int:
 
     version = _project_version()
     manifest = {
-        "name": "medical-notes-enricher",
+        "name": "medical-notes-workbench",
         "version": version,
         "description": (
-            "Gemini CLI extension for enriching medical Markdown notes "
-            "with locally downloaded Obsidian image embeds."
+            "Gemini CLI workbench for creating, organizing, and processing "
+            "medical Markdown notes for Obsidian."
         ),
         "contextFileName": "GEMINI.md",
         "settings": [
@@ -85,11 +85,16 @@ def main() -> int:
         _copy_file(ROOT / filename, DIST / filename)
 
     _copy_file(SOURCE / "GEMINI.md", DIST / "GEMINI.md")
-    _copy_tree(SOURCE / "commands", DIST / "commands")
-    _copy_tree(SOURCE / "skills", DIST / "skills")
+    for dirname in ("commands", "skills", "agents", "hooks", "policies", "mcp"):
+        src_dir = SOURCE / dirname
+        if src_dir.exists():
+            _copy_tree(src_dir, DIST / dirname)
     _copy_tree(ROOT / "src", DIST / "src")
 
     (DIST / "scripts").mkdir()
+    extension_scripts = SOURCE / "scripts"
+    if extension_scripts.exists():
+        _copy_tree(extension_scripts, DIST / "scripts")
     _copy_file(ROOT / "scripts" / "run_agent.py", DIST / "scripts" / "run_agent.py")
 
     print(f"Built Gemini CLI extension: {DIST}")

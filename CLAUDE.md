@@ -1,12 +1,12 @@
-# medical-notes-enricher
+# medical-notes-workbench
 
-Toolbox Python que dá a um **agente externo** (gemini CLI hoje, qualquer outro amanhã) primitivas pra enriquecer notas médicas didáticas em Markdown com imagens de várias fontes (Wikimedia, busca web via SerpAPI; futuramente Radiopaedia, OpenStax, NIH Open-i, biblioteca PDF local). As imagens são baixadas localmente para o vault Obsidian e referenciadas via `![[...]]`.
+Workbench para criação, organização e processamento de notas médicas didáticas em Markdown/Obsidian. O primeiro módulo interno é o `enricher`, uma toolbox Python que dá a um **agente externo** (gemini CLI hoje, qualquer outro amanhã) primitivas pra enriquecer notas com imagens de várias fontes (Wikimedia, busca web via SerpAPI; futuramente Radiopaedia, OpenStax, NIH Open-i, biblioteca PDF local). As imagens são baixadas localmente para o vault Obsidian e referenciadas via `![[...]]`.
 
 Uso pessoal/estudo do usuário (estudante/profissional de medicina) — fair use, sem distinção por licença, toda imagem escolhida baixa e embeda.
 
 ## Contexto
 
-- **Fluxo geral**: `chat Gemini → skill upstream (chat → nota didática) → enricher (chamado pelo agente)`. A skill upstream **não é parte deste projeto**. Quando ela existir, define o frontmatter da nota didática.
+- **Fluxo geral**: `chat Gemini → /mednotes:create ou nota existente → /mednotes:enrich → enricher (chamado pelo agente)`.
 - **Entrada**: arquivo `.md` da nota didática. Schema do frontmatter é **livre** — o enricher é agnóstico. Pode até não ter frontmatter.
 - **Saída**: o mesmo `.md`, in-place, com:
   - Imagens inseridas via `![[...]]` no fim das seções alvo, com caption (`*Figura: <conceito>.* *Fonte: <source> — <url>*`).
@@ -116,9 +116,9 @@ gemini extensions validate dist/gemini-cli-extension
 
 Fontes versionadas:
 
-- `gemini-cli-extension/GEMINI.md`
-- `gemini-cli-extension/commands/enricher/*.toml`
-- `gemini-cli-extension/skills/enrich-medical-note/SKILL.md`
+- `extension/GEMINI.md`
+- `extension/commands/mednotes/*.toml`
+- `extension/skills/*/SKILL.md`
 - `scripts/build_gemini_cli_extension.py`
 - `scripts/publish_gemini_cli_extension_branch.py`
 
@@ -131,7 +131,7 @@ npm run publish:gemini-cli-extension
 Instalação auto-updatable para usuários:
 
 ```bash
-gemini extensions install https://www.github.com/augustocaruso/medical-notes-enricher.git --ref=gemini-cli-extension --auto-update --consent
+gemini extensions install https://www.github.com/augustocaruso/medical-notes-workbench.git --ref=gemini-cli-extension --auto-update --consent
 ```
 
 O `www.github.com` força o Gemini CLI a instalar via `git clone` direto. Sem
@@ -141,7 +141,7 @@ cair para clone e mostram um 404 inofensivo.
 Configuração da SerpAPI:
 
 ```bash
-gemini extensions config medical-notes-enricher SERPAPI_KEY
+gemini extensions config medical-notes-workbench SERPAPI_KEY
 ```
 
 A chave vem do dashboard em https://serpapi.com/. Sem ela, `web_search` devolve
@@ -165,7 +165,7 @@ O **enricher core não muda** quando o agente muda — esse é o ponto da arquit
 1. **Markdown surgery (`insert.py`)**: identificar a seção alvo por `section_path` é onde mais bug aparece. Headings podem repetir, ter caracteres especiais, ou a nota usa setext (`===`/`---` underline) em vez de ATX (`#`). Sempre escrever teste antes da mudança.
 2. **Frontmatter aditivo**: pyyaml reordena chaves se não passar `sort_keys=False`. Já fixado em `frontmatter.write`, mas verificar em todo round-trip. Nunca assumir schema da nota — qualquer chave preexistente sai intacta.
 3. **Adapters de fonte**: APIs mudam silenciosamente. Cada adapter precisa de teste contra fixture HTTP local (`httpx.MockTransport`), não rede ao vivo no CI.
-4. **Magic number > extensão da URL**: URLs do Google/Bing podem servir HTML quando o asset some — `Pillow.Image.open` é a única validação de que veio imagem real. Coberto por teste em `test_download.py`. **Headers browser-like**: `download.py` envia User-Agent configurável, `Accept` de imagem e `Referer` da página-fonte quando disponível. Isso destrava alguns CDNs/hotlink simples; Wikimedia também aceita. Quando SerpAPI fornece `thumbnail_url`, o orquestrador usa esse thumbnail como fallback se o original bloquear. Pra modo "respeitoso/identificável" troque `[download].user_agent` pra `medical-notes-enricher/0.1 (...)`.
+4. **Magic number > extensão da URL**: URLs do Google/Bing podem servir HTML quando o asset some — `Pillow.Image.open` é a única validação de que veio imagem real. Coberto por teste em `test_download.py`. **Headers browser-like**: `download.py` envia User-Agent configurável, `Accept` de imagem e `Referer` da página-fonte quando disponível. Isso destrava alguns CDNs/hotlink simples; Wikimedia também aceita. Quando SerpAPI fornece `thumbnail_url`, o orquestrador usa esse thumbnail como fallback se o original bloquear. Pra modo "respeitoso/identificável" troque `[download].user_agent` pra `medical-notes-workbench/0.1 (...)`.
 5. **Dedupe SHA-256**: imagens iguais via fontes diferentes só baixam uma vez; o `image_sources` do frontmatter conta a primeira origem que achou.
 
 ## Regras de contribuição

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Force-publish dist/gemini-cli-extension to the gemini-cli-extension branch."""
+"""Force-publish the Medical Notes Workbench extension branch."""
 from __future__ import annotations
 
 import os
@@ -11,7 +11,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE_DIR = ROOT / "dist" / "gemini-cli-extension"
-BRANCH = os.environ.get("MNE_GEMINI_EXTENSION_BRANCH", "gemini-cli-extension")
+BRANCH = os.environ.get(
+    "MNW_GEMINI_EXTENSION_BRANCH",
+    os.environ.get("MNE_GEMINI_EXTENSION_BRANCH", "gemini-cli-extension"),
+)
 REMOTE_NAME = "publish-origin"
 
 
@@ -33,6 +36,8 @@ def _run(cmd: list[str], *, cwd: Path) -> str:
 
 
 def _remote_url() -> str:
+    if os.environ.get("MNW_GEMINI_EXTENSION_REMOTE_URL"):
+        return os.environ["MNW_GEMINI_EXTENSION_REMOTE_URL"]
     if os.environ.get("MNE_GEMINI_EXTENSION_REMOTE_URL"):
         return os.environ["MNE_GEMINI_EXTENSION_REMOTE_URL"]
     if os.environ.get("GITHUB_TOKEN") and os.environ.get("GITHUB_REPOSITORY"):
@@ -48,7 +53,7 @@ def main() -> int:
         print(f"Missing {manifest}. Run the build script first.")
         return 1
 
-    with tempfile.TemporaryDirectory(prefix="medical-notes-enricher-extension-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="medical-notes-workbench-extension-") as tmp:
         work_dir = Path(tmp)
         shutil.copytree(SOURCE_DIR, work_dir, dirs_exist_ok=True)
         _run(["git", "init"], cwd=work_dir)

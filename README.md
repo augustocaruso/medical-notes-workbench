@@ -1,10 +1,10 @@
-# medical-notes-enricher
+# medical-notes-workbench
 
-Toolbox Python que dá a um **agente externo** (gemini CLI hoje, qualquer outro amanhã) primitivas pra enriquecer notas médicas didáticas em Markdown com imagens. Fontes: Wikimedia Commons, busca web (SerpAPI); futuramente Radiopaedia, OpenStax, NIH Open-i, biblioteca PDF.
+Workbench para criar, organizar e processar notas médicas didáticas em Markdown/Obsidian. O primeiro módulo empacotado é o `enricher`, uma toolbox Python que dá a um **agente externo** (Gemini CLI hoje, qualquer outro amanhã) primitivas pra enriquecer notas com imagens. Fontes: Wikimedia Commons, busca web (SerpAPI); futuramente Radiopaedia, OpenStax, NIH Open-i, biblioteca PDF.
 
 Uso pessoal/estudo (fair use). Imagens são baixadas localmente para o vault Obsidian e referenciadas via `![[...]]`.
 
-> **Fluxo geral**: `chat Gemini → skill upstream (chat → nota didática) → enricher (chamado pelo agente)`. A skill upstream não é parte deste projeto.
+> **Fluxo geral**: `chat Gemini → /mednotes:create ou nota existente → /mednotes:enrich → enricher (chamado pelo agente)`.
 
 ## Subcomandos (toolbox)
 
@@ -41,8 +41,8 @@ Ajustes em `[gemini]` do `config.toml`:
 ## Setup
 
 ```bash
-git clone <este-repo> ~/Documents/medical-notes-enricher
-cd ~/Documents/medical-notes-enricher
+git clone https://github.com/augustocaruso/medical-notes-workbench.git ~/Documents/medical-notes-workbench
+cd ~/Documents/medical-notes-workbench
 
 python -m venv .venv && source .venv/bin/activate
 pip install -e .[dev]              # core + testes
@@ -92,8 +92,8 @@ gemini extensions link dist/gemini-cli-extension
 A extensão inclui:
 
 - `GEMINI.md` com contexto operacional.
-- Slash commands `/enricher:setup`, `/enricher:enrich` e `/enricher:status`.
-- Skill `enrich-medical-note`.
+- Slash commands `/mednotes:setup`, `/mednotes:create`, `/mednotes:enrich` e `/mednotes:status`.
+- Skills `create-medical-note` e `enrich-medical-note`.
 - Runtime Python mínimo (`src/`, `scripts/run_agent.py`, `pyproject.toml`).
 
 Para publicar uma branch auto-updatable:
@@ -108,7 +108,7 @@ Isso força o conteúdo de `dist/gemini-cli-extension` para a branch
 Instalação auto-updatable para usuários:
 
 ```bash
-gemini extensions install https://www.github.com/augustocaruso/medical-notes-enricher.git --ref=gemini-cli-extension --auto-update --consent
+gemini extensions install https://www.github.com/augustocaruso/medical-notes-workbench.git --ref=gemini-cli-extension --auto-update --consent
 ```
 
 O `www.github.com` força o Gemini CLI a instalar via `git clone` direto. Sem
@@ -118,7 +118,7 @@ cair para clone e mostram um 404 inofensivo.
 Durante/apos a instalação, configure a SerpAPI para busca web:
 
 ```bash
-gemini extensions config medical-notes-enricher SERPAPI_KEY
+gemini extensions config medical-notes-workbench SERPAPI_KEY
 ```
 
 Para obter a chave, crie uma conta em [SerpAPI](https://serpapi.com/), abra o
@@ -141,10 +141,10 @@ src/enricher/
 Fontes da extensão Gemini CLI:
 
 ```
-gemini-cli-extension/
+extension/
 ├── GEMINI.md
-├── commands/enricher/*.toml
-└── skills/enrich-medical-note/SKILL.md
+├── commands/mednotes/*.toml
+└── skills/*/SKILL.md
 ```
 
 ## Status
@@ -158,8 +158,9 @@ Em construção:
 - [x] Etapa 5: `download.py` + subcomando `download`
 - [x] Etapa 6: orquestrador `scripts/run_agent.py` (gemini CLI)
 - [x] Etapa 7: empacotamento como extensão Gemini CLI
-- [ ] Etapa 8: adapters médicos curados (Radiopaedia, OpenStax, NIH Open-i)
-- [ ] Etapa 9: biblioteca PDF como source adapter
+- [x] Etapa 8: migração para Medical Notes Workbench
+- [ ] Etapa 9: adapters médicos curados (Radiopaedia, OpenStax, NIH Open-i)
+- [ ] Etapa 10: biblioteca PDF como source adapter
 
 ## Testes
 

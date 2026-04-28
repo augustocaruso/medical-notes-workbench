@@ -1,4 +1,4 @@
-# medical-notes-enricher — copie para config.toml e ajuste.
+# medical-notes-workbench — copie para config.toml e ajuste.
 
 [vault]
 # Caminho absoluto do vault Obsidian. Vazio = enricher recusa rodar.
@@ -28,7 +28,7 @@ top_k_per_source = 4
 
 [sources.pdf_library]
 # Caminho do índice gerado por scripts/build_pdf_index.py.
-index_path = "~/Documents/medical-notes-enricher/pdf_index.db"
+index_path = "~/Documents/medical-notes-workbench/pdf_index.db"
 
 [sources.web_search]
 # "serpapi" ou "bing". Exige a key correspondente em .env.
@@ -57,11 +57,11 @@ timeout_seconds = 120
 #
 # Alternativa identificável (mais respeitoso, alinhado com expectativa do
 # Wikimedia e algumas fontes médicas):
-# user_agent = "medical-notes-enricher/0.1 (personal study; https://github.com/augustocaruso/medical-notes-enricher)"
+# user_agent = "medical-notes-workbench/0.1 (personal study; https://github.com/augustocaruso/medical-notes-workbench)"
 user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 [cache]
 # Caminho do SQLite com âncoras, candidatas e índice de imagens baixadas.
-path = "~/Documents/medical-notes-enricher/cache.db"
+path = "~/Documents/medical-notes-workbench/cache.db"
 # TTL em dias para o cache de candidatas por (source, query).
 candidates_ttl_days = 30

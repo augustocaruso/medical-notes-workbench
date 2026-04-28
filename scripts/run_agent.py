@@ -561,7 +561,7 @@ def main(argv: list[str] | None = None) -> int:
     max_candidates = cfg["gemini"]["max_candidates_per_anchor"]
     max_dim = cfg["enrichment"]["max_image_dimension"]
 
-    _log("medical-notes-enricher")
+    _log("medical-notes-workbench / enricher")
     _log(f"Nota: {args.note}")
     _log(f"Config: {args.config if args.config else '(auto)'}")
     _log(f"Vault: {vault}")

@@ -1,6 +1,6 @@
 ---
 name: enrich-medical-note
-description: Enriquece notas médicas em Markdown com imagens usando o medical-notes-enricher empacotado nesta extensão Gemini CLI. Use quando o usuário pedir para enriquecer, ilustrar, adicionar figuras ou buscar imagens para uma nota médica `.md`.
+description: Enriquece notas médicas em Markdown com imagens usando o módulo enricher empacotado no Medical Notes Workbench. Use quando o usuário pedir para enriquecer, ilustrar, adicionar figuras ou buscar imagens para uma nota médica `.md`.
 ---
 
 # Skill: enrich-medical-note
@@ -23,7 +23,7 @@ Use `${extensionPath}` como raiz da extensão. Se o conteúdo não tiver sido
 hidratado pelo Gemini CLI, use o caminho padrão:
 
 ```bash
-~/.gemini/extensions/medical-notes-enricher
+~/.gemini/extensions/medical-notes-workbench
 ```
 
 ## Pré-condições
@@ -82,6 +82,6 @@ Reporte ao usuário:
 - **Sem `SERPAPI_KEY`**: `web_search` retorna `[]`; Wikimedia ainda funciona.
   Para habilitar, peça ao usuário criar conta em https://serpapi.com/, copiar a
   API key do dashboard e rodar
-  `gemini extensions config medical-notes-enricher SERPAPI_KEY`.
+  `gemini extensions config medical-notes-workbench SERPAPI_KEY`.
 - **Downloads 403**: o downloader tenta headers browser-like e fallback de
   thumbnail SerpAPI quando disponível; se ainda falhar, pule a candidata.

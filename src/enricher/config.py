@@ -45,7 +45,7 @@ _DEFAULTS: dict[str, Any] = {
         # Default: UA browser-like (Chrome/macOS) — destrava osmosis,
         # thehealthy.com, e similares com anti-bot básico. Wikimedia também
         # aceita (qualquer browser legítimo passa). Trocar de volta pra UA
-        # identificável (`medical-notes-enricher/0.1 (...)`) é mais
+        # identificável (`medical-notes-workbench/0.1 (...)`) é mais
         # respeitoso mas perde fontes; veja config.example.toml.
         "user_agent": (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -54,7 +54,7 @@ _DEFAULTS: dict[str, Any] = {
         ),
     },
     "cache": {
-        "path": "~/Documents/medical-notes-enricher/cache.db",
+        "path": "~/Documents/medical-notes-workbench/cache.db",
         "candidates_ttl_days": 30,
     },
 }

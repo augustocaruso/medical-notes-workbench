@@ -19,8 +19,8 @@ NAME = "wikimedia"
 
 _ENDPOINT = "https://commons.wikimedia.org/w/api.php"
 _USER_AGENT = (
-    "medical-notes-enricher/0.1 (personal study; "
-    "https://github.com/augustocaruso/medical-notes-enricher)"
+    "medical-notes-workbench/0.1 (personal study; "
+    "https://github.com/augustocaruso/medical-notes-workbench)"
 )
 _PREFERRED_THUMB_WIDTH = 1600
 

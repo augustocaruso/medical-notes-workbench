@@ -43,8 +43,8 @@ _FORMAT_TO_EXT = {"PNG": "png", "JPEG": "jpg", "WEBP": "webp", "GIF": "gif"}
 
 # Wikimedia (e outros) rejeitam UAs genéricos como `python-httpx/X.Y` com 403.
 _DEFAULT_USER_AGENT = (
-    "medical-notes-enricher/0.1 (personal study; "
-    "https://github.com/augustocaruso/medical-notes-enricher)"
+    "medical-notes-workbench/0.1 (personal study; "
+    "https://github.com/augustocaruso/medical-notes-workbench)"
 )
 
 
