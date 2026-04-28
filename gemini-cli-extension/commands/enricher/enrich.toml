@@ -1,0 +1,18 @@
+description = "Enriquece uma nota medica Markdown com imagens."
+prompt = """
+Enriqueça a nota medica Markdown indicada pelo usuario.
+
+Argumentos do usuario: {{args}}
+
+Use a skill `enrich-medical-note` desta extensao. A raiz padrao da extensao instalada e `~/.gemini/extensions/medical-notes-enricher`; se ela nao existir, localize a extensao ou pergunte ao usuario.
+
+Fluxo:
+1. Identifique o caminho da nota `.md` em `{{args}}`. Se ausente, peça o caminho.
+2. Garanta que `.venv` existe e que o pacote esta instalado (`.venv/bin/python -m pip install -e .` se necessario).
+3. Garanta que `config.toml` existe e que `[vault].path` aponta para o vault Obsidian. Se estiver vazio, peça o caminho e atualize o arquivo.
+4. Rode `.venv/bin/python scripts/run_agent.py "<nota.md>" --config config.toml`.
+5. Se a nota ja tiver `images_enriched: true` e o usuario pediu refazer, rode novamente com `--force`.
+6. Resuma quantas imagens foram inseridas, quais fontes foram usadas e o caminho da nota.
+
+Nao edite o conteudo textual da nota fora dos blocos de imagem/caption gerados pelo enricher.
+"""

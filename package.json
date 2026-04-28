@@ -1,0 +1,11 @@
+{
+  "name": "medical-notes-enricher",
+  "version": "0.0.1",
+  "description": "Gemini CLI extension packaging for the medical notes image enricher.",
+  "private": true,
+  "scripts": {
+    "build:gemini-cli-extension": "python3 scripts/build_gemini_cli_extension.py",
+    "validate:gemini-cli-extension": "npm run build:gemini-cli-extension && gemini extensions validate dist/gemini-cli-extension",
+    "publish:gemini-cli-extension": "npm run build:gemini-cli-extension && python3 scripts/publish_gemini_cli_extension_branch.py"
+  }
+}

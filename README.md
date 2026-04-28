@@ -79,6 +79,38 @@ python -m enricher insert nota.md \
     --source-url https://commons.wikimedia.org/wiki/File:X
 ```
 
+## Gemini CLI Extension
+
+O projeto também pode ser empacotado como extensão do Gemini CLI:
+
+```bash
+npm run build:gemini-cli-extension
+gemini extensions validate dist/gemini-cli-extension
+gemini extensions link dist/gemini-cli-extension
+```
+
+A extensão inclui:
+
+- `GEMINI.md` com contexto operacional.
+- Slash commands `/enricher:setup`, `/enricher:enrich` e `/enricher:status`.
+- Skill `enrich-medical-note`.
+- Runtime Python mínimo (`src/`, `scripts/run_agent.py`, `pyproject.toml`).
+
+Para publicar uma branch auto-updatable:
+
+```bash
+npm run publish:gemini-cli-extension
+```
+
+Isso força o conteúdo de `dist/gemini-cli-extension` para a branch
+`gemini-cli-extension`, com `gemini-extension.json` na raiz.
+
+Instalação auto-updatable para usuários:
+
+```bash
+gemini extensions install https://github.com/augustocaruso/medical-notes-enricher.git --ref=gemini-cli-extension --auto-update --consent
+```
+
 ## Estrutura
 
 ```
@@ -92,6 +124,15 @@ src/enricher/
 └── sources/          adapters plugáveis (wikimedia, web_search, ...)
 ```
 
+Fontes da extensão Gemini CLI:
+
+```
+gemini-cli-extension/
+├── GEMINI.md
+├── commands/enricher/*.toml
+└── skills/enrich-medical-note/SKILL.md
+```
+
 ## Status
 
 Em construção:
@@ -102,8 +143,9 @@ Em construção:
 - [x] Etapa 4: realinhamento toolbox (CLI subcomandos `sections`/`search`/`insert` + adapter `web_search` SerpAPI)
 - [x] Etapa 5: `download.py` + subcomando `download`
 - [x] Etapa 6: orquestrador `scripts/run_agent.py` (gemini CLI)
-- [ ] Etapa 6: adapters médicos curados (Radiopaedia, OpenStax, NIH Open-i)
-- [ ] Etapa 7: biblioteca PDF como source adapter
+- [x] Etapa 7: empacotamento como extensão Gemini CLI
+- [ ] Etapa 8: adapters médicos curados (Radiopaedia, OpenStax, NIH Open-i)
+- [ ] Etapa 9: biblioteca PDF como source adapter
 
 ## Testes
 

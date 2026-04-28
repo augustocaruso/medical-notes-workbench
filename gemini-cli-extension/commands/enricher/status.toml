@@ -1,0 +1,15 @@
+description = "Verifica configuracao local do Medical Notes Enricher."
+prompt = """
+Verifique o status local do Medical Notes Enricher.
+
+Use a raiz padrao `~/.gemini/extensions/medical-notes-enricher`, a menos que o usuario indique outro caminho.
+
+Cheque:
+1. Se a extensao esta instalada/listada pelo Gemini CLI (`gemini extensions list`).
+2. Se `config.toml` existe.
+3. Se `[vault].path` esta preenchido.
+4. Se `.venv` existe e `.venv/bin/python -m enricher --help` funciona.
+5. Se `.env` tem `SERPAPI_KEY` preenchida, sem imprimir a chave.
+
+Responda em portugues com pronto / pendente e proximas acoes concretas.
+"""

@@ -105,6 +105,37 @@ Saída é log estruturado em stderr/stdout (etapas numeradas, decisões do gemin
 
 Idempotente: pula notas com `images_enriched: true`. `--force` ignora.
 
+### Extensão Gemini CLI
+
+O repo também gera um bundle em `dist/gemini-cli-extension`:
+
+```bash
+npm run build:gemini-cli-extension
+gemini extensions validate dist/gemini-cli-extension
+```
+
+Fontes versionadas:
+
+- `gemini-cli-extension/GEMINI.md`
+- `gemini-cli-extension/commands/enricher/*.toml`
+- `gemini-cli-extension/skills/enrich-medical-note/SKILL.md`
+- `scripts/build_gemini_cli_extension.py`
+- `scripts/publish_gemini_cli_extension_branch.py`
+
+O publish force-pusha o bundle para a branch `gemini-cli-extension`:
+
+```bash
+npm run publish:gemini-cli-extension
+```
+
+Instalação auto-updatable para usuários:
+
+```bash
+gemini extensions install https://github.com/augustocaruso/medical-notes-enricher.git --ref=gemini-cli-extension --auto-update --consent
+```
+
+Como `dist/` é artefato gerado, não versionar no `main`.
+
 ### Adaptando pra outro orquestrador (Claude Code skill, Cursor, etc.)
 
 `scripts/run_agent.py` é uma **implementação de referência**, não a única forma. Pra plugar outro agente:
