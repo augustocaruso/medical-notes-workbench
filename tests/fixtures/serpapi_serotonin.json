@@ -1,0 +1,67 @@
+{
+  "search_metadata": {
+    "id": "fixture-001",
+    "status": "Success",
+    "google_images_url": "https://www.google.com/search?q=serotonin+reuptake&tbm=isch"
+  },
+  "search_parameters": {
+    "engine": "google_images",
+    "q": "serotonin reuptake",
+    "google_domain": "google.com"
+  },
+  "images_results": [
+    {
+      "position": 1,
+      "thumbnail": "https://serpapi.com/searches/abc/images/thumbs/1.jpg",
+      "original": "https://example.org/figs/serotonin_reuptake.png",
+      "original_width": 1600,
+      "original_height": 1200,
+      "title": "Serotonin reuptake at the synapse",
+      "link": "https://example.org/articles/serotonin-reuptake",
+      "source": "example.org",
+      "snippet": "Diagram of serotonin reuptake via SERT."
+    },
+    {
+      "position": 2,
+      "thumbnail": "https://serpapi.com/searches/abc/images/thumbs/2.jpg",
+      "original": "https://medschool.example.com/img/ssri.jpg",
+      "original_width": 1200,
+      "original_height": 800,
+      "title": "SSRI mechanism",
+      "link": "https://medschool.example.com/notes/ssri",
+      "source": "medschool.example.com",
+      "snippet": "SSRI ocupa o transportador SERT."
+    },
+    {
+      "position": 3,
+      "thumbnail": "https://serpapi.com/searches/abc/images/thumbs/3.jpg",
+      "original": "https://blog.example.net/2023/serotonin.png",
+      "original_width": 900,
+      "original_height": 600,
+      "title": "Serotonergic synapse overview",
+      "link": "https://blog.example.net/2023/serotonin",
+      "source": "blog.example.net",
+      "snippet": "Visão geral da sinapse serotoninérgica."
+    },
+    {
+      "position": 4,
+      "thumbnail": "https://serpapi.com/searches/abc/images/thumbs/4.jpg",
+      "original": "https://anatomy.example.io/synapse_full.jpg",
+      "original_width": 2400,
+      "original_height": 1800,
+      "title": "Synaptic cleft anatomy",
+      "link": "https://anatomy.example.io/synapse",
+      "source": "anatomy.example.io",
+      "snippet": "Anatomia detalhada da fenda sináptica."
+    },
+    {
+      "position": 5,
+      "thumbnail": "https://serpapi.com/searches/abc/images/thumbs/5.jpg",
+      "original_width": 800,
+      "original_height": 600,
+      "title": "Sem original (apenas thumb)",
+      "link": "https://other.example/doc",
+      "source": "other.example"
+    }
+  ]
+}

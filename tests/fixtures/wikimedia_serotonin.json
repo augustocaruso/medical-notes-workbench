@@ -1,0 +1,114 @@
+{
+  "batchcomplete": true,
+  "query": {
+    "pages": [
+      {
+        "pageid": 1001,
+        "ns": 6,
+        "title": "File:Serotonin_reuptake.svg",
+        "imageinfo": [
+          {
+            "size": 88231,
+            "width": 2048,
+            "height": 1536,
+            "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/aa/Serotonin_reuptake.svg/1600px-Serotonin_reuptake.svg.png",
+            "thumbwidth": 1600,
+            "thumbheight": 1200,
+            "url": "https://upload.wikimedia.org/wikipedia/commons/a/aa/Serotonin_reuptake.svg",
+            "descriptionurl": "https://commons.wikimedia.org/wiki/File:Serotonin_reuptake.svg",
+            "mime": "image/svg+xml",
+            "extmetadata": {
+              "LicenseShortName": {"value": "CC BY-SA 4.0"},
+              "ImageDescription": {"value": "Diagrama do mecanismo de recaptação de serotonina pelo SERT."}
+            }
+          }
+        ]
+      },
+      {
+        "pageid": 1002,
+        "ns": 6,
+        "title": "File:SSRI_mechanism.png",
+        "imageinfo": [
+          {
+            "size": 145000,
+            "width": 1800,
+            "height": 1200,
+            "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bb/SSRI_mechanism.png/1600px-SSRI_mechanism.png",
+            "thumbwidth": 1600,
+            "thumbheight": 1067,
+            "url": "https://upload.wikimedia.org/wikipedia/commons/b/bb/SSRI_mechanism.png",
+            "descriptionurl": "https://commons.wikimedia.org/wiki/File:SSRI_mechanism.png",
+            "mime": "image/png",
+            "extmetadata": {
+              "LicenseShortName": {"value": "Public domain"},
+              "ImageDescription": {"value": "Mecanismo de ação dos ISRS na sinapse."}
+            }
+          }
+        ]
+      },
+      {
+        "pageid": 1003,
+        "ns": 6,
+        "title": "File:Synapse_overview.jpg",
+        "imageinfo": [
+          {
+            "size": 200000,
+            "width": 3000,
+            "height": 2000,
+            "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cc/Synapse_overview.jpg/1600px-Synapse_overview.jpg",
+            "thumbwidth": 1600,
+            "thumbheight": 1067,
+            "url": "https://upload.wikimedia.org/wikipedia/commons/c/cc/Synapse_overview.jpg",
+            "descriptionurl": "https://commons.wikimedia.org/wiki/File:Synapse_overview.jpg",
+            "mime": "image/jpeg",
+            "extmetadata": {
+              "LicenseShortName": {"value": "CC BY 3.0"},
+              "ImageDescription": {"value": "Visão geral de uma sinapse química."}
+            }
+          }
+        ]
+      },
+      {
+        "pageid": 1004,
+        "ns": 6,
+        "title": "File:Random_unrelated.pdf",
+        "imageinfo": [
+          {
+            "size": 50000,
+            "url": "https://upload.wikimedia.org/wikipedia/commons/x/yy/Random_unrelated.pdf",
+            "descriptionurl": "https://commons.wikimedia.org/wiki/File:Random_unrelated.pdf",
+            "mime": "application/pdf",
+            "extmetadata": {}
+          }
+        ]
+      },
+      {
+        "pageid": 1005,
+        "ns": 6,
+        "title": "File:Without_imageinfo.png"
+      },
+      {
+        "pageid": 1006,
+        "ns": 6,
+        "title": "File:Serotonin_pathway.jpg",
+        "imageinfo": [
+          {
+            "size": 90000,
+            "width": 1200,
+            "height": 800,
+            "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Serotonin_pathway.jpg/1200px-Serotonin_pathway.jpg",
+            "thumbwidth": 1200,
+            "thumbheight": 800,
+            "url": "https://upload.wikimedia.org/wikipedia/commons/d/dd/Serotonin_pathway.jpg",
+            "descriptionurl": "https://commons.wikimedia.org/wiki/File:Serotonin_pathway.jpg",
+            "mime": "image/jpeg",
+            "extmetadata": {
+              "LicenseShortName": {"value": "CC BY-SA 3.0"},
+              "ImageDescription": {"value": "Via serotoninérgica esquemática."}
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

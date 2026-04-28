@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg
+
+# Local config
+.env
+config.toml
+**/.claude/settings.local.json
+
+# Caches e índices locais
+cache.db
+pdf_index.db
+*.db-journal
+
+# Saídas locais (vault não vive aqui, mas por garantia)
+attachments/
+out/
+tmp/
+
+# OS
+.DS_Store
+Thumbs.db
