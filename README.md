@@ -51,6 +51,7 @@ pip install -e .[dev,pdf]          # +biblioteca PDF (pdfplumber, pdf2image, pyt
 cp config.example.toml config.toml  # editar [vault].path
 
 # Opcional: chave SerpAPI pra busca web genérica.
+# O adapter lê SERPAPI_KEY do ambiente ou deste .env.
 # Sem ela, `search web_search` devolve [] silenciosamente.
 cp .env.example .env
 ```

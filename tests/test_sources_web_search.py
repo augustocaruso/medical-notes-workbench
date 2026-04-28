@@ -19,11 +19,43 @@ def _client_with(response_json: dict, *, on_request=None) -> httpx.Client:
     return httpx.Client(transport=httpx.MockTransport(handler))
 
 
-def test_search_sem_key_devolve_lista_vazia(monkeypatch):
+def test_search_sem_key_devolve_lista_vazia(monkeypatch, tmp_path):
     monkeypatch.delenv("SERPAPI_KEY", raising=False)
+    monkeypatch.chdir(tmp_path)
     # Note: `client` não chega a ser usado porque a função sai antes.
     out = web_search.search("qualquer coisa", "diagram", top_k=4)
     assert out == []
+
+
+def test_search_carrega_key_do_dotenv(monkeypatch, tmp_path):
+    monkeypatch.delenv("SERPAPI_KEY", raising=False)
+    (tmp_path / ".env").write_text("SERPAPI_KEY=K_DOTENV\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    captured: dict = {}
+
+    def on_request(request: httpx.Request) -> None:
+        captured["params"] = dict(request.url.params)
+
+    with _client_with({"images_results": []}, on_request=on_request) as client:
+        out = web_search.search("q", "diagram", top_k=1, client=client)
+
+    assert out == []
+    assert captured["params"]["api_key"] == "K_DOTENV"
+
+
+def test_search_api_key_explicita_tem_precedencia_sobre_dotenv(monkeypatch, tmp_path):
+    monkeypatch.delenv("SERPAPI_KEY", raising=False)
+    (tmp_path / ".env").write_text("SERPAPI_KEY=K_DOTENV\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    captured: dict = {}
+
+    def on_request(request: httpx.Request) -> None:
+        captured["params"] = dict(request.url.params)
+
+    with _client_with({"images_results": []}, on_request=on_request) as client:
+        web_search.search("q", "diagram", top_k=1, client=client, api_key="K_EXPLICIT")
+
+    assert captured["params"]["api_key"] == "K_EXPLICIT"
 
 
 def test_search_parses_candidates_da_fixture():

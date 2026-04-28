@@ -79,8 +79,9 @@ def test_search_wikimedia_devolve_candidates_em_json(monkeypatch, capsys):
     assert all(c["source"] == "wikimedia" for c in out)
 
 
-def test_search_web_search_sem_key_devolve_lista_vazia(monkeypatch, capsys):
+def test_search_web_search_sem_key_devolve_lista_vazia(monkeypatch, tmp_path, capsys):
     monkeypatch.delenv("SERPAPI_KEY", raising=False)
+    monkeypatch.chdir(tmp_path)
 
     rc = cli.main(["search", "web_search", "--query", "synapse"])
     assert rc == 0

@@ -7,6 +7,7 @@ silenciosamente (contrato: falha de fonte não derruba o resto do agente).
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -25,6 +26,35 @@ _LANGUAGE_TO_GOOGLE_PARAMS = {
 }
 
 
+def _dotenv_value(name: str, *, start: Path | None = None) -> str | None:
+    """Busca `name` em um `.env` simples na árvore acima do CWD.
+
+    Não substitui `python-dotenv`: cobre só `KEY=value`, suficiente para a
+    configuração local do projeto sem adicionar dependência de runtime.
+    """
+    cur = (start or Path.cwd()).resolve()
+    for d in [cur, *cur.parents]:
+        env_path = d / ".env"
+        if not env_path.is_file():
+            continue
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            key, value = stripped.split("=", 1)
+            if key.strip() != name:
+                continue
+            value = value.strip()
+            if (
+                len(value) >= 2
+                and value[0] == value[-1]
+                and value[0] in {'"', "'"}
+            ):
+                value = value[1:-1]
+            return value or None
+    return None
+
+
 def search(
     query: str,
     visual_type: str,
@@ -36,7 +66,8 @@ def search(
 ) -> list[ImageCandidate]:
     """Busca imagens via SerpAPI (Google Images).
 
-    Sem ``SERPAPI_KEY`` em env e sem ``api_key`` explícito, devolve ``[]``.
+    Sem ``SERPAPI_KEY`` em env/``.env`` e sem ``api_key`` explícito,
+    devolve ``[]``.
     ``visual_type`` é aceito por uniformidade com outros adapters mas não
     é mapeado em facets do SerpAPI.
 
@@ -44,7 +75,7 @@ def search(
     (geolocation) do Google Images. Aceita ``"pt-br"`` e ``"en"``;
     qualquer outro valor (inclusive ``"any"`` e ``None``) → sem param.
     """
-    key = api_key or os.environ.get("SERPAPI_KEY")
+    key = api_key or os.environ.get("SERPAPI_KEY") or _dotenv_value("SERPAPI_KEY")
     if not key:
         return []
 

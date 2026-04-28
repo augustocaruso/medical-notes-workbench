@@ -149,7 +149,7 @@ python -m enricher insert nota.md --section Mecanismo \
 pytest
 ```
 
-Pra busca via SerpAPI, exporte `SERPAPI_KEY` no ambiente. Sem a chave, `search web_search` devolve `[]` (silencioso, por contrato).
+Pra busca via SerpAPI, defina `SERPAPI_KEY` no ambiente ou no `.env` do projeto. Sem a chave, `search web_search` devolve `[]` (silencioso, por contrato).
 
 ## Política de licença e ética
 
