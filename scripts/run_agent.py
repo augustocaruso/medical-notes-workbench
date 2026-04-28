@@ -395,6 +395,14 @@ def gather_candidates(
     return out
 
 
+def _candidate_image_urls(c: ImageCandidate) -> list[str]:
+    urls = [c.image_url]
+    thumbnail_url = getattr(c, "thumbnail_url", None)
+    if thumbnail_url and thumbnail_url not in urls:
+        urls.append(thumbnail_url)
+    return urls
+
+
 def fetch_thumbs(
     candidates: list[ImageCandidate],
     *,
@@ -405,21 +413,27 @@ def fetch_thumbs(
     é tolerada — devolve None na posição correspondente."""
     out: list[Path | None] = []
     for i, c in enumerate(candidates):
-        try:
-            res = download_image(
-                c.image_url,
-                vault_dir=tmp_dir,
-                max_dim=256,
-                webp_min_savings_pct=0,  # sempre WebP nos thumbs
-                cache=None,
-                source=c.source,
-                source_url=c.source_url,
-                user_agent=user_agent,
-            )
-            out.append(Path(res["path"]))
-        except DownloadError as e:
-            print(f"  ! thumb {i} falhou: {e}", file=sys.stderr)
-            out.append(None)
+        thumb_path = None
+        last_error = None
+        for url in _candidate_image_urls(c):
+            try:
+                res = download_image(
+                    url,
+                    vault_dir=tmp_dir,
+                    max_dim=256,
+                    webp_min_savings_pct=0,  # sempre WebP nos thumbs
+                    cache=None,
+                    source=c.source,
+                    source_url=c.source_url,
+                    user_agent=user_agent,
+                )
+                thumb_path = Path(res["path"])
+                break
+            except DownloadError as e:
+                last_error = e
+        if thumb_path is None:
+            print(f"  ! thumb {i} falhou: {last_error}", file=sys.stderr)
+        out.append(thumb_path)
     return out
 
 
@@ -554,19 +568,25 @@ def main(argv: list[str] | None = None) -> int:
             chosen = ranked_candidates[idx]
             print(f"    ✓ escolhida #{idx}: {chosen.title}")
 
-            try:
-                dl = download_image(
-                    chosen.image_url,
-                    vault_dir=vault,
-                    max_dim=cfg["enrichment"]["max_image_dimension"],
-                    webp_min_savings_pct=cfg["enrichment"]["webp_min_savings_pct"],
-                    cache=cache,
-                    source=chosen.source,
-                    source_url=chosen.source_url,
-                    user_agent=cfg["download"]["user_agent"],
-                )
-            except DownloadError as e:
-                print(f"    ! download falhou: {e}; pulo.", file=sys.stderr)
+            dl = None
+            last_error = None
+            for url in _candidate_image_urls(chosen):
+                try:
+                    dl = download_image(
+                        url,
+                        vault_dir=vault,
+                        max_dim=cfg["enrichment"]["max_image_dimension"],
+                        webp_min_savings_pct=cfg["enrichment"]["webp_min_savings_pct"],
+                        cache=cache,
+                        source=chosen.source,
+                        source_url=chosen.source_url,
+                        user_agent=cfg["download"]["user_agent"],
+                    )
+                    break
+                except DownloadError as e:
+                    last_error = e
+            if dl is None:
+                print(f"    ! download falhou: {last_error}; pulo.", file=sys.stderr)
                 continue
 
             inserted.append(

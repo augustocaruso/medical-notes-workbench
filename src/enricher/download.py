@@ -78,16 +78,18 @@ def download(
 
     # 2) Fetch.
     own = client is None
+    request_headers = _browser_like_headers(
+        user_agent=user_agent or _DEFAULT_USER_AGENT,
+        referer=source_url,
+    )
     if own:
-        ua = user_agent or _DEFAULT_USER_AGENT
         client = httpx.Client(
             timeout=30.0,
             follow_redirects=True,
-            headers={"User-Agent": ua},
         )
     try:
         try:
-            resp = client.get(url)
+            resp = client.get(url, headers=request_headers)
             resp.raise_for_status()
         except httpx.HTTPError as e:
             raise DownloadError(f"falha HTTP em {url}: {e}") from e
@@ -175,6 +177,17 @@ def _hit_dict(existing: dict[str, Any], path: Path, *, source_url: str) -> dict[
         "source_url": existing.get("source_url") or source_url,
         "cached": True,
     }
+
+
+def _browser_like_headers(*, user_agent: str, referer: str | None) -> dict[str, str]:
+    headers = {
+        "User-Agent": user_agent,
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9,pt-BR;q=0.8,pt;q=0.7",
+    }
+    if referer:
+        headers["Referer"] = referer
+    return headers
 
 
 def _encode(

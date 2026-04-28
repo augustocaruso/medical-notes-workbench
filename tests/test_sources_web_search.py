@@ -70,6 +70,7 @@ def test_search_parses_candidates_da_fixture():
     assert out[0].title == "Serotonin reuptake at the synapse"
     assert out[0].image_url == "https://example.org/figs/serotonin_reuptake.png"
     assert out[0].source_url == "https://example.org/articles/serotonin-reuptake"
+    assert out[0].thumbnail_url == "https://serpapi.com/searches/abc/images/thumbs/1.jpg"
     assert out[0].width == 1600
     assert out[0].license is None  # SerpAPI não devolve licença
 

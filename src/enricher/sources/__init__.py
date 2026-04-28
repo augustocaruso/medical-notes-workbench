@@ -24,6 +24,7 @@ class ImageCandidate:
     height: Optional[int]
     license: Optional[str]    # informativo (uso pessoal/fair use)
     score: Optional[float]    # relevância da fonte, opcional
+    thumbnail_url: Optional[str] = None  # fallback/proxy quando o original bloqueia
 
 
 __all__ = ["ImageCandidate"]

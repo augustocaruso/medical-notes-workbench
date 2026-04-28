@@ -72,6 +72,7 @@ Agente roda subcomandos via shell, parseia stdout, decide próximos passos. **Ca
   "source": "wikimedia",
   "source_url": "https://commons.wikimedia.org/wiki/File:X",
   "image_url": "https://upload.wikimedia.org/.../X_1600px.png",
+  "thumbnail_url": "https://serpapi.com/.../thumb.jpg",
   "title": "File:X",
   "description": "…",
   "width": 1600, "height": 1200,
@@ -120,7 +121,7 @@ O **enricher core não muda** quando o agente muda — esse é o ponto da arquit
 1. **Markdown surgery (`insert.py`)**: identificar a seção alvo por `section_path` é onde mais bug aparece. Headings podem repetir, ter caracteres especiais, ou a nota usa setext (`===`/`---` underline) em vez de ATX (`#`). Sempre escrever teste antes da mudança.
 2. **Frontmatter aditivo**: pyyaml reordena chaves se não passar `sort_keys=False`. Já fixado em `frontmatter.write`, mas verificar em todo round-trip. Nunca assumir schema da nota — qualquer chave preexistente sai intacta.
 3. **Adapters de fonte**: APIs mudam silenciosamente. Cada adapter precisa de teste contra fixture HTTP local (`httpx.MockTransport`), não rede ao vivo no CI.
-4. **Magic number > extensão da URL**: URLs do Google/Bing podem servir HTML quando o asset some — `Pillow.Image.open` é a única validação de que veio imagem real. Coberto por teste em `test_download.py`. **User-Agent**: configurável via `[download].user_agent` no `config.toml`. Default é UA browser-like (Chrome/macOS) — destrava sites com anti-bot básico; Wikimedia também aceita. Pra modo "respeitoso/identificável" troque pra `medical-notes-enricher/0.1 (...)`.
+4. **Magic number > extensão da URL**: URLs do Google/Bing podem servir HTML quando o asset some — `Pillow.Image.open` é a única validação de que veio imagem real. Coberto por teste em `test_download.py`. **Headers browser-like**: `download.py` envia User-Agent configurável, `Accept` de imagem e `Referer` da página-fonte quando disponível. Isso destrava alguns CDNs/hotlink simples; Wikimedia também aceita. Quando SerpAPI fornece `thumbnail_url`, o orquestrador usa esse thumbnail como fallback se o original bloquear. Pra modo "respeitoso/identificável" troque `[download].user_agent` pra `medical-notes-enricher/0.1 (...)`.
 5. **Dedupe SHA-256**: imagens iguais via fontes diferentes só baixam uma vez; o `image_sources` do frontmatter conta a primeira origem que achou.
 
 ## Regras de contribuição

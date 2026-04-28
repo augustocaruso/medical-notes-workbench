@@ -251,6 +251,31 @@ def test_user_agent_custom_eh_propagado(tmp_path):
     assert captured["ua"] == "MyCustomBot/9000"
 
 
+def test_download_envia_headers_browser_like_com_referer(tmp_path):
+    captured = {}
+
+    def on_req(req):
+        captured["ua"] = req.headers.get("user-agent", "")
+        captured["accept"] = req.headers.get("accept", "")
+        captured["referer"] = req.headers.get("referer", "")
+
+    with Cache(tmp_path / "c.db") as cache, _client_returning(
+        _png_bytes(), on_request=on_req
+    ) as client:
+        download(
+            "https://cdn.example/img.png",
+            vault_dir=tmp_path / "v",
+            cache=cache,
+            client=client,
+            user_agent="Browserish/1.0",
+            source_url="https://site.example/page",
+        )
+
+    assert captured["ua"] == "Browserish/1.0"
+    assert "image/" in captured["accept"]
+    assert captured["referer"] == "https://site.example/page"
+
+
 def test_funciona_sem_cache(tmp_path):
     vault = tmp_path / "vault"
     payload = _png_bytes()

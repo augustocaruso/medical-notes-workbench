@@ -184,6 +184,41 @@ def test_call_gemini_json_retry_corrige_resposta_invalida(monkeypatch):
     assert raw == valid
 
 
+def test_fetch_thumbs_tenta_thumbnail_quando_original_falha(monkeypatch, tmp_path):
+    from enricher.download import DownloadError
+    from enricher.sources import ImageCandidate
+
+    calls = []
+
+    def fake_download(url, **_kwargs):
+        calls.append(url)
+        if url == "https://blocked.example/original.png":
+            raise DownloadError("403")
+        return {"path": str(tmp_path / "thumb.webp")}
+
+    monkeypatch.setattr(run_agent, "download_image", fake_download)
+    candidate = ImageCandidate(
+        source="web_search",
+        source_url="https://example.org/page",
+        image_url="https://blocked.example/original.png",
+        title="t",
+        description="d",
+        width=100,
+        height=100,
+        license=None,
+        score=None,
+        thumbnail_url="https://serpapi.com/thumb.jpg",
+    )
+
+    out = run_agent.fetch_thumbs([candidate], tmp_dir=tmp_path)
+
+    assert calls == [
+        "https://blocked.example/original.png",
+        "https://serpapi.com/thumb.jpg",
+    ]
+    assert out == [tmp_path / "thumb.webp"]
+
+
 # --- orquestração end-to-end (mocks) --------------------------------
 
 

@@ -107,7 +107,8 @@ def _parse(data: dict[str, Any], *, top_k: int) -> list[ImageCandidate]:
     results = data.get("images_results") or []
     out: list[ImageCandidate] = []
     for r in results:
-        image_url = r.get("original") or r.get("thumbnail")
+        thumbnail_url = r.get("thumbnail")
+        image_url = r.get("original") or thumbnail_url
         if not image_url:
             continue
         # `link` é a página onde a imagem aparece; `source` é o domínio.
@@ -125,6 +126,7 @@ def _parse(data: dict[str, Any], *, top_k: int) -> list[ImageCandidate]:
                 height=r.get("original_height"),
                 license=None,  # SerpAPI não devolve licença
                 score=None,
+                thumbnail_url=thumbnail_url,
             )
         )
         if len(out) >= top_k:
