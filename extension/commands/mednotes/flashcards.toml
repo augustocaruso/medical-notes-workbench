@@ -1,6 +1,9 @@
 description = "Cria flashcards medicos no Anki via Anki MCP."
 prompt = '''
 Crie flashcards medicos no Anki a partir do material indicado pelo usuario.
+Este comando namespaced segue o mesmo contrato do comando top-level
+`/flashcards`; use `/flashcards` como atalho preferido quando o usuario pedir
+flashcards diretamente.
 
 Argumentos do usuario: {{args}}
 
@@ -9,32 +12,52 @@ Use o subagent `med-flashcard-maker` desta extensao. A extensao declara o MCP
 expoe o prompt `/twenty_rules`; use esse prompt como guia primario para a
 formulacao dos cards quando ele ja estiver carregado no contexto. O prompt MCP
 e um slash command, nao uma ferramenta; as ferramentas Anki autorizadas aparecem
-como `mcp_anki_*`. O hook `mednotes-ensure-anki` deve tentar abrir o Anki antes
-de ferramentas Anki; se o MCP nao aparecer, explique que o Anki Desktop precisa
+como `mcp_anki_*`. A referencia de origem do prompt no pacote MCP e
+`@ankimcp/anki-mcp-server/dist/mcp/primitives/essential/prompts/twenty-rules.prompt/content.md`;
+use esse path como proveniencia, nao como arquivo local a ser lido pelo
+`read_file`. O hook `mednotes-ensure-anki` deve tentar abrir o Anki antes de
+ferramentas Anki; se o MCP nao aparecer, explique que o Anki Desktop precisa
 estar aberto e com o add-on AnkiConnect instalado.
 
 Fluxo:
-1. Identifique a fonte em `{{args}}`: caminho de nota Markdown, trecho colado,
-   topico, chat atual ou selecao do usuario. Se nao houver fonte suficiente,
-   pergunte antes de criar cards.
-2. Defina o deck destino. Se houver caminho de nota Obsidian, derive o deck
+1. Identifique a fonte em `{{args}}`: caminho(s) de nota Markdown, diretorio,
+   glob, filtro por tag Obsidian, trecho colado, topico, chat atual ou selecao
+   do usuario. Se nao houver fonte suficiente, pergunte antes de criar cards.
+2. Quando houver diretorio, glob ou filtro por tag, resolva a lista final de
+   arquivos `.md` antes de chamar o subagent. Use tags Obsidian apenas para
+   selecionar notas; nao crie tags Anki.
+3. Para cada arquivo Markdown selecionado, gere o deeplink da nota com
+   `python ${extensionPath}/scripts/mednotes/obsidian_note_utils.py deeplink <arquivo.md>`
+   e passe esse valor ao subagent para preencher o campo Anki `Obsidian`.
+   Nao use a Obsidian CLI para extrair esse link; o script deriva o URI
+   `obsidian://open?vault=...&file=...` do nome do vault e do path relativo da
+   nota, que e o formato portavel para Windows e iPhone quando o mesmo vault
+   esta no iCloud. Se a raiz do vault nao for inferida, peça `--vault-root` e o
+   nome do vault antes de criar cards.
+4. Defina o deck destino. Se houver caminho de nota Obsidian, derive o deck
    desse caminho conforme `flashcard-ingestion.md`; se nao houver caminho nem
    deck indicado, use `Medicina::Inbox`.
-3. Peça ao subagent `med-flashcard-maker` para usar o prompt MCP `/twenty_rules`
+5. Peça ao subagent `med-flashcard-maker` para usar o prompt MCP `/twenty_rules`
    do servidor `anki`. Se esse prompt nao estiver carregado/presente no contexto,
    pare e peça ao usuario para executar `/twenty_rules` primeiro. Nao substitua
    por uma copia local.
-4. Leia e siga `${extensionPath}/knowledge/flashcard-ingestion.md` para as
-   especificacoes locais de ingestao: deck espelhando o Obsidian, sem tags e
-   `Verso Extra` com quebra inicial.
-5. O subagent deve listar/criar o deck com `mcp_anki_listDecks`/
+6. Leia e siga `${extensionPath}/knowledge/flashcard-ingestion.md` para as
+   especificacoes locais de ingestao: deck espelhando o Obsidian, campo
+   `Obsidian` com deeplink, sem tags Anki, marcacao Obsidian `anki` apos
+   sucesso e `Verso Extra` com quebra inicial.
+7. O subagent deve listar/criar o deck com `mcp_anki_listDecks`/
    `mcp_anki_createDeck`, inspecionar modelos com `mcp_anki_modelNames`/
    `mcp_anki_modelFieldNames` e criar cards com `mcp_anki_addNotes` em lote
    quando possivel.
-6. Para lotes acima de 40 cards, gere uma previa e peça confirmacao antes de
-   gravar no Anki.
-7. Ao final, responda em portugues com deck, quantidade criada, modelo/campos,
-   conceitos omitidos e qualquer falha do Anki MCP.
+8. Para escopos acima de 10 arquivos ou lotes acima de 40 cards, gere uma previa
+   e peça confirmacao antes de gravar no Anki.
+9. Depois de criados os cards, rode
+   `python ${extensionPath}/scripts/mednotes/obsidian_note_utils.py add-tag --tag anki <arquivos...>`
+   somente para arquivos que tiveram pelo menos um card aceito. O mesmo script
+   suporta `remove-tag --tag anki` para desfazer a marcacao.
+10. Ao final, responda em portugues com arquivos/notas processados, decks,
+   quantidade criada, modelo/campos, status do campo `Obsidian`, marcacao `anki`
+   das notas-fonte, conceitos omitidos e qualquer falha do Anki MCP.
 
 Nao crie cards de fatos que nao estejam compreendidos ou suportados pela fonte.
 Nao transforme listas longas em um unico card. Nao crie conduta individualizada

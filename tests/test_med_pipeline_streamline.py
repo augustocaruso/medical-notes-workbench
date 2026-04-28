@@ -56,12 +56,19 @@ def test_removed_reviewer_agents_do_not_exist():
 def test_hooks_are_node_based_for_windows_installations():
     hooks = json.loads((EXTENSION / "hooks" / "hooks.json").read_text(encoding="utf-8"))
     serialized = json.dumps(hooks)
+    before_tool = hooks["hooks"]["BeforeTool"]
 
     assert "python3" not in serialized
     assert "node" in serialized
     assert ".mjs" in serialized
     assert "ensure_anki.mjs" in serialized
+    assert "SessionStart" not in hooks["hooks"]
+    assert "AfterAgent" not in hooks["hooks"]
+    assert {entry["matcher"] for entry in before_tool} == {"^mcp_anki_.*", "run_shell_command"}
+    assert "*" not in {entry["matcher"] for entry in before_tool}
     assert not list((EXTENSION / "scripts" / "hooks").glob("*.py"))
+    assert not (EXTENSION / "scripts" / "hooks" / "med_context.mjs").exists()
+    assert not (EXTENSION / "scripts" / "hooks" / "med_after_agent.mjs").exists()
 
 
 def test_command_toml_files_parse():
@@ -71,27 +78,49 @@ def test_command_toml_files_parse():
 
 def test_flashcard_module_references_anki_mcp_prompt_and_ingestion_design():
     agent = (EXTENSION / "agents" / "med-flashcard-maker.md").read_text(encoding="utf-8")
+    top_flashcards = (EXTENSION / "commands" / "flashcards.toml").read_text(encoding="utf-8")
     med_command = (EXTENSION / "commands" / "mednotes" / "flashcards.toml").read_text(encoding="utf-8")
     file_command = (EXTENSION / "commands" / "mednotes" / "twenty_rules.toml").read_text(
         encoding="utf-8"
     )
     design = (EXTENSION / "knowledge" / "flashcard-ingestion.md").read_text(encoding="utf-8")
+    hook = (EXTENSION / "scripts" / "hooks" / "ensure_anki.mjs").read_text(encoding="utf-8")
+    note_utils = EXTENSION / "scripts" / "mednotes" / "obsidian_note_utils.py"
     build = (ROOT / "scripts" / "build_gemini_cli_extension.py").read_text(encoding="utf-8")
 
+    assert note_utils.exists()
     assert "@ankimcp/anki-mcp-server@0.18.5" in build
     assert "--stdio" in build
     assert '"envVar": "SERPAPI_KEY"' in build
     assert '"sensitive": True' in build
     assert not (EXTENSION / "commands" / "twenty_rules.toml").exists()
     assert "`/twenty_rules` sem namespace pertence ao prompt MCP" in file_command
-    assert "twenty_rules" in agent + med_command + file_command + design
-    assert "flashcard-ingestion.md" in agent + med_command + file_command
+    assert "twenty-rules.prompt/content.md" in agent
+    assert "twenty-rules.prompt/content.md" in top_flashcards
+    assert "twenty-rules.prompt/content.md" in med_command
+    assert "twenty-rules.prompt/content.md" in file_command
+    assert "twenty-rules.prompt/content.md" in design
+    assert "nao por `read_file` nesse path" in design
+    assert "Este comando aceita" in top_flashcards
+    assert "filtro por tag Obsidian" in top_flashcards
+    assert "mais de 10 arquivos" in top_flashcards
+    assert "mcp_anki_*" in top_flashcards
+    assert "twenty_rules" in agent + top_flashcards + med_command + file_command + design
+    assert "flashcard-ingestion.md" in agent + top_flashcards + med_command + file_command
     assert "nao adicionar tags" in design
+    assert "Obsidian`" in agent + top_flashcards + med_command + file_command + design
+    assert "obsidian://open?vault=...&file=..." in top_flashcards + med_command + design
+    assert "vault=...&file=..." in agent + top_flashcards + med_command + design
+    assert "--absolute-path" in design
+    assert "obsidian_note_utils.py" in agent + top_flashcards + med_command + file_command + design
+    assert "add-tag --tag anki" in top_flashcards + med_command + file_command + design
+    assert "remove-tag --tag anki" in top_flashcards + med_command + file_command + design
     assert "Wiki_Medicina::Cardiologia::Ponte_Miocardica" in design
     assert "Verso Extra" in design + agent
     assert "mcp_anki_addNotes" in agent
     assert "mcp_anki_modelFieldNames" in agent
     assert "  - addNotes" not in agent
+    assert "mcp_anki_" in hook
     assert "manage_flashcards" not in agent
 
 

@@ -10,6 +10,10 @@ Este comando espera `/mednotes:twenty_rules <path>`.
 Referencia obrigatoria ao prompt:
 - `/twenty_rules` sem namespace pertence ao prompt MCP `twenty_rules` exposto
   pelo servidor `anki` de `@ankimcp/anki-mcp-server`; ele nao e uma ferramenta.
+- Referencia de origem do prompt no pacote MCP:
+  `@ankimcp/anki-mcp-server/dist/mcp/primitives/essential/prompts/twenty-rules.prompt/content.md`.
+  Esse path documenta a origem do prompt, mas o carregamento operacional deve
+  acontecer via prompt MCP `/twenty_rules`, nao por `read_file` nesse path.
 - Nao crie nem use copia local da metodologia Twenty Rules. Se o prompt MCP
   `/twenty_rules` ainda nao estiver carregado no contexto desta sessao, pare e
   peça ao usuario: "Execute `/twenty_rules` primeiro e depois rode
@@ -24,13 +28,21 @@ Fluxo obrigatorio:
 3. Use exclusivamente o conteudo lido desse arquivo como base de conhecimento
    ("O QUE"). Nao acrescente fatos externos.
 4. Leia e siga `${extensionPath}/knowledge/flashcard-ingestion.md` para as
-   especificacoes locais: hierarquia de decks do Obsidian, sem tags, e campo
-   `Verso Extra` com quebra inicial.
+   especificacoes locais: hierarquia de decks do Obsidian, campo `Obsidian`
+   com deeplink da nota, sem tags Anki, marcacao Obsidian `anki` apos sucesso
+   e campo `Verso Extra` com quebra inicial.
 5. Use o subagent `med-flashcard-maker` para executar a criacao no Anki. Ao
    chama-lo, informe que as ferramentas Anki autorizadas sao `mcp_anki_*` e que
-   a metodologia vem do prompt MCP `/twenty_rules` ja carregado.
-6. Responda em portugues com o deck final, quantidade criada, modelo/campos
-   usados e qualquer item omitido por falta de suporte no arquivo.
+   a metodologia vem do prompt MCP `/twenty_rules` ja carregado. Antes de
+   chama-lo, gere o deeplink com:
+   `python ${extensionPath}/scripts/mednotes/obsidian_note_utils.py deeplink <path>`.
+6. Depois que o Anki MCP aceitar pelo menos um card, marque a nota-fonte com:
+   `python ${extensionPath}/scripts/mednotes/obsidian_note_utils.py add-tag --tag anki <path>`.
+   Nao marque a nota se nenhum card for criado. Para desfazer, use
+   `remove-tag --tag anki` no mesmo script.
+7. Responda em portugues com o deck final, quantidade criada, modelo/campos
+   usados, status do campo `Obsidian`, marcacao `anki` da nota-fonte e qualquer
+   item omitido por falta de suporte no arquivo.
 
 Se o prompt MCP `/twenty_rules` nao estiver disponivel no cliente, nao substitua
 por uma copia local: explique a limitacao e peça para habilitar/atualizar o

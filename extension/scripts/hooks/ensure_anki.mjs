@@ -46,26 +46,6 @@ function isAnkiRelevant(payload) {
     return true;
   }
 
-  const toolInput = payload.tool_input || payload.toolInput || {};
-  const command = String(toolInput.command || toolInput.cmd || "").toLowerCase();
-  if (
-    command.includes("/twenty_rules") ||
-    command.includes("/mednotes:twenty_rules") ||
-    command.includes("/mednotes:flashcards") ||
-    (command.includes("anki") && command.includes("flash"))
-  ) {
-    return true;
-  }
-
-  const prompt = String(payload.prompt || payload.user_prompt || "").toLowerCase();
-  if (
-    prompt.includes("/twenty_rules") ||
-    prompt.includes("/mednotes:twenty_rules") ||
-    prompt.includes("/mednotes:flashcards")
-  ) {
-    return true;
-  }
-
   return false;
 }
 

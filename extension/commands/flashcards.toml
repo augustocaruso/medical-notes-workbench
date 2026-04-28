@@ -1,0 +1,82 @@
+description = "Cria flashcards no Anki a partir de arquivos, pastas, tags Obsidian ou instrucoes."
+prompt = '''
+Crie flashcards medicos no Anki a partir do escopo indicado pelo usuario.
+
+Argumentos do usuario: {{args}}
+
+Este comando aceita:
+- um ou mais caminhos de arquivos Markdown;
+- diretorios, globs ou pastas do Obsidian;
+- filtros em linguagem natural, como "notas com tag #cardio", "notas em
+  Cardiologia", "arquivos nesta pasta", ou combinacoes de pasta + tag;
+- texto colado ou briefing, quando nao houver arquivo/pasta/tag suficiente.
+
+Referencia obrigatoria ao prompt:
+- `/twenty_rules` sem namespace e o prompt MCP `twenty_rules` exposto pelo
+  servidor `anki` de `@ankimcp/anki-mcp-server`.
+- Referencia de origem do prompt no pacote MCP:
+  `@ankimcp/anki-mcp-server/dist/mcp/primitives/essential/prompts/twenty-rules.prompt/content.md`.
+  Use esse path como proveniencia, nao como arquivo local a ser lido pelo
+  `read_file`.
+- O prompt MCP e slash command, nao ferramenta. As ferramentas Anki autorizadas
+  no subagent aparecem como `mcp_anki_*`.
+- Nao crie nem use copia local da metodologia Twenty Rules. Se o prompt MCP
+  `/twenty_rules` nao estiver carregado/presente no contexto desta sessao, pare
+  e peça ao usuario para executar `/twenty_rules` primeiro e depois repetir
+  `/flashcards {{args}}`.
+
+Resolucao do escopo:
+1. Se `{{args}}` contiver arquivos explicitos, leia somente esses arquivos com
+   `read_file`.
+2. Se contiver diretorios ou globs, expanda para arquivos `.md` dentro desse
+   escopo. Nao inclua arquivos nao Markdown, cache, `dist/`, `.git/`, anexos ou
+   imagens.
+3. Se contiver filtro por tag Obsidian, use a tag apenas para selecionar notas.
+   Procure em frontmatter `tags`/`tag` e hashtags inline (`#tag`). Nao transforme
+   tags Obsidian em tags Anki.
+4. Se o filtro por tag ou pasta nao trouxer uma raiz clara, use uma raiz de wiki
+   configurada (`MED_WIKI_DIR`, `[chat_processor].wiki_dir` ou contexto da
+   extensao) quando disponivel. Se ainda estiver ambigua, pergunte qual pasta
+   deve ser vasculhada antes de criar cards.
+5. Para cada arquivo Markdown selecionado, gere o deeplink de origem com:
+   `python ${extensionPath}/scripts/mednotes/obsidian_note_utils.py deeplink <arquivo.md>`.
+   Passe o resultado ao subagent para preencher o campo Anki `Obsidian`. O link
+   deve sair no formato portavel `obsidian://open?vault=...&file=...`, usando
+   nome do vault + caminho relativo da nota, para funcionar no Windows e no
+   iPhone com o mesmo vault no iCloud. Se o script nao conseguir inferir a raiz
+   do vault, pergunte o `--vault-root`/nome do vault antes de criar cards.
+6. Antes de gravar no Anki, mostre uma previa e peça confirmacao quando o escopo
+   tiver mais de 10 arquivos ou quando houver mais de 40 cards candidatos.
+
+Criacao:
+1. Use exclusivamente o conteudo lido dos arquivos selecionados, ou o texto
+   colado pelo usuario, como base factual ("O QUE"). Nao acrescente fatos
+   externos.
+2. Aplique o prompt MCP `/twenty_rules` como metodologia de formulacao ("COMO").
+3. Leia e siga `${extensionPath}/knowledge/flashcard-ingestion.md`.
+4. Chame o subagent `med-flashcard-maker` com:
+   - lista final de arquivos resolvidos e seu conteudo/fonte;
+   - mapa de `arquivo -> obsidian://open?vault=...&file=...` gerado pelo script
+     `obsidian_note_utils.py`;
+   - instrucao de processar cada arquivo separadamente;
+   - instrucao de derivar o deck por arquivo conforme o caminho Obsidian;
+   - instrucao de preencher o campo Anki `Obsidian` em todo card vindo de
+     arquivo Markdown;
+   - confirmacao de que as ferramentas Anki autorizadas sao `mcp_anki_*`.
+5. Para texto colado ou briefing sem arquivo, use `Medicina::Inbox`, a menos que
+   o usuario indique outro deck.
+6. Depois que o subagent confirmar criacao no Anki, marque somente os arquivos
+   com pelo menos um card criado usando:
+   `python ${extensionPath}/scripts/mednotes/obsidian_note_utils.py add-tag --tag anki <arquivos...>`.
+   Nao marque arquivos que falharam ou que nao geraram cards. Para desfazer
+   uma marcacao manualmente, o script tambem oferece `remove-tag --tag anki`.
+
+Ao final, responda em portugues com:
+- arquivos/notas processados;
+- decks destino;
+- quantidade criada;
+- modelo/campos usados;
+- campo `Obsidian` e marcacao `anki` das notas-fonte;
+- conceitos omitidos, duplicados ou aguardando confirmacao;
+- falhas do Anki MCP, se houver.
+'''

@@ -8,7 +8,7 @@ Uso pessoal/estudo do usuário (estudante/profissional de medicina) — fair use
 
 - **Fluxo geral do enricher**: `chat Gemini → /mednotes:create ou nota existente → /mednotes:enrich → enricher (chamado pelo agente)`.
 - **Fluxo geral do chat processor**: `Chats_Raw → /mednotes:process-chats → subagents médicos → Wiki_Medicina → med_linker`.
-- **Fluxo geral dos flashcards**: `nota/arquivo → /twenty_rules (prompt MCP) → /mednotes:twenty_rules <path> ou /mednotes:flashcards → med-flashcard-maker → Anki MCP → Anki`.
+- **Fluxo geral dos flashcards**: `nota/arquivo/escopo → /twenty_rules (prompt MCP) → /flashcards ou /mednotes:twenty_rules <path> ou /mednotes:flashcards → med-flashcard-maker → Anki MCP → Anki`.
 - **Entrada**: arquivo `.md` da nota didática. Schema do frontmatter é **livre** — o enricher é agnóstico. Pode até não ter frontmatter.
 - **Saída**: o mesmo `.md`, in-place, com:
   - Imagens inseridas via `![[...]]` no fim das seções alvo, com caption (`*Figura: <conceito>.* *Fonte: <source> — <url>*`).
@@ -171,8 +171,9 @@ em notas Obsidian:
 - Linker: `extension/scripts/mednotes/med_linker.py`.
 - Subagents: `med-chat-triager`, `med-knowledge-architect`,
   `med-catalog-curator`, `med-publish-guard`.
-- Hooks: contexto em `SessionStart`, guardrail de `med_ops.py` em
-  `BeforeTool`, checagem de relatório em `AfterAgent`.
+- Hooks: somente `BeforeTool` com matchers estreitos. `ensure_anki.mjs` roda
+  apenas para ferramentas `mcp_anki_*`; `med_guard.mjs` roda apenas para
+  `run_shell_command`.
 
 `med_ops.py` é deliberadamente uma CLI determinística, não um hook: hooks só
 guardam contexto/segurança. Toda alteração de YAML/status em `Chats_Raw`, todo
@@ -209,15 +210,27 @@ Regras de segurança do chat processor:
 A extensão empacota um módulo de criação de flashcards:
 
 - Comandos: `/twenty_rules` é o prompt MCP puro do Anki MCP;
+  `/flashcards` aceita arquivos, múltiplos arquivos, diretórios, globs, tags
+  Obsidian e instruções em linguagem natural;
   `/mednotes:twenty_rules <path>` é o wrapper da extensão para um arquivo local;
-  `/mednotes:flashcards` cobre pedidos mais gerais.
+  `/mednotes:flashcards` é o caminho namespaced equivalente.
 - Subagent: `med-flashcard-maker`.
 - MCP: `anki`, via `@ankimcp/anki-mcp-server` em modo STDIO.
 - Prompt primário: `/twenty_rules`, exposto pelo próprio Anki MCP. Não manter
   cópia local da metodologia; referenciar o prompt MCP.
+- Path de origem do prompt no pacote MCP:
+  `@ankimcp/anki-mcp-server/dist/mcp/primitives/essential/prompts/twenty-rules.prompt/content.md`.
+  Esse path é proveniência; o carregamento operacional é via `/twenty_rules`,
+  não via `read_file`.
 - Regras locais fatoradas: `extension/knowledge/flashcard-ingestion.md`.
 - Hook: `extension/scripts/hooks/ensure_anki.mjs`, que tenta abrir/minimizar o
   Anki antes de ferramentas Anki MCP.
+- Seleção por tag no `/flashcards` usa tags Obsidian apenas para escolher notas;
+  os cards criados no Anki continuam sem tags.
+- Utilitário determinístico: `extension/scripts/mednotes/obsidian_note_utils.py`
+  gera deeplinks portáveis `obsidian://open?vault=...&file=...` e
+  adiciona/remove a tag Obsidian `anki` no frontmatter depois de sucesso no
+  Anki.
 
 Contrato do `/mednotes:twenty_rules <path>`:
 
@@ -231,9 +244,20 @@ Regras locais atuais dos flashcards:
 - O deck do Anki espelha o caminho Obsidian. Exemplo:
   `Wiki_Medicina/Cardiologia/Ponte_Miocardica.md` vira
   `Wiki_Medicina::Cardiologia::Ponte_Miocardica`.
-- Não adicionar tags por enquanto.
+- Não adicionar tags Anki por enquanto.
+- Todo card vindo de arquivo Markdown deve preencher o campo Anki `Obsidian`
+  com o deeplink da nota-fonte gerado por
+  `python extension/scripts/mednotes/obsidian_note_utils.py deeplink <nota.md>`.
+  O link deve usar nome do vault + path relativo, não path absoluto, para abrir
+  no Windows e no iPhone quando o mesmo vault está no iCloud.
 - Ao preencher `Verso Extra`, prefixar o campo com uma quebra visual antes do
   conteúdo (`\n\n` em texto puro ou `<br><br>` em HTML).
+- Depois que pelo menos um card de uma nota for criado, marcar somente essa
+  nota com a tag Obsidian `anki` usando
+  `python extension/scripts/mednotes/obsidian_note_utils.py add-tag --tag anki <nota.md>`.
+  Para desfazer, usar `remove-tag --tag anki`.
+- `/flashcards` deve pedir confirmação antes de gravar lotes com mais de 10
+  arquivos ou mais de 40 cards candidatos.
 - Anki Desktop precisa estar instalado e o add-on AnkiConnect precisa responder
   em `http://127.0.0.1:8765`.
 

@@ -22,13 +22,16 @@ Operational rules:
 - `/twenty_rules` without a namespace is the Anki MCP prompt itself. Prefer
   `/mednotes:twenty_rules <path>` when the user asks to create Anki flashcards
   from one local note/file after that prompt has been loaded. Prefer
-  `/mednotes:flashcards` for broader flashcard requests that are not exactly
-  one file path.
+  `/flashcards` for broad flashcard requests: multiple files, folders, globs,
+  Obsidian tag filters, or natural-language source instructions. Keep
+  `/mednotes:flashcards` as the namespaced equivalent.
 - For Wiki_Medicina note structure, follow the preserved knowledge docs under
   `knowledge/`, especially `knowledge-architect.md`.
 - For flashcard ingestion design, follow `knowledge/flashcard-ingestion.md`:
-  derive the Anki deck from the Obsidian path, do not add tags for now, and
-  prefix `Verso Extra` with a visual blank line.
+  derive the Anki deck from the Obsidian path, fill the Anki `Obsidian` field
+  with a source deeplink, do not add Anki tags for now, mark successful source
+  notes with the Obsidian frontmatter tag `anki`, and prefix `Verso Extra` with
+  a visual blank line.
 - Prefer `/mednotes:link` or `scripts/mednotes/med_linker.py` when the user asks
   to interconnect Wiki_Medicina notes, refresh wiki links, or run the semantic
   linker.
@@ -53,7 +56,16 @@ Operational rules:
   `@ankimcp/anki-mcp-server` in STDIO mode. It requires Anki Desktop with
   AnkiConnect reachable at `http://127.0.0.1:8765`. The MCP exposes the
   `/twenty_rules` prompt; use that prompt as the card-writing methodology.
+  Its package source path is
+  `@ankimcp/anki-mcp-server/dist/mcp/primitives/essential/prompts/twenty-rules.prompt/content.md`;
+  treat that path as provenance only, not as a local file to read.
   Gemini exposes Anki MCP tools as `mcp_anki_*`, not as bare tool names.
+  `/flashcards` may resolve folders/globs/tag filters, but selected source
+  content remains the only factual base and Obsidian tags must not become Anki
+  tags. Use `scripts/mednotes/obsidian_note_utils.py deeplink <note.md>` to
+  generate portable `obsidian://open?vault=...&file=...` links, then use
+  `add-tag --tag anki` only after at least one card from that note is accepted
+  by Anki. The same script supports `remove-tag --tag anki` for cleanup.
 - The chat-processing workflow must preserve the original Gemini skill
   contract kept in `knowledge/factory.md`: triage first, use the Padrão Ouro for
   clinical note generation, stage aliases/provenance, publish safely, then run
@@ -71,6 +83,8 @@ Useful extension commands:
 - `/mednotes:process-chats [args]` processes raw chat backlog into wiki notes.
 - `/mednotes:link [path-or-empty]` runs the semantic linker for one note or the
   whole Wiki_Medicina.
+- `/flashcards [paths-or-scope]` creates medical Anki cards from files,
+  folders, globs, Obsidian tags, or source instructions.
 - `/mednotes:flashcards [source-or-brief]` creates medical Anki cards via Anki
   MCP.
 - `/twenty_rules` loads the Anki MCP `twenty_rules` methodology prompt.
