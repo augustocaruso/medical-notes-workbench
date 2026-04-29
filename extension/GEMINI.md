@@ -32,7 +32,25 @@ Operational rules:
   notes with the Obsidian frontmatter tag `anki`, and prefix `Verso Extra` with
   a visual blank line. For the card-writing methodology, follow
   `knowledge/anki-mcp-twenty-rules.md`, the local operational copy of the Anki
-  MCP `/twenty_rules` prompt.
+  MCP `/twenty_rules` prompt. For file/folder/tag scopes, resolve sources first
+  with `scripts/mednotes/flashcard_sources.py resolve --scope "<args>" --dry-run --skip-tag anki`
+  and use that manifest for decks, deeplinks, tags and confirmation flags. Use
+  the sibling `preview` subcommand when you need a human-readable confirmation
+  summary. The candidate-card payload must include `preferred_model` and
+  `models` captured through Anki MCP `modelNames`/`modelFieldNames`. Before
+  writing to Anki, validate model fields with
+  `scripts/mednotes/anki_model_validator.py`, filter duplicate candidate cards
+  with `scripts/mednotes/flashcard_index.py check`, run generated `findNotes`
+  queries for Anki-side duplicates, and record only Anki-accepted cards with
+  `flashcard_index.py record`. Use
+  `scripts/mednotes/flashcard_pipeline.py prepare`/`apply` for the consolidated
+  preferred flow around Anki MCP writes. By default, show the prepared cards in
+  the terminal with `scripts/mednotes/flashcard_report.py preview-cards` and ask
+  for confirmation before any Anki write; skip that prompt only when the user
+  explicitly requests direct creation (`--create`, `--direct`, `--yes`, or
+  equivalent natural language). Use
+  `scripts/mednotes/flashcard_report.py final` to format a consistent final
+  report when structured run data is available.
 - Prefer `/mednotes:link` or `scripts/mednotes/med_linker.py` when the user asks
   to interconnect Wiki_Medicina notes, refresh wiki links, or run the semantic
   linker.
@@ -65,12 +83,16 @@ Operational rules:
   `knowledge/anki-mcp-twenty-rules.md` at runtime instead.
   Gemini exposes the existing `anki-mcp` tools as `mcp_anki-mcp_*`, not as bare
   tool names.
-  `/flashcards` may resolve folders/globs/tag filters, but selected source
-  content remains the only factual base and Obsidian tags must not become Anki
-  tags. Use `scripts/mednotes/obsidian_note_utils.py deeplink <note.md>` to
-  generate portable `obsidian://open?vault=...&file=...` links, then use
-  `add-tag --tag anki` only after at least one card from that note is accepted
-  by Anki. The same script supports `remove-tag --tag anki` for cleanup.
+  `/flashcards` resolves folders/globs/tag filters through
+  `scripts/mednotes/flashcard_sources.py`, but selected source content remains
+  the only factual base and Obsidian tags must not become Anki tags. The
+  manifest provides portable `obsidian://open?vault=...&file=...` links and
+  `skipped_notes` for notes already tagged `anki`; use
+  `scripts/mednotes/obsidian_note_utils.py add-tag --tag anki` only after at
+  least one card from that note is accepted by Anki. The same script supports
+  `remove-tag --tag anki` for cleanup. Use
+  `scripts/mednotes/sync_anki_twenty_rules.py check` when auditing the vendored
+  Twenty Rules copy against the upstream Anki MCP package.
 - The chat-processing workflow must preserve the original Gemini skill
   contract kept in `knowledge/factory.md`: triage first, use the Padrão Ouro for
   clinical note generation, stage aliases/provenance, publish safely, then run

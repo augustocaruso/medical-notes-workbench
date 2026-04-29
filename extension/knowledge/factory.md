@@ -12,7 +12,7 @@ Você utilizará ativamente o script `med_ops.py` contido no diretório desta sk
 
 *   `Chats_Raw`: `C:\Users\leona\OneDrive\Chats_Raw`
 *   `Wiki_Medicina`: `C:\Users\leona\iCloudDrive\iCloud~md~obsidian\Wiki_Medicina`
-*   `Script de Commit`: `C:\Users\leona\.gemini\skills\med-chat-processor\med_ops.py`
+*   `CLI Mecânica`: `C:\Users\leona\.gemini\skills\med-chat-processor\med_ops.py`
 *   `Linker Semântico`: `C:\Users\leona\.gemini\skills\med-auto-linker\med_linker.py`
 
 ## Passo-a-Passo Obrigatório:
@@ -53,9 +53,15 @@ Escreva as notas processadas em arquivos temporários.
   ```
 - **Link Original:** Inclua no final o link: `[Chat Original](https://gemini.google.com/app/<fonte_id>)`.
 
-### 6. Efetivação Atômica (O Músculo)
-Execute o comando de commit do script para cada nota gerada.
-`run_shell_command("python C:\Users\leona\.gemini\skills\med-chat-processor\med_ops.py commit --raw-file \"<path_original>\" --taxonomy \"<Categoria/Subcategoria>\" --title \"<Titulo_Exato>\" --content \"C:\Users\leona\.gemini\tmp\leona\temp_gold_note.md\"")`
+### 6. Staging e Publicação Segura (O Músculo)
+Registre cada nota gerada em um manifest de lote usando `stage-note`.
+`run_shell_command("python C:\Users\leona\.gemini\skills\med-chat-processor\med_ops.py stage-note --manifest \"<batch_manifest.json>\" --raw-file \"<path_original>\" --taxonomy \"<Categoria/Subcategoria>\" --title \"<Titulo_Exato>\" --content \"C:\Users\leona\.gemini\tmp\leona\temp_gold_note.md\"")`
+
+Depois que todas as notas do lote estiverem no manifest, rode primeiro a simulação:
+`run_shell_command("python C:\Users\leona\.gemini\skills\med-chat-processor\med_ops.py publish-batch --manifest \"<batch_manifest.json>\" --dry-run")`
+
+Revise o resultado com o gate operacional `med-publish-guard`. Só se ele retornar `approve`, rode o publish real:
+`run_shell_command("python C:\Users\leona\.gemini\skills\med-chat-processor\med_ops.py publish-batch --manifest \"<batch_manifest.json>\"")`
 
 ### 7. Loop
 Repita os passos 3 a 6 até limpar a lista de arquivos triados.

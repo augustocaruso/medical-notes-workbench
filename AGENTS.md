@@ -8,7 +8,7 @@ Uso pessoal/estudo do usuário (estudante/profissional de medicina) — fair use
 
 - **Fluxo geral do enricher**: `chat Gemini → /mednotes:create ou nota existente → /mednotes:enrich → enricher (chamado pelo agente)`.
 - **Fluxo geral do chat processor**: `Chats_Raw → /mednotes:process-chats → subagents médicos → Wiki_Medicina → med_linker`.
-- **Fluxo geral dos flashcards**: `nota/arquivo/escopo → /flashcards → anki-mcp-twenty-rules.md → med-flashcard-maker → Anki MCP → Anki`.
+- **Fluxo geral dos flashcards**: `nota/arquivo/escopo → /flashcards → flashcard_sources.py manifest → anki-mcp-twenty-rules.md → med-flashcard-maker → Anki MCP → Anki`.
 - **Entrada**: arquivo `.md` da nota didática. Schema do frontmatter é **livre** — o enricher é agnóstico. Pode até não ter frontmatter.
 - **Saída**: o mesmo `.md`, in-place, com:
   - Imagens inseridas via `![[...]]` no fim das seções alvo, com caption (`*Figura: <conceito>.* *Fonte: <source> — <url>*`).
@@ -171,13 +171,21 @@ em notas Obsidian:
 - Linker: `extension/scripts/mednotes/med_linker.py`.
 - Subagents: `med-chat-triager`, `med-knowledge-architect`,
   `med-catalog-curator`, `med-publish-guard`.
-- Hooks: somente `BeforeTool` com matchers estreitos. `ensure_anki.mjs` roda
-  apenas para ferramentas `mcp_anki-mcp_*`/`mcp_anki_*`; `med_guard.mjs` roda
-  apenas para `run_shell_command`.
+- Hooks: somente `BeforeTool`/`AfterTool` com matchers estreitos via
+  `extension/scripts/hooks/mednotes_hook.mjs`. O modo `ensure-anki-before` roda
+  apenas para ferramentas `mcp_anki-mcp_*`/`mcp_anki_*`; os modos
+  `med-ops-before`/`med-ops-after` rodam apenas para `run_shell_command`.
 
 `med_ops.py` é deliberadamente uma CLI determinística, não um hook: hooks só
 guardam contexto/segurança. Toda alteração de YAML/status em `Chats_Raw`, todo
 staging e todo publish real devem passar por `med_ops.py`.
+
+O hook de `med_ops.py` bloqueia `publish-batch` real sem um
+`publish-batch --dry-run` recente do mesmo manifest. O recibo fica em
+`~/.gemini/medical-notes-workbench/hooks/med-ops-dry-runs.json` por 30 minutos
+por default, com overrides `MEDNOTES_HOOK_STATE_DIR` e
+`MEDNOTES_PUBLISH_DRY_RUN_TTL_MS`. Mensagens ao usuário devem sair pelo JSON do
+hook (`systemMessage`/`reason`), nunca por stdout textual.
 
 O conteúdo original das skills médicas funcionais deve ficar preservado ao
 máximo em `extension/knowledge/`. Se uma instrução comum for fatorada em agente
@@ -211,13 +219,12 @@ A extensão empacota um módulo de criação de flashcards:
 
 - Comando público: `/flashcards`, que aceita um arquivo, múltiplos arquivos,
   diretórios, globs, tags Obsidian e instruções em linguagem natural.
-- Prompt upstream: `/twenty_rules` é o prompt MCP puro do Anki MCP; não é um
-  comando da extensão e não precisa ser executado antes de `/flashcards`.
 - Subagent: `med-flashcard-maker`.
 - MCP: usar o servidor global existente `anki-mcp`, via
   `@ankimcp/anki-mcp-server` em modo STDIO. A extensão não declara outro Anki
   MCP no manifest, para evitar duplicação com `~/.gemini/settings.json`.
-- Prompt upstream: `/twenty_rules`, exposto pelo próprio Anki MCP. Como
+- Prompt upstream: `/twenty_rules` é o prompt MCP puro do Anki MCP, não é um
+  comando da extensão e não precisa ser executado antes de `/flashcards`. Como
   subagents não conseguem chamar slash prompts MCP e puxar o conteúdo para o
   próprio contexto, manter uma cópia operacional local em
   `extension/knowledge/anki-mcp-twenty-rules.md`.
@@ -226,20 +233,59 @@ A extensão empacota um módulo de criação de flashcards:
   Esse path é proveniência upstream; o carregamento operacional é via
   `read_file` no arquivo local `anki-mcp-twenty-rules.md`.
 - Regras locais fatoradas: `extension/knowledge/flashcard-ingestion.md`.
-- Hook: `extension/scripts/hooks/ensure_anki.mjs`, que tenta abrir/minimizar o
-  Anki antes de ferramentas Anki MCP.
+- Roadmap do módulo: `docs/flashcards-roadmap.md`. Use esse documento para
+  priorizar melhorias futuras; `flashcard-ingestion.md` continua sendo a fonte
+  operacional das regras do agente.
+- Hook: `extension/scripts/hooks/mednotes_hook.mjs ensure-anki-before`, que
+  tenta abrir/minimizar o Anki antes de ferramentas Anki MCP. O preflight espera
+  ate 20s por default (`MEDNOTES_ANKI_START_TIMEOUT_MS`, teto de 20s) e tenta
+  preservar foco do terminal por best-effort (`open -g -j` no macOS,
+  `Start-Process -WindowStyle Minimized` no Windows).
 - Seleção por tag no `/flashcards` usa tags Obsidian apenas para escolher notas;
   os cards criados no Anki continuam sem tags.
 - Utilitário determinístico: `extension/scripts/mednotes/obsidian_note_utils.py`
   gera deeplinks portáveis `obsidian://open?vault=...&file=...` e
   adiciona/remove a tag Obsidian `anki` no frontmatter depois de sucesso no
   Anki.
+- Resolver determinístico: `extension/scripts/mednotes/flashcard_sources.py`
+  expande arquivos, diretórios, globs, pastas em linguagem natural e filtros por
+  tag Obsidian para um manifest JSON com `deck`, `deeplink`,
+  `vault_relative_path`, tags, hash de conteúdo e `skipped_notes`; o subcomando
+  `preview` emite a mesma resolução em texto humano para confirmação.
+- Índice local: `extension/scripts/mednotes/flashcard_index.py` filtra
+  `candidate_cards` contra
+  `~/.gemini/medical-notes-workbench/FLASHCARDS_INDEX.json` e registra somente
+  cards aceitos pelo Anki.
+- Validador de modelo: `extension/scripts/mednotes/anki_model_validator.py`
+  valida que o note type capturado do Anki MCP tem `Frente`, `Verso`,
+  `Verso Extra` e `Obsidian`.
+- Sync das Twenty Rules: `extension/scripts/mednotes/sync_anki_twenty_rules.py`
+  compara a cópia local com o prompt upstream do pacote Anki MCP.
+- Relatório/preview: `extension/scripts/mednotes/flashcard_report.py` mostra
+  os cards candidatos antes da escrita (`preview-cards`) e consolida notas
+  processadas, cards criados, duplicados, pulos e erros (`final`).
+- Pipeline determinístico: `extension/scripts/mednotes/flashcard_pipeline.py`
+  prepara o plano de escrita (`prepare`) e aplica resultados aceitos (`apply`)
+  juntando validação de modelo, idempotência, reprocessamento por hash e
+  relatório final.
 
 Contrato do `/flashcards <escopo>`:
 
-1. Ler o arquivo com `read_file`.
-2. Usar exclusivamente o conteúdo desse arquivo como base factual ("O QUÊ").
-3. Aplicar `extension/knowledge/anki-mcp-twenty-rules.md` e as regras locais de
+1. Resolver o escopo com
+   `python extension/scripts/mednotes/flashcard_sources.py resolve --scope "<args>" --dry-run --skip-tag anki`.
+2. Ler cada arquivo em `manifest.notes[].path` com `read_file`.
+3. Formular `candidate_cards` antes de gravar no Anki e devolver também
+   `preferred_model` + `models` capturados via `modelNames`/`modelFieldNames`.
+4. Preparar o plano com `flashcard_pipeline.py prepare`.
+5. No modo padrão, mostrar os cards no terminal com
+   `flashcard_report.py preview-cards` e só gravar depois de confirmação
+   explícita do usuário.
+6. Se o plano exigir confirmação de reprocessamento por fonte alterada, pedir
+   confirmação antes de criar novos cards.
+7. Antes de `addNotes`, rodar `findNotes` com as queries do plano e pular cards
+   já existentes no Anki.
+8. Usar exclusivamente o conteúdo desses arquivos como base factual ("O QUÊ").
+9. Aplicar `extension/knowledge/anki-mcp-twenty-rules.md` e as regras locais de
    ingestão como metodologia ("COMO"). Não exigir que o usuário rode
    `/twenty_rules` antes.
 
@@ -260,6 +306,20 @@ Regras locais atuais dos flashcards:
   nota com a tag Obsidian `anki` usando
   `python extension/scripts/mednotes/obsidian_note_utils.py add-tag --tag anki <nota.md>`.
   Para desfazer, usar `remove-tag --tag anki`.
+- Por padrão, `/flashcards` pula notas que já têm tag Obsidian `anki` para
+  evitar duplicação; se o usuário pedir refazer/regenerar, rode o resolver sem
+  `--skip-tag anki`.
+- Antes de gravar no Anki, use `flashcard_index.py check` para pular cards já
+  registrados no índice local. Depois de sucesso no Anki, use
+  `flashcard_index.py record` para registrar apenas os cards aceitos.
+- Por padrão, `/flashcards` mostra os cards candidatos no terminal e pede
+  confirmação antes de chamar `addNotes`. Modo direto só quando o usuário pedir
+  explicitamente `--create`, `--direct`, `--yes`, `--no-preview`, "criar
+  diretamente", "crie direto", "sem preview", "sem previa" ou "sem confirmação".
+- Ao final, use `flashcard_report.py final` quando houver dados estruturados da
+  execução para produzir um resumo consistente.
+- O fluxo preferido e consolidado é `flashcard_pipeline.py prepare` antes do
+  Anki MCP e `flashcard_pipeline.py apply` depois dos cards aceitos.
 - `/flashcards` deve pedir confirmação antes de gravar lotes com mais de 10
   arquivos ou mais de 40 cards candidatos.
 - Anki Desktop precisa estar instalado e o add-on AnkiConnect precisa responder

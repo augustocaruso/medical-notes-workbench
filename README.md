@@ -7,7 +7,7 @@ Uso pessoal/estudo (fair use). Imagens são baixadas localmente para o vault Obs
 > **Fluxos gerais**:
 > - `chat Gemini → /mednotes:create ou nota existente → /mednotes:enrich → enricher (chamado pelo agente)`.
 > - `Chats_Raw → /mednotes:process-chats → subagents médicos → Wiki_Medicina → linker semântico`.
-> - `nota/arquivo/escopo → /flashcards → anki-mcp-twenty-rules.md → med-flashcard-maker → Anki MCP → Anki`.
+> - `nota/arquivo/escopo → /flashcards → flashcard_sources.py manifest → anki-mcp-twenty-rules.md → med-flashcard-maker → Anki MCP → Anki`.
 
 ## Subcomandos (toolbox)
 
@@ -100,7 +100,9 @@ A extensão inclui:
 - Subagents Gemini para triagem, arquitetura clínica, curadoria de catálogo, guarda de publicação e criação de flashcards.
 - Knowledge docs preservando a redação original das skills médicas funcionais e
   a cópia operacional `anki-mcp-twenty-rules.md`.
-- Hooks Gemini leves e estreitos: guardrails do `med_ops.py` em `run_shell_command` e inicialização do Anki apenas antes de ferramentas Anki MCP.
+- Hooks Gemini leves e estreitos: `mednotes_hook.mjs` bloqueia publishes
+  inseguros do `med_ops.py`, registra dry-runs aprovados e faz preflight do Anki
+  apenas antes de ferramentas Anki MCP.
 - MCP global existente `anki-mcp` via `@ankimcp/anki-mcp-server`, incluindo o
   prompt MCP `twenty_rules`.
 - Runtime Python mínimo (`src/`, `scripts/run_agent.py`, `pyproject.toml`).
@@ -121,6 +123,13 @@ python scripts/mednotes/med_ops.py publish-batch --manifest batch.json --dry-run
 python scripts/mednotes/med_ops.py publish-batch --manifest batch.json
 python scripts/mednotes/med_ops.py run-linker
 ```
+
+Dentro do Gemini CLI, o hook bloqueia `publish-batch` real quando nao existe um
+`publish-batch --dry-run` recente do mesmo manifest. O recibo fica em
+`~/.gemini/medical-notes-workbench/hooks/med-ops-dry-runs.json` por 30 minutos
+por padrao; `MEDNOTES_HOOK_STATE_DIR` e `MEDNOTES_PUBLISH_DRY_RUN_TTL_MS`
+permitem ajustar esse comportamento. Mensagens uteis aparecem via JSON oficial
+do hook (`systemMessage` ou `reason`), nunca como texto solto em stdout.
 
 Defaults internos preservam os caminhos Windows reais de raw/wiki/linker. O catálogo fica em `~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json`, fora da pasta auto-updatable da extensão. Para testar em macOS/Linux, use flags, variáveis `MED_RAW_DIR`/`MED_WIKI_DIR`/`MED_CATALOG_PATH`/`MED_LINKER_PATH`, ou `[chat_processor]` no `config.toml`.
 
@@ -158,7 +167,14 @@ O módulo de flashcards usa o MCP global existente `anki-mcp` configurado em
 `~/.gemini/settings.json` com `@ankimcp/anki-mcp-server`. A extensão não declara
 outro servidor Anki MCP no manifest, para evitar duplicação. Ele depende do Anki
 Desktop com o add-on AnkiConnect respondendo em `http://127.0.0.1:8765`; o hook
-`mednotes-ensure-anki` tenta abrir/minimizar o Anki antes de ferramentas Anki.
+`mednotes-ensure-anki` usa `mednotes_hook.mjs ensure-anki-before` para tentar
+abrir/minimizar o Anki antes de ferramentas Anki e falha aberto com uma
+mensagem util se o AnkiConnect nao responder. O preflight espera ate 20s por
+padrao (`MEDNOTES_ANKI_START_TIMEOUT_MS`, teto de 20s) e usa lancamento sem
+foco quando a plataforma permite: `open -g -j` no macOS e PowerShell com
+`Start-Process -WindowStyle Minimized` no Windows. Manter o terminal em foco e
+best-effort; se o sistema operacional ou o Anki focarem a janela, o hook nao
+forca a reversao.
 
 O prompt MCP puro é `/twenty_rules`. Ele fica reservado para o Anki MCP; a
 extensão não cria um comando local com esse nome para não causar colisão. A
@@ -170,6 +186,9 @@ importa a metodologia em `extension/knowledge/anki-mcp-twenty-rules.md`.
 `/flashcards` usa essa cópia local automaticamente; não é preciso executar
 `/twenty_rules` antes.
 
+O plano completo de evolução do módulo está em
+[docs/flashcards-roadmap.md](docs/flashcards-roadmap.md).
+
 Para uso diário, o comando top-level `/flashcards` aceita caminhos, múltiplos
 arquivos, pastas, globs e filtros por tags Obsidian:
 
@@ -178,6 +197,86 @@ arquivos, pastas, globs e filtros por tags Obsidian:
 /flashcards ~/Wiki_Medicina/Cardiologia/*.md
 /flashcards notas com tag #revisar em ~/Wiki_Medicina/Cardiologia
 /flashcards notas na pasta Arritmias
+```
+
+Antes de chamar o subagent, `/flashcards` resolve o escopo com um manifest JSON
+determinístico:
+
+```bash
+python extension/scripts/mednotes/flashcard_sources.py resolve \
+  --scope "notas com tag #revisar em ~/Wiki_Medicina/Cardiologia" \
+  --dry-run --skip-tag anki
+```
+
+O manifest lista apenas notas Markdown válidas e já inclui `deck`,
+`obsidian://open?vault=...&file=...`, tags encontradas, hash do conteúdo e a
+flag de confirmação para lotes com mais de 10 arquivos. Por padrão, notas já
+marcadas com a tag Obsidian `anki` são puladas para evitar duplicação; elas
+aparecem em `skipped_notes`. Para refazer cards de notas já marcadas, rode sem
+`--skip-tag anki`. Se a raiz do vault não estiver clara, rode novamente com
+`--vault-root`/`--wiki-dir`.
+
+Para confirmação humana, o mesmo resolvedor tem uma prévia textual:
+
+```bash
+python extension/scripts/mednotes/flashcard_sources.py preview \
+  --scope "notas com tag #revisar em ~/Wiki_Medicina/Cardiologia" \
+  --dry-run --skip-tag anki
+```
+
+Antes de gravar no Anki, o subagent primeiro devolve um manifesto de
+`candidate_cards` junto com `preferred_model` e `models` capturados via
+`modelNames`/`modelFieldNames`. O fluxo então tem checagens determinísticas:
+
+```bash
+python extension/scripts/mednotes/anki_model_validator.py validate --models-json models.json
+python extension/scripts/mednotes/flashcard_index.py check --candidates candidate_cards.json
+```
+
+Para o caminho consolidado usado pelo agente, prefira:
+
+```bash
+python extension/scripts/mednotes/flashcard_pipeline.py prepare --input run.json
+python extension/scripts/mednotes/flashcard_pipeline.py apply --input accepted-run.json
+```
+
+O `prepare` devolve `anki_find_queries`; o subagent usa essas consultas com
+`findNotes` antes de `addNotes` para pular cards que já existam no Anki, além da
+idempotência local por hash.
+
+Por padrão, `/flashcards` para aqui e mostra os cards no terminal antes de
+gravar no Anki:
+
+```bash
+python extension/scripts/mednotes/flashcard_report.py preview-cards --input write-plan.json
+```
+
+Só depois da sua confirmação ele chama o Anki MCP. Para criar diretamente depois
+das validações, peça explicitamente no comando, por exemplo:
+
+```text
+/flashcards --create ~/Wiki_Medicina/Cardiologia/Ponte_Miocardica.md
+/flashcards criar diretamente notas com tag #revisar em Cardiologia
+```
+
+Depois que o Anki aceitar os cards, registre apenas os aceitos:
+
+```bash
+python extension/scripts/mednotes/flashcard_index.py record --accepted accepted_cards.json
+```
+
+O índice local padrão fica em
+`~/.gemini/medical-notes-workbench/FLASHCARDS_INDEX.json`. Para auditar a cópia
+local das Twenty Rules contra o pacote Anki MCP instalado:
+
+```bash
+python extension/scripts/mednotes/sync_anki_twenty_rules.py check
+```
+
+Para consolidar o fim da execução em um resumo legível:
+
+```bash
+python extension/scripts/mednotes/flashcard_report.py final --input run-result.json
 ```
 
 Fluxo obrigatório: o agente lê o arquivo com `read_file`, usa somente esse

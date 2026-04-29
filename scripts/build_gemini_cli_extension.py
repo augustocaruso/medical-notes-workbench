@@ -89,6 +89,9 @@ def main() -> int:
         src_dir = SOURCE / dirname
         if src_dir.exists():
             _copy_tree(src_dir, DIST / dirname)
+    docs_dir = ROOT / "docs"
+    if docs_dir.exists():
+        _copy_tree(docs_dir, DIST / "docs")
     _copy_tree(ROOT / "src", DIST / "src")
 
     (DIST / "scripts").mkdir()
