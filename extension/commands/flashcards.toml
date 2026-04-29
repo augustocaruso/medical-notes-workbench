@@ -16,16 +16,16 @@ Referencia obrigatoria ao prompt:
   servidor existente `anki-mcp` de `@ankimcp/anki-mcp-server`.
 - Referencia de origem do prompt no pacote MCP:
   `@ankimcp/anki-mcp-server/dist/mcp/primitives/essential/prompts/twenty-rules.prompt/content.md`.
-  Use esse path como proveniencia, nao como arquivo local a ser lido pelo
-  `read_file`.
+  Use esse path como proveniencia upstream.
+- A metodologia operacional esta importada em
+  `${extensionPath}/knowledge/anki-mcp-twenty-rules.md` para que `/flashcards`
+  seja autonomo. Leia esse arquivo e passe essa metodologia ao subagent.
 - O prompt MCP e slash command, nao ferramenta. As ferramentas Anki autorizadas
   no subagent aparecem como `mcp_anki-mcp_*`.
 - A extensao nao declara nem instala outro Anki MCP; ela usa o MCP global ja
   configurado pelo usuario em `~/.gemini/settings.json`.
-- Nao crie nem use copia local da metodologia Twenty Rules. Se o prompt MCP
-  `/twenty_rules` nao estiver carregado/presente no contexto desta sessao, pare
-  e peça ao usuario para executar `/twenty_rules` primeiro e depois repetir
-  `/flashcards {{args}}`.
+- Nao peça ao usuario para executar `/twenty_rules` antes. Esse comando MCP pode
+  existir para uso manual, mas o fluxo `/flashcards` deve usar a copia local.
 
 Resolucao do escopo:
 1. Se `{{args}}` contiver arquivos explicitos, leia somente esses arquivos com
@@ -54,10 +54,12 @@ Criacao:
 1. Use exclusivamente o conteudo lido dos arquivos selecionados, ou o texto
    colado pelo usuario, como base factual ("O QUE"). Nao acrescente fatos
    externos.
-2. Aplique o prompt MCP `/twenty_rules` como metodologia de formulacao ("COMO").
+2. Leia e aplique `${extensionPath}/knowledge/anki-mcp-twenty-rules.md` como
+   metodologia de formulacao ("COMO").
 3. Leia e siga `${extensionPath}/knowledge/flashcard-ingestion.md`.
 4. Chame o subagent `med-flashcard-maker` com:
    - lista final de arquivos resolvidos e seu conteudo/fonte;
+   - metodologia local carregada de `anki-mcp-twenty-rules.md`;
    - mapa de `arquivo -> obsidian://open?vault=...&file=...` gerado pelo script
      `obsidian_note_utils.py`;
    - instrucao de processar cada arquivo separadamente;

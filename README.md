@@ -7,7 +7,7 @@ Uso pessoal/estudo (fair use). Imagens são baixadas localmente para o vault Obs
 > **Fluxos gerais**:
 > - `chat Gemini → /mednotes:create ou nota existente → /mednotes:enrich → enricher (chamado pelo agente)`.
 > - `Chats_Raw → /mednotes:process-chats → subagents médicos → Wiki_Medicina → linker semântico`.
-> - `nota/arquivo/escopo → /twenty_rules (prompt MCP) → /flashcards ou /mednotes:twenty_rules <path> ou /mednotes:flashcards → med-flashcard-maker → Anki MCP → Anki`.
+> - `nota/arquivo/escopo → /flashcards → anki-mcp-twenty-rules.md → med-flashcard-maker → Anki MCP → Anki`.
 
 ## Subcomandos (toolbox)
 
@@ -95,10 +95,11 @@ gemini extensions link dist/gemini-cli-extension
 A extensão inclui:
 
 - `GEMINI.md` com contexto operacional.
-- Slash commands `/mednotes:setup`, `/mednotes:create`, `/mednotes:enrich`, `/mednotes:process-chats`, `/mednotes:link`, `/flashcards`, `/mednotes:flashcards`, `/mednotes:twenty_rules` e `/mednotes:status`.
+- Slash commands `/mednotes:setup`, `/mednotes:create`, `/mednotes:enrich`, `/mednotes:process-chats`, `/mednotes:link`, `/flashcards` e `/mednotes:status`.
 - Skills `create-medical-note` e `enrich-medical-note`.
 - Subagents Gemini para triagem, arquitetura clínica, curadoria de catálogo, guarda de publicação e criação de flashcards.
-- Knowledge docs preservando a redação original das skills médicas funcionais.
+- Knowledge docs preservando a redação original das skills médicas funcionais e
+  a cópia operacional `anki-mcp-twenty-rules.md`.
 - Hooks Gemini leves e estreitos: guardrails do `med_ops.py` em `run_shell_command` e inicialização do Anki apenas antes de ferramentas Anki MCP.
 - MCP global existente `anki-mcp` via `@ankimcp/anki-mcp-server`, incluindo o
   prompt MCP `twenty_rules`.
@@ -163,14 +164,11 @@ O prompt MCP puro é `/twenty_rules`. Ele fica reservado para o Anki MCP; a
 extensão não cria um comando local com esse nome para não causar colisão. A
 referência de origem no pacote MCP é
 `@ankimcp/anki-mcp-server/dist/mcp/primitives/essential/prompts/twenty-rules.prompt/content.md`;
-esse path é proveniência, enquanto o carregamento operacional é via
-`/twenty_rules`. Para arquivo único, carregue o prompt MCP e depois use o
-wrapper da extensão:
-
-```bash
-/twenty_rules
-/mednotes:twenty_rules ~/Wiki_Medicina/Cardiologia/Ponte_Miocardica.md
-```
+esse path é proveniência. Como subagents Gemini CLI não conseguem chamar um
+slash prompt MCP e puxar seu conteúdo para o próprio contexto, a extensão
+importa a metodologia em `extension/knowledge/anki-mcp-twenty-rules.md`.
+`/flashcards` usa essa cópia local automaticamente; não é preciso executar
+`/twenty_rules` antes.
 
 Para uso diário, o comando top-level `/flashcards` aceita caminhos, múltiplos
 arquivos, pastas, globs e filtros por tags Obsidian:
@@ -183,8 +181,9 @@ arquivos, pastas, globs e filtros por tags Obsidian:
 ```
 
 Fluxo obrigatório: o agente lê o arquivo com `read_file`, usa somente esse
-conteúdo como base factual, aplica o prompt MCP `/twenty_rules` como metodologia
-e segue `extension/knowledge/flashcard-ingestion.md` para as regras locais:
+conteúdo como base factual, aplica `extension/knowledge/anki-mcp-twenty-rules.md`
+como metodologia e segue `extension/knowledge/flashcard-ingestion.md` para as
+regras locais:
 
 - deck do Anki espelha o caminho Obsidian, por exemplo `Wiki_Medicina::Cardiologia::Ponte_Miocardica`;
 - sem tags Anki por enquanto;
@@ -192,11 +191,10 @@ e segue `extension/knowledge/flashcard-ingestion.md` para as regras locais:
   portavel `obsidian://open?vault=...&file=...` para a nota que o gerou;
 - campo `Verso Extra` começa com uma quebra visual antes do conteúdo.
 
-O comando namespaced `/mednotes:flashcards` segue o mesmo contrato do
-`/flashcards`. Tags Obsidian servem apenas para selecionar notas; os cards do
-Anki continuam sem tags por enquanto. Depois que uma nota gerar pelo menos um
-card aceito pelo Anki MCP, a extensão marca a nota-fonte com a tag Obsidian
-`anki` no frontmatter usando o utilitário Python:
+Tags Obsidian servem apenas para selecionar notas; os cards do Anki continuam
+sem tags por enquanto. Depois que uma nota gerar pelo menos um card aceito pelo
+Anki MCP, a extensão marca a nota-fonte com a tag Obsidian `anki` no
+frontmatter usando o utilitário Python:
 
 ```bash
 python extension/scripts/mednotes/obsidian_note_utils.py add-tag --tag anki nota.md
@@ -282,7 +280,7 @@ Em construção:
 - [x] Etapa 7: empacotamento como extensão Gemini CLI
 - [x] Etapa 8: migração para Medical Notes Workbench
 - [x] Etapa 9: pipeline Gemini CLI com subagents, knowledge docs e `med_ops.py` seguro
-- [x] Etapa 10: módulo de flashcards Anki MCP (`/twenty_rules`, `/flashcards`, `/mednotes:twenty_rules`, `/mednotes:flashcards`)
+- [x] Etapa 10: módulo de flashcards Anki MCP (`/flashcards`, com proveniência no prompt MCP `/twenty_rules`)
 - [ ] Etapa 11: adapters médicos curados (Radiopaedia, OpenStax, NIH Open-i)
 - [ ] Etapa 12: biblioteca PDF como source adapter
 

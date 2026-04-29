@@ -8,7 +8,7 @@ Uso pessoal/estudo do usuário (estudante/profissional de medicina) — fair use
 
 - **Fluxo geral do enricher**: `chat Gemini → /mednotes:create ou nota existente → /mednotes:enrich → enricher (chamado pelo agente)`.
 - **Fluxo geral do chat processor**: `Chats_Raw → /mednotes:process-chats → subagents médicos → Wiki_Medicina → med_linker`.
-- **Fluxo geral dos flashcards**: `nota/arquivo/escopo → /twenty_rules (prompt MCP) → /flashcards ou /mednotes:twenty_rules <path> ou /mednotes:flashcards → med-flashcard-maker → Anki MCP → Anki`.
+- **Fluxo geral dos flashcards**: `nota/arquivo/escopo → /flashcards → anki-mcp-twenty-rules.md → med-flashcard-maker → Anki MCP → Anki`.
 - **Entrada**: arquivo `.md` da nota didática. Schema do frontmatter é **livre** — o enricher é agnóstico. Pode até não ter frontmatter.
 - **Saída**: o mesmo `.md`, in-place, com:
   - Imagens inseridas via `![[...]]` no fim das seções alvo, com caption (`*Figura: <conceito>.* *Fonte: <source> — <url>*`).
@@ -209,21 +209,22 @@ Regras de segurança do chat processor:
 
 A extensão empacota um módulo de criação de flashcards:
 
-- Comandos: `/twenty_rules` é o prompt MCP puro do Anki MCP;
-  `/flashcards` aceita arquivos, múltiplos arquivos, diretórios, globs, tags
-  Obsidian e instruções em linguagem natural;
-  `/mednotes:twenty_rules <path>` é o wrapper da extensão para um arquivo local;
-  `/mednotes:flashcards` é o caminho namespaced equivalente.
+- Comando público: `/flashcards`, que aceita um arquivo, múltiplos arquivos,
+  diretórios, globs, tags Obsidian e instruções em linguagem natural.
+- Prompt upstream: `/twenty_rules` é o prompt MCP puro do Anki MCP; não é um
+  comando da extensão e não precisa ser executado antes de `/flashcards`.
 - Subagent: `med-flashcard-maker`.
 - MCP: usar o servidor global existente `anki-mcp`, via
   `@ankimcp/anki-mcp-server` em modo STDIO. A extensão não declara outro Anki
   MCP no manifest, para evitar duplicação com `~/.gemini/settings.json`.
-- Prompt primário: `/twenty_rules`, exposto pelo próprio Anki MCP. Não manter
-  cópia local da metodologia; referenciar o prompt MCP.
+- Prompt upstream: `/twenty_rules`, exposto pelo próprio Anki MCP. Como
+  subagents não conseguem chamar slash prompts MCP e puxar o conteúdo para o
+  próprio contexto, manter uma cópia operacional local em
+  `extension/knowledge/anki-mcp-twenty-rules.md`.
 - Path de origem do prompt no pacote MCP:
   `@ankimcp/anki-mcp-server/dist/mcp/primitives/essential/prompts/twenty-rules.prompt/content.md`.
-  Esse path é proveniência; o carregamento operacional é via `/twenty_rules`,
-  não via `read_file`.
+  Esse path é proveniência upstream; o carregamento operacional é via
+  `read_file` no arquivo local `anki-mcp-twenty-rules.md`.
 - Regras locais fatoradas: `extension/knowledge/flashcard-ingestion.md`.
 - Hook: `extension/scripts/hooks/ensure_anki.mjs`, que tenta abrir/minimizar o
   Anki antes de ferramentas Anki MCP.
@@ -234,12 +235,13 @@ A extensão empacota um módulo de criação de flashcards:
   adiciona/remove a tag Obsidian `anki` no frontmatter depois de sucesso no
   Anki.
 
-Contrato do `/mednotes:twenty_rules <path>`:
+Contrato do `/flashcards <escopo>`:
 
 1. Ler o arquivo com `read_file`.
 2. Usar exclusivamente o conteúdo desse arquivo como base factual ("O QUÊ").
-3. Aplicar o prompt MCP `/twenty_rules` e as regras locais de ingestão como
-   metodologia ("COMO").
+3. Aplicar `extension/knowledge/anki-mcp-twenty-rules.md` e as regras locais de
+   ingestão como metodologia ("COMO"). Não exigir que o usuário rode
+   `/twenty_rules` antes.
 
 Regras locais atuais dos flashcards:
 

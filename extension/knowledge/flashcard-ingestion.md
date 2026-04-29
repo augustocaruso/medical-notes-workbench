@@ -1,9 +1,12 @@
 # Flashcard Ingestion Design
 
 Este documento e a fonte unica das regras locais de ingestao para criacao de
-flashcards medicos no Anki. O prompt MCP `/twenty_rules`, fornecido pelo
-servidor Anki MCP global `anki-mcp`, continua sendo a metodologia de formulacao dos cards. Este
-documento define as decisoes de design da extensao Medical Notes Workbench.
+flashcards medicos no Anki. A metodologia de formulacao dos cards vive em
+`extension/knowledge/anki-mcp-twenty-rules.md`, uma copia operacional do prompt
+MCP `/twenty_rules` fornecido pelo servidor Anki MCP global `anki-mcp`. Essa
+copia local existe porque subagents Gemini CLI nao conseguem chamar slash
+prompts MCP e puxar o conteudo para o proprio contexto. Este documento define
+as decisoes de design da extensao Medical Notes Workbench.
 
 ## Especificacoes De Design
 
@@ -79,25 +82,26 @@ documento define as decisoes de design da extensao Medical Notes Workbench.
 
 `/twenty_rules` sem namespace e reservado para o prompt MCP `twenty_rules` do
 servidor global `anki-mcp`. A extensao nao declara outro Anki MCP no manifest,
-para evitar duplicacao com `~/.gemini/settings.json`. O wrapper da extensao para um arquivo local e
-`/mednotes:twenty_rules <path>` para evitar colisao com o prompt MCP.
+para evitar duplicacao com `~/.gemini/settings.json`. A extensao tambem nao cria
+um comando local chamado `/twenty_rules`, para evitar colisao com o prompt MCP.
 Referencia de origem do prompt no pacote MCP:
 `@ankimcp/anki-mcp-server/dist/mcp/primitives/essential/prompts/twenty-rules.prompt/content.md`.
-Esse path e rastreabilidade/proveniencia; o agente deve carregar a metodologia
-por `/twenty_rules`, nao por `read_file` nesse path.
-O comando top-level `/flashcards` aceita escopos mais amplos: arquivos,
-diretorios, globs, filtros por tag Obsidian e instrucoes em linguagem natural.
+Esse path e rastreabilidade/proveniencia upstream; o agente deve carregar a
+metodologia por `read_file` em
+`${extensionPath}/knowledge/anki-mcp-twenty-rules.md`.
+O comando `/flashcards` aceita um arquivo, multiplos arquivos, diretorios,
+globs, filtros por tag Obsidian e instrucoes em linguagem natural.
 Tags Obsidian podem selecionar notas, mas nao devem virar tags Anki. A tag
 Obsidian `anki` e reservada para marcar notas que ja geraram cards com sucesso.
 
-Ao receber `/mednotes:twenty_rules <path>` ou uma tarefa equivalente que ja
-tenha carregado o prompt MCP `/twenty_rules`, o agente deve:
+Ao receber `/flashcards <escopo>`, o agente deve:
 
 1. Usar `read_file` para extrair o conteudo do arquivo em `<path>`.
 2. Utilizar exclusivamente o conteudo lido desse arquivo como base de
    conhecimento, isto e, o "O QUE" dos flashcards.
-3. Aplicar rigorosamente o prompt MCP `/twenty_rules` e as especificacoes deste
-   documento como "COMO".
+3. Aplicar rigorosamente
+   `${extensionPath}/knowledge/anki-mcp-twenty-rules.md` e as especificacoes
+   deste documento como "COMO".
 
 Nao use conhecimento externo para acrescentar fatos aos cards. Conhecimento
 medico geral pode ser usado apenas para entender, segmentar e redigir melhor o

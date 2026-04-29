@@ -24,22 +24,22 @@ declare or install its own Anki MCP server, to avoid duplicate servers. Gemini
 CLI exposes the existing server's tools with fully-qualified names such as
 `mcp_anki-mcp_addNotes`; do not call bare tool names such as `addNotes`.
 
-The flashcard-creation methodology is the Anki MCP prompt `/twenty_rules`
-(`twenty_rules` from server `anki-mcp`). MCP prompts are slash commands, not
-tools, so they do not appear in the `tools:` allowlist above. The prompt's
+The flashcard-creation methodology is bundled locally in
+`${extensionPath}/knowledge/anki-mcp-twenty-rules.md`. That file is an
+operational copy of the Anki MCP prompt `/twenty_rules` (`twenty_rules` from
+server `anki-mcp`) because Gemini CLI subagents cannot reliably call MCP slash
+prompts and import their content into delegated context. The upstream prompt's
 source inside the MCP package is
 `@ankimcp/anki-mcp-server/dist/mcp/primitives/essential/prompts/twenty-rules.prompt/content.md`;
-use that as provenance only, not as a local `read_file` target.
+use that package path as provenance only. Do not require the user to run
+`/twenty_rules` before `/flashcards`.
 
 Before writing cards:
 
-- Apply the loaded Anki MCP prompt `/twenty_rules` when the parent agent has
-  loaded or passed it into your task.
-- Do not replace `/twenty_rules` with a local copy. If the prompt content is not
-  available in the task context, report that limitation to the parent agent
-  before creating cards.
-- Read and follow `${extensionPath}/knowledge/flashcard-ingestion.md`; it is the
-  source of truth for local ingestion design.
+- Read and follow `${extensionPath}/knowledge/anki-mcp-twenty-rules.md`; it is
+  the local runtime methodology for card formulation.
+- Read and follow `${extensionPath}/knowledge/flashcard-ingestion.md`; it is
+  the source of truth for local ingestion design.
 
 Operating contract:
 

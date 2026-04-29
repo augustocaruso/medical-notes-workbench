@@ -82,43 +82,47 @@ def test_command_toml_files_parse():
 def test_flashcard_module_references_anki_mcp_prompt_and_ingestion_design():
     agent = (EXTENSION / "agents" / "med-flashcard-maker.md").read_text(encoding="utf-8")
     top_flashcards = (EXTENSION / "commands" / "flashcards.toml").read_text(encoding="utf-8")
-    med_command = (EXTENSION / "commands" / "mednotes" / "flashcards.toml").read_text(encoding="utf-8")
-    file_command = (EXTENSION / "commands" / "mednotes" / "twenty_rules.toml").read_text(
+    design = (EXTENSION / "knowledge" / "flashcard-ingestion.md").read_text(encoding="utf-8")
+    twenty_rules = (EXTENSION / "knowledge" / "anki-mcp-twenty-rules.md").read_text(
         encoding="utf-8"
     )
-    design = (EXTENSION / "knowledge" / "flashcard-ingestion.md").read_text(encoding="utf-8")
     hook = (EXTENSION / "scripts" / "hooks" / "ensure_anki.mjs").read_text(encoding="utf-8")
     note_utils = EXTENSION / "scripts" / "mednotes" / "obsidian_note_utils.py"
     build = (ROOT / "scripts" / "build_gemini_cli_extension.py").read_text(encoding="utf-8")
 
     assert note_utils.exists()
+    assert (EXTENSION / "knowledge" / "anki-mcp-twenty-rules.md").exists()
     assert '"mcpServers"' not in build
-    assert "@ankimcp/anki-mcp-server" in agent + top_flashcards + med_command + file_command + design
-    assert "servidor global `anki-mcp`" in file_command + design
+    combined = agent + top_flashcards + design
+    assert "@ankimcp/anki-mcp-server" in combined + twenty_rules
+    assert "servidor global `anki-mcp`" in top_flashcards + design
     assert '"envVar": "SERPAPI_KEY"' in build
     assert '"sensitive": True' in build
     assert not (EXTENSION / "commands" / "twenty_rules.toml").exists()
-    assert "`/twenty_rules` sem namespace pertence ao prompt MCP" in file_command
+    assert not (EXTENSION / "commands" / "mednotes" / "flashcards.toml").exists()
+    assert not (EXTENSION / "commands" / "mednotes" / "twenty_rules.toml").exists()
+    assert "`/twenty_rules` sem namespace e o prompt MCP" in top_flashcards
     assert "twenty-rules.prompt/content.md" in agent
     assert "twenty-rules.prompt/content.md" in top_flashcards
-    assert "twenty-rules.prompt/content.md" in med_command
-    assert "twenty-rules.prompt/content.md" in file_command
     assert "twenty-rules.prompt/content.md" in design
-    assert "nao por `read_file` nesse path" in design
+    assert "twenty-rules.prompt/content.md" in twenty_rules
+    assert "anki-mcp-twenty-rules.md" in combined
+    assert "Nao peça ao usuario para executar `/twenty_rules`" in top_flashcards
+    assert "Execute `/twenty_rules` primeiro" not in combined
     assert "Este comando aceita" in top_flashcards
     assert "filtro por tag Obsidian" in top_flashcards
     assert "mais de 10 arquivos" in top_flashcards
     assert "mcp_anki-mcp_*" in top_flashcards
-    assert "twenty_rules" in agent + top_flashcards + med_command + file_command + design
-    assert "flashcard-ingestion.md" in agent + top_flashcards + med_command + file_command
+    assert "twenty_rules" in combined
+    assert "flashcard-ingestion.md" in agent + top_flashcards
     assert "nao adicionar tags" in design
-    assert "Obsidian`" in agent + top_flashcards + med_command + file_command + design
-    assert "obsidian://open?vault=...&file=..." in top_flashcards + med_command + design
-    assert "vault=...&file=..." in agent + top_flashcards + med_command + design
+    assert "Obsidian`" in agent + top_flashcards + design
+    assert "obsidian://open?vault=...&file=..." in top_flashcards + design
+    assert "vault=...&file=..." in agent + top_flashcards + design
     assert "--absolute-path" in design
-    assert "obsidian_note_utils.py" in agent + top_flashcards + med_command + file_command + design
-    assert "add-tag --tag anki" in top_flashcards + med_command + file_command + design
-    assert "remove-tag --tag anki" in top_flashcards + med_command + file_command + design
+    assert "obsidian_note_utils.py" in agent + top_flashcards + design
+    assert "add-tag --tag anki" in top_flashcards + design
+    assert "remove-tag --tag anki" in top_flashcards + design
     assert "Wiki_Medicina::Cardiologia::Ponte_Miocardica" in design
     assert "Verso Extra" in design + agent
     assert "mcp_anki-mcp_addNotes" in agent

@@ -19,19 +19,20 @@ Operational rules:
 - Prefer `/mednotes:process-chats` and the bundled subagents when the user asks
   to process raw Gemini/medical chat exports from `Chats_Raw` into Obsidian
   notes in `Wiki_Medicina`.
-- `/twenty_rules` without a namespace is the Anki MCP prompt itself. Prefer
-  `/mednotes:twenty_rules <path>` when the user asks to create Anki flashcards
-  from one local note/file after that prompt has been loaded. Prefer
-  `/flashcards` for broad flashcard requests: multiple files, folders, globs,
-  Obsidian tag filters, or natural-language source instructions. Keep
-  `/mednotes:flashcards` as the namespaced equivalent.
+- `/twenty_rules` without a namespace is the Anki MCP prompt itself. The
+  extension keeps that name reserved for the MCP, but `/flashcards` must not
+  require the user to run it first. Use `/flashcards` for all flashcard
+  requests: one file, multiple files, folders, globs, Obsidian tag filters, or
+  natural-language source instructions.
 - For Wiki_Medicina note structure, follow the preserved knowledge docs under
   `knowledge/`, especially `knowledge-architect.md`.
 - For flashcard ingestion design, follow `knowledge/flashcard-ingestion.md`:
   derive the Anki deck from the Obsidian path, fill the Anki `Obsidian` field
   with a source deeplink, do not add Anki tags for now, mark successful source
   notes with the Obsidian frontmatter tag `anki`, and prefix `Verso Extra` with
-  a visual blank line.
+  a visual blank line. For the card-writing methodology, follow
+  `knowledge/anki-mcp-twenty-rules.md`, the local operational copy of the Anki
+  MCP `/twenty_rules` prompt.
 - Prefer `/mednotes:link` or `scripts/mednotes/med_linker.py` when the user asks
   to interconnect Wiki_Medicina notes, refresh wiki links, or run the semantic
   linker.
@@ -56,11 +57,12 @@ Operational rules:
   server from `~/.gemini/settings.json`. It deliberately does not declare
   another Anki MCP server in the extension manifest, to avoid duplicates. The
   MCP requires Anki Desktop with AnkiConnect reachable at
-  `http://127.0.0.1:8765`. It exposes the `/twenty_rules` prompt; use that
-  prompt as the card-writing methodology.
+  `http://127.0.0.1:8765`. It exposes the `/twenty_rules` prompt, whose content
+  is bundled locally for autonomous command/subagent use.
   Its package source path is
   `@ankimcp/anki-mcp-server/dist/mcp/primitives/essential/prompts/twenty-rules.prompt/content.md`;
-  treat that path as provenance only, not as a local file to read.
+  treat that package path as upstream provenance. Read
+  `knowledge/anki-mcp-twenty-rules.md` at runtime instead.
   Gemini exposes the existing `anki-mcp` tools as `mcp_anki-mcp_*`, not as bare
   tool names.
   `/flashcards` may resolve folders/globs/tag filters, but selected source
@@ -88,11 +90,6 @@ Useful extension commands:
   whole Wiki_Medicina.
 - `/flashcards [paths-or-scope]` creates medical Anki cards from files,
   folders, globs, Obsidian tags, or source instructions.
-- `/mednotes:flashcards [source-or-brief]` creates medical Anki cards via Anki
-  MCP.
-- `/twenty_rules` loads the Anki MCP `twenty_rules` methodology prompt.
-- `/mednotes:twenty_rules <path>` creates Anki cards from exactly one file using
-  the loaded Anki MCP `/twenty_rules` prompt and local ingestion design.
 - `/mednotes:status` checks local configuration and dependencies.
 
 Bundled Gemini subagents for chat processing:
