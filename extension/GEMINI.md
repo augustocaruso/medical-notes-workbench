@@ -81,6 +81,19 @@ Operational rules:
   before note-writing agents choose paths, and run the semantic linker once at
   the end. The equivalent split subcommands are `taxonomy-canonical`,
   `taxonomy-tree --max-depth 4`, and `taxonomy-audit` in `med_ops.py`.
+- For chat-processing subagent parallelism, plan fan-out first with
+  `scripts/mednotes/med_ops.py plan-subagents`: `--phase triage
+  --max-concurrency 4` for pending raw chats and `--phase architect
+  --max-concurrency 3 --temp-root <tmp-agents>` for triaged raw chats. The
+  indivisible unit is one raw chat. Never launch multiple subagents for the same
+  raw chat, the same generated note, or the same style-rewrite target. If a
+  raw chat generates several notes, one `med-knowledge-architect` owns all of
+  them. If there is only one work item, use at most one subagent.
+- For `/mednotes:fix-wiki` LLM rewrites, also plan fan-out first with
+  `scripts/mednotes/med_ops.py plan-subagents --phase style-rewrite
+  --max-concurrency 3 --temp-root <tmp-rewrites>`. The indivisible unit is one
+  existing Wiki note target path; never launch two rewrite agents for the same
+  note.
 - For Wiki_Medicina note creation, taxonomy means existing category folders
   only and title means the `.md` filename. Targets must live under the 5
   canonical big areas (`1. Clínica Médica`, `2. Cirurgia`,

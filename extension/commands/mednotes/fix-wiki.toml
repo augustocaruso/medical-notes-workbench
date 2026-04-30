@@ -12,19 +12,22 @@ Fluxo:
 3. Mostre um resumo do preview: `file_count`, `changed_count`, `error_count`, `warning_count` e exemplos de arquivos que seriam alterados.
 4. So aplique se o usuario pediu explicitamente `--apply`, `--yes`, "aplicar", "corrigir de verdade" ou equivalente. Ao aplicar, inclua `--backup` por padrao, a menos que o usuario tenha pedido explicitamente sem backup.
 5. Depois do fix deterministico aplicado, rode `validate-wiki --json` para auditar o resultado.
-6. Se qualquer relatório tiver `requires_llm_rewrite: true`, acione o subagent `med-knowledge-architect` para completar/reescrever essas notas, uma nota por agente, passando:
+6. Se qualquer relatório tiver `requires_llm_rewrite: true`, gere a worklist deterministica com:
+   `python "<script>" plan-subagents --phase style-rewrite --max-concurrency 3 --temp-root <tmp-rewrites>`.
+   Use `batches[]`: acione o subagent `med-knowledge-architect` em lotes de no maximo 3 notas, uma nota por agente, nunca mais de um subagent para o mesmo `work_item.target_path`. Se houver uma unica nota, use um unico subagent; nao crie paralelismo artificial. Passe:
    - caminho absoluto da nota existente;
    - conteúdo atual da nota;
-   - `rewrite_prompt` retornado pelo linter;
+   - `rewrite_prompt` vindo do `work_item`;
+   - `work_id`, `temp_dir` e `temp_output` vindos do `work_item`;
    - instrução de preservar fatos existentes, aliases, links fortes, `Chat Original` e `[[_Índice_Medicina]]`;
-   - instrução para escrever a reescrita em um arquivo temporário, não diretamente na Wiki.
+   - instrução para escrever a reescrita em `temp_output`, não diretamente na Wiki.
 7. Para cada arquivo temporário retornado pelo subagent, rode:
    `apply-style-rewrite --target <nota-original.md> --content <temp-rewrite.md> --dry-run --json`
    e só prossiga se `validation.errors` estiver vazio.
 8. Se o usuario autorizou aplicar (`--apply`, `--yes`, "aplicar", etc.), rode:
    `apply-style-rewrite --target <nota-original.md> --content <temp-rewrite.md> --backup --json`
    Use `--backup` por padrao, a menos que o usuario tenha pedido explicitamente sem backup.
-9. Limite reescritas por LLM a 2 tentativas por nota. Se continuar falhando, liste a nota, os erros remanescentes e não force escrita manual.
+9. Limite reescritas por LLM a 2 tentativas por nota. Uma tentativa substituta so pode comecar depois que a anterior terminou ou foi abandonada; nunca rode duas reescritas simultaneas para a mesma nota. Se continuar falhando, liste a nota, os erros remanescentes e não force escrita manual.
 10. Depois das reescritas aplicadas, rode `validate-wiki --json` novamente.
 11. Responda em portugues com arquivos alterados pelo fix deterministico, notas reescritas pelo subagent, backups criados, erros remanescentes e proximas acoes.
 

@@ -133,6 +133,77 @@ def test_list_pending_and_triados(tmp_path):
     assert triados[0]["titulo_triagem"] == "ISRS"
 
 
+def test_plan_subagents_chunks_pending_chats_without_duplicate_owners(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    for idx in range(5):
+        _write(raw_dir / f"chat-{idx}.md", "Sem yaml\n")
+
+    plan = med_ops.plan_subagents(_config(raw_dir, wiki_dir), "triage", max_concurrency=2)
+
+    assert plan["schema"] == med_ops.SUBAGENT_PLAN_SCHEMA
+    assert plan["phase"] == "triage"
+    assert plan["agent"] == "med-chat-triager"
+    assert plan["max_concurrency"] == 2
+    assert plan["item_count"] == 5
+    assert [len(batch["items"]) for batch in plan["batches"]] == [2, 2, 1]
+    assert len({item["owner_key"] for item in plan["work_items"]}) == 5
+    assert "Never spawn multiple subagents for the same raw chat or generated note." in plan["rules"]
+
+
+def test_plan_subagents_architect_assigns_isolated_temp_dirs(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    temp_root = tmp_path / "tmp-agents"
+    _write(raw_dir / "a.md", _raw_chat(status="triado", fonte_id="a1"))
+    _write(raw_dir / "b.md", _raw_chat(status="triado", fonte_id="b2"))
+    _write(raw_dir / "ignored.md", "---\nstatus: triado\ntipo: outra\n---\nChat\n")
+
+    plan = med_ops.plan_subagents(
+        _config(raw_dir, wiki_dir),
+        "architect",
+        max_concurrency=3,
+        temp_root=temp_root,
+    )
+
+    assert plan["agent"] == "med-knowledge-architect"
+    assert plan["unit"].startswith("one triaged raw chat per subagent")
+    assert plan["item_count"] == 2
+    assert len(plan["batches"]) == 1
+    assert {Path(item["raw_file"]).name for item in plan["work_items"]} == {"a.md", "b.md"}
+    assert all(str(temp_root) in item["temp_dir"] for item in plan["work_items"])
+    assert len({item["temp_dir"] for item in plan["work_items"]}) == 2
+
+
+def test_plan_subagents_style_rewrite_shards_by_unique_wiki_note(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    temp_root = tmp_path / "tmp-rewrites"
+    _write(wiki_dir / "1. Clínica Médica" / "Psiquiatria" / "ISRS.md", "# ISRS\n\n## Diagnóstico\nTexto.\n")
+    _write(
+        wiki_dir / "1. Clínica Médica" / "Cardiologia" / "HAS.md",
+        "# HAS\n\n## Diagnóstico\nTexto.\n",
+    )
+    _write(wiki_dir / "1. Clínica Médica" / "Cardiologia" / "OK.md", _wiki_note("OK"))
+
+    plan = med_ops.plan_subagents(
+        _config(raw_dir, wiki_dir),
+        "style-rewrite",
+        max_concurrency=1,
+        temp_root=temp_root,
+    )
+
+    assert plan["agent"] == "med-knowledge-architect"
+    assert plan["unit"].startswith("one existing Wiki_Medicina note per subagent")
+    assert plan["item_count"] == 2
+    assert [len(batch["items"]) for batch in plan["batches"]] == [1, 1]
+    assert {Path(item["target_path"]).name for item in plan["work_items"]} == {"HAS.md", "ISRS.md"}
+    assert all(item["rewrite_prompt"] for item in plan["work_items"])
+    assert all(str(temp_root) in item["temp_output"] for item in plan["work_items"])
+    assert len({item["owner_key"] for item in plan["work_items"]}) == 2
+    assert "Never spawn multiple subagents for the same Wiki note." in plan["rules"]
+
+
 def test_taxonomy_validation_rejects_unsafe_paths():
     assert med_ops.normalize_taxonomy("Cardiologia/Arritmias") == ("Cardiologia", "Arritmias")
     assert med_ops.normalize_taxonomy(r"Cardiologia\Arritmias") == ("Cardiologia", "Arritmias")

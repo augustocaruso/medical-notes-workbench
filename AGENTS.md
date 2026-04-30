@@ -180,6 +180,22 @@ em notas Obsidian:
 guardam contexto/segurança. Toda alteração de YAML/status em `Chats_Raw`, todo
 staging e todo publish real devem passar por `med_ops.py`.
 
+Paralelização segura dos subagents passa por `med_ops.py plan-subagents`.
+Triagem usa `--phase triage --max-concurrency 4`; arquitetura usa
+`--phase architect --max-concurrency 3 --temp-root <tmp-agents>`. A unidade
+indivisível é o raw chat: nunca lance dois subagents para o mesmo raw chat,
+para a mesma nota temporária ou para a mesma nota final. Se um raw chat gerar
+várias notas, um único `med-knowledge-architect` decide e devolve todas. Se só
+houver um work item, use no máximo um subagent. Consolidação, `triage`,
+`discard`, `stage-note`, catálogo, dry-run, publish e linker continuam seriais
+no agente principal.
+
+No `/mednotes:fix-wiki`, reescritas por LLM também devem ser planejadas com
+`med_ops.py plan-subagents --phase style-rewrite --max-concurrency 3
+--temp-root <tmp-rewrites>`. A unidade indivisível é uma nota Wiki existente:
+nunca lance dois rewriters para o mesmo target. A validação e aplicação das
+reescritas continuam seriais via `apply-style-rewrite`.
+
 Antes de criar notas, o agente principal deve rodar
 `scripts/mednotes/wiki_tree.py --max-depth 4 --audit` para obter em um único
 JSON a taxonomia canônica, a árvore real existente e a auditoria dry-run. Os

@@ -6,16 +6,26 @@ Argumentos do usuario: {{args}}
 
 Use os subagents Gemini CLI desta extensao. A raiz padrao instalada e `~/.gemini/extensions/medical-notes-workbench`; se `${extensionPath}` estiver disponivel, prefira esse valor.
 
+Politica de paralelizacao dos subagents:
+- A unidade indivisivel de paralelismo e o raw chat, nao a nota nem a secao.
+- Antes de qualquer fan-out, gere uma worklist deterministica com `plan-subagents`.
+- Nunca lance dois subagents para o mesmo `raw_file`, para a mesma nota temporaria ou para a mesma nota final.
+- Se um raw chat gerar varias notas, o mesmo `med-knowledge-architect` responsavel pelo raw chat decide todas elas e devolve todas no mesmo resultado.
+- Nao lance mais subagents do que `item_count` nem mais do que `max_concurrency`.
+- Se `item_count` for 0 ou 1, nao ha paralelizacao util: use zero ou um subagent, nunca um grupo artificial.
+- O agente principal mantem o registro `raw_file -> work_id -> subagent` e consolida resultados em serie com `med_ops.py`.
+- Etapas que escrevem estado compartilhado (`triage`, `discard`, `stage-note`, catalogo, `publish-batch`, linker) ficam em serie no agente principal.
+
 Fluxo:
 1. Localize o script `${extensionPath}/scripts/mednotes/med_ops.py`.
 2. Rode `python "<script>" validate` e resuma pendencias de configuracao.
 3. Rode `python "${extensionPath}/scripts/mednotes/wiki_tree.py" --max-depth 4 --audit` para obter a taxonomia canonica, a arvore real existente e a auditoria dry-run. Se preferir, use os subcomandos equivalentes `taxonomy-canonical`, `taxonomy-tree --max-depth 4` e `taxonomy-audit` em `med_ops.py`.
 4. Se o usuario pedir para corrigir bagunca preexistente no vault, rode `taxonomy-migrate --dry-run --plan-output <plano.json>`. Aplique apenas com confirmacao explicita usando `taxonomy-migrate --apply --plan <plano.json> --receipt <recibo.json>`. Se houver erro, use `taxonomy-migrate --rollback --receipt <recibo.json>`. Itens `blocked` exigem decisao humana; nao force merge.
 5. Rode `list-pending` e `list-triados`.
-6. Para raw chats pendentes, use `med-chat-triager` em paralelo, um raw chat por agente. O agente principal aplica `triage` ou `discard` via `med_ops.py`.
-7. Para raw chats triados do lote, use `med-knowledge-architect` em paralelo, um raw chat por agente, com temp dir isolado por raw chat, sempre fornecendo a taxonomia canonica e a arvore real do passo 3.
+6. Para raw chats pendentes, rode `python "<script>" plan-subagents --phase triage --max-concurrency 4`. Use `batches[]`: para cada batch, lance no maximo um `med-chat-triager` por `work_item.raw_file`. Depois que o batch retornar, aplique `triage` ou `discard` em serie via `med_ops.py`; nao edite YAML manualmente.
+7. Atualize `list-triados`. Para raw chats triados do lote, rode `python "<script>" plan-subagents --phase architect --max-concurrency 3 --temp-root <tmp-agents>`. Use `batches[]`: para cada batch, lance no maximo um `med-knowledge-architect` por `work_item.raw_file`, passando `work_id`, `raw_file`, `temp_dir`, taxonomia canonica, arvore real do passo 3 e snapshot do catalogo. Cada architect deve escrever somente no proprio `temp_dir`.
 8. O `med-knowledge-architect` deve seguir os documentos preservados em `${extensionPath}/knowledge/`, especialmente `knowledge-architect.md`, e escolher `taxonomy` apenas sob uma das 5 grandes areas canonicas. Atalhos como `Cardiologia/Arritmias` sao aceitos porque `med_ops.py` canoniza para `1. Clínica Médica/Cardiologia/Arritmias`. Toda nota temporaria deve cumprir o Contrato de Formato Wiki: primeiro heading `# <title>`, definição curta em 2-4 linhas, todo `##` com emoji semântico no inicio, `## 🏁 Fechamento` com `### Resumo`, `### Key Points` e `### Frase de Prova`, `## 🔗 Notas Relacionadas`, e rodape final `---`, `[Chat Original](https://gemini.google.com/app/<fonte_id>)`, `[[_Índice_Medicina]]`.
-9. Antes do staging, rode `validate-note --content <temp.md> --title <title> --raw-file <raw.md> --json`. Se houver erro formal corrigivel, rode `fix-note --content <temp.md> --title <title> --raw-file <raw.md> --output <temp-fixed.md> --json` e valide de novo. Se o relatório trouxer `requires_llm_rewrite: true`, reenviar ao `med-knowledge-architect` com `rewrite_prompt`, no maximo 2 tentativas.
+9. Antes do staging, rode `validate-note --content <temp.md> --title <title> --raw-file <raw.md> --json`. Se houver erro formal corrigivel, rode `fix-note --content <temp.md> --title <title> --raw-file <raw.md> --output <temp-fixed.md> --json` e valide de novo. Se o relatório trouxer `requires_llm_rewrite: true`, reenviar ao mesmo `med-knowledge-architect`/mesmo raw chat ou abrir uma unica tentativa substituta depois que a tentativa anterior terminou; nunca duas tentativas simultaneas para a mesma nota. Limite a 2 tentativas por nota.
 10. Consolide os outputs no agente principal e monte manifest com `stage-note`. Se `stage-note` bloquear a taxonomia ou estilo, corrija antes de prosseguir; nao edite o manifest manualmente.
 11. Rode `med-catalog-curator` em serie para atualizar/validar `CATALOGO_WIKI.json` e aliases. Use o catalogo configurado ou o default `~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json`.
 12. Rode `publish-batch --dry-run` sem `--allow-new-taxonomy-leaf` por padrao.

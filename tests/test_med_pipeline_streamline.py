@@ -104,6 +104,29 @@ def test_fix_wiki_command_is_public_and_deterministic():
     assert "apply-style-rewrite" in text
 
 
+def test_subagent_parallelism_contract_is_explicit_and_sharded_by_note_owner():
+    process = (EXTENSION / "commands" / "mednotes" / "process-chats.toml").read_text(encoding="utf-8")
+    fix_wiki = (EXTENSION / "commands" / "mednotes" / "fix-wiki.toml").read_text(encoding="utf-8")
+    gemini = (EXTENSION / "GEMINI.md").read_text(encoding="utf-8")
+    triager = (EXTENSION / "agents" / "med-chat-triager.md").read_text(encoding="utf-8")
+    architect = (EXTENSION / "agents" / "med-knowledge-architect.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+
+    assert "plan-subagents --phase triage --max-concurrency 4" in process + gemini + readme
+    assert "plan-subagents --phase architect --max-concurrency 3" in process + gemini + readme
+    assert "plan-subagents --phase style-rewrite --max-concurrency 3" in fix_wiki + gemini + readme
+    assert "A unidade indivisivel de paralelismo e o raw chat" in process
+    assert "Nunca lance dois subagents para o mesmo `raw_file`" in process
+    assert "Se `item_count` for 0 ou 1" in process
+    assert "exactly one raw chat per agent invocation" in triager
+    assert "Never split one raw chat" in architect
+    assert "nunca mais de um subagent para o mesmo `work_item.target_path`" in fix_wiki
+    assert "Paralelização segura dos subagents passa por `med_ops.py plan-subagents`" in claude
+    assert "Paralelização segura dos subagents passa por `med_ops.py plan-subagents`" in agents
+
+
 def test_flashcard_module_references_anki_mcp_prompt_and_ingestion_design():
     agent = (EXTENSION / "agents" / "med-flashcard-maker.md").read_text(encoding="utf-8")
     top_flashcards = (EXTENSION / "commands" / "flashcards.toml").read_text(encoding="utf-8")

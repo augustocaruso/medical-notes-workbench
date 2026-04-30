@@ -125,12 +125,30 @@ python scripts/mednotes/med_ops.py taxonomy-migrate --rollback --receipt recibo-
 python scripts/mednotes/med_ops.py taxonomy-resolve --taxonomy "Cardiologia/Arritmias" --title "Fibrilacao Atrial"
 python scripts/mednotes/med_ops.py list-pending
 python scripts/mednotes/med_ops.py list-triados
+python scripts/mednotes/med_ops.py plan-subagents --phase triage --max-concurrency 4
+python scripts/mednotes/med_ops.py plan-subagents --phase architect --max-concurrency 3 --temp-root tmp/agents
+python scripts/mednotes/med_ops.py plan-subagents --phase style-rewrite --max-concurrency 3 --temp-root tmp/rewrites
 python scripts/mednotes/med_ops.py triage --raw-file chat.md --titulo "..."
 python scripts/mednotes/med_ops.py stage-note --manifest batch.json --raw-file chat.md --taxonomy "Psiquiatria" --title "ISRS" --content nota-temp.md
 python scripts/mednotes/med_ops.py publish-batch --manifest batch.json --dry-run
 python scripts/mednotes/med_ops.py publish-batch --manifest batch.json
 python scripts/mednotes/med_ops.py run-linker
 ```
+
+Paralelização segura no `process-chats`: o agente principal primeiro gera uma
+worklist com `plan-subagents` e só paraleliza por raw chat. Triagem usa no
+máximo 4 `med-chat-triager` por lote, arquitetura usa no máximo 3
+`med-knowledge-architect` por lote, e nunca há dois subagents trabalhando no
+mesmo raw chat, na mesma nota temporária ou na mesma nota final. Se um raw chat
+precisar virar várias notas, o mesmo architect decide todas. `triage`,
+`discard`, `stage-note`, curadoria de catálogo, dry-run, publicação e linker
+continuam seriais no agente principal.
+
+O mesmo padrão vale para `/mednotes:fix-wiki` quando restarem relatórios com
+`requires_llm_rewrite: true`: `plan-subagents --phase style-rewrite` cria uma
+worklist única por nota existente, com no máximo 3 reescritas paralelas e um
+`temp_output` isolado por item. A aplicação real continua serial via
+`apply-style-rewrite --dry-run` e depois `apply-style-rewrite`.
 
 Taxonomia segue uma regra rigida: `taxonomy` e apenas o caminho de pastas de
 categoria sob as 5 grandes areas canonicas de `Wiki_Medicina`, e `title` vira o
