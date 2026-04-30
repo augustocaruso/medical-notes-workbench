@@ -26,6 +26,14 @@ Operational rules:
   natural-language source instructions.
 - For Wiki_Medicina note structure, follow the preserved knowledge docs under
   `knowledge/`, especially `knowledge-architect.md`.
+- For Wiki_Medicina chat-generated notes, the legacy visual contract is
+  mandatory: a short 2-4 line definition follows the title, every `##` heading
+  begins with one semantic emoji, the note answers the core exam questions
+  ("when to think/use?", "how to confirm?", "what to do?", "what is the trap?"),
+  it includes `## 🏁 Fechamento` with `### Resumo`, `### Key Points`, and
+  `### Frase de Prova`, it includes `## 🔗 Notas Relacionadas`, and it ends
+  with `---`, `[Chat Original](https://gemini.google.com/app/<fonte_id>)`,
+  then `[[_Índice_Medicina]]`.
 - For flashcard ingestion design, follow `knowledge/flashcard-ingestion.md`:
   derive the Anki deck from the Obsidian path, fill the Anki `Obsidian` field
   with a source deeplink, do not add Anki tags for now, mark successful source
@@ -54,6 +62,8 @@ Operational rules:
 - Prefer `/mednotes:link` or `scripts/mednotes/med_linker.py` when the user asks
   to interconnect Wiki_Medicina notes, refresh wiki links, or run the semantic
   linker.
+- Prefer `/mednotes:fix-wiki` when the user asks to audit or batch-correct the
+  visual/style contract of existing Wiki_Medicina notes.
 - Work in Portuguese by default when talking to the user.
 - Keep note edits additive: insert image embeds/captions and append enricher
   frontmatter fields, but do not rewrite the user's original frontmatter keys.
@@ -113,6 +123,15 @@ Operational rules:
   contract kept in `knowledge/factory.md`: triage first, use the Padrão Ouro for
   clinical note generation, stage aliases/provenance, publish safely, then run
   the semantic linker.
+- `stage-note` and `publish-batch --dry-run` validate the Wiki_Medicina style
+  contract and reject generated notes with missing emoji `##` headings, missing
+  closing sections, missing `### Frase de Prova`, missing related-notes
+  section, or an incorrect final `[Chat Original]`/`[[_Índice_Medicina]]`
+  footer. Use `scripts/mednotes/med_ops.py validate-note`, `fix-note`, and
+  `validate-wiki` for structured diagnostics, deterministic formal fixes, and
+  whole-vault audit. Use `fix-wiki` first without `--apply` to preview whole
+  vault fixes, then with `--apply --backup` to write deterministic formal fixes
+  in-place.
 - If the user asks where to get SerpAPI, direct them to
   https://serpapi.com/ and tell them to create an account, open the dashboard,
   copy the API key, then run
@@ -124,6 +143,8 @@ Useful extension commands:
 - `/mednotes:create <topic-or-brief>` drafts a medical note.
 - `/mednotes:enrich <path-to-note.md>` enriches one note with images.
 - `/mednotes:process-chats [args]` processes raw chat backlog into wiki notes.
+- `/mednotes:fix-wiki [--apply] [--backup]` previews or applies deterministic
+  whole-vault style fixes for Wiki_Medicina notes.
 - `/mednotes:link [path-or-empty]` runs the semantic linker for one note or the
   whole Wiki_Medicina.
 - `/flashcards [paths-or-scope]` creates medical Anki cards from files,

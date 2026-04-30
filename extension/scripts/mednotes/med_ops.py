@@ -27,6 +27,12 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - Python 3.10 fallback
     tomllib = None
 
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+import wiki_note_style  # noqa: E402
+
 
 DEFAULT_RAW_DIR = r"C:\Users\leona\OneDrive\Chats_Raw"
 DEFAULT_WIKI_DIR = r"C:\Users\leona\iCloudDrive\iCloud~md~obsidian\Wiki_Medicina"
@@ -416,6 +422,25 @@ def safe_title(title: str) -> str:
     if not cleaned:
         raise ValidationError("Title produced an empty filename")
     return cleaned
+
+
+def _style_report_error_message(report: dict[str, Any]) -> str:
+    messages = [str(item.get("message", item.get("code", ""))) for item in report.get("errors", [])]
+    return "Generated Wiki note does not match the Wiki_Medicina style contract: " + "; ".join(messages)
+
+
+def validate_wiki_note_contract(content: str, *, title: str, raw_file: Path) -> dict[str, Any]:
+    """Reject generated Wiki_Medicina notes that drift from the house style."""
+
+    report = wiki_note_style.validate_note_style(
+        content,
+        title=title,
+        raw_meta=read_note_meta(raw_file),
+        path=str(raw_file),
+    )
+    if report["errors"]:
+        raise ValidationError(_style_report_error_message(report))
+    return report
 
 
 def _fold_taxonomy_segment(value: str) -> str:
@@ -1064,6 +1089,8 @@ def plan_publish_batch(
             content_path = _path(item["content_path"])
             if not content_path.exists():
                 raise MissingPathError(f"Content file not found: {content_path}")
+            content = content_path.read_text(encoding="utf-8")
+            validate_wiki_note_contract(content, title=item["title"], raw_file=raw_file)
             target, taxonomy_resolution = resolve_target_for_note(
                 config.wiki_dir,
                 item["taxonomy"],
@@ -1165,6 +1192,8 @@ def stage_note(
         raise MissingPathError(f"Raw file not found: {raw_file}")
     if not content_path.exists():
         raise MissingPathError(f"Content file not found: {content_path}")
+    content = content_path.read_text(encoding="utf-8")
+    validate_wiki_note_contract(content, title=title, raw_file=raw_file)
     if manifest.exists():
         data = _load_manifest(manifest)
     else:
@@ -1216,6 +1245,137 @@ def run_linker(config: MedConfig, dry_run: bool = False) -> dict[str, Any]:
         "stdout": result.stdout,
         "stderr": result.stderr,
     }
+
+
+def validate_note_style_file(content_path: Path, title: str, raw_file: Path | None = None) -> dict[str, Any]:
+    if not content_path.exists():
+        raise MissingPathError(f"Content file not found: {content_path}")
+    if raw_file is not None and not raw_file.exists():
+        raise MissingPathError(f"Raw file not found: {raw_file}")
+    raw_meta = wiki_note_style.raw_meta_from_file(raw_file) if raw_file is not None else {}
+    return wiki_note_style.validate_note_style(
+        content_path.read_text(encoding="utf-8"),
+        title=title,
+        raw_meta=raw_meta,
+        path=str(content_path),
+    )
+
+
+def fix_note_style_file(
+    content_path: Path,
+    title: str,
+    output_path: Path,
+    raw_file: Path | None = None,
+) -> dict[str, Any]:
+    if not content_path.exists():
+        raise MissingPathError(f"Content file not found: {content_path}")
+    if raw_file is not None and not raw_file.exists():
+        raise MissingPathError(f"Raw file not found: {raw_file}")
+    raw_meta = wiki_note_style.raw_meta_from_file(raw_file) if raw_file is not None else {}
+    fixed_content, report = wiki_note_style.fix_note_style(
+        content_path.read_text(encoding="utf-8"),
+        title=title,
+        raw_meta=raw_meta,
+        path=str(content_path),
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(output_path, fixed_content)
+    report["output_path"] = str(output_path)
+    report["wrote_output"] = True
+    return report
+
+
+def validate_wiki_style(wiki_dir: Path) -> dict[str, Any]:
+    if not wiki_dir.exists():
+        raise MissingPathError(f"Wiki dir not found: {wiki_dir}")
+    if not wiki_dir.is_dir():
+        raise ValidationError(f"Wiki dir is not a directory: {wiki_dir}")
+    return wiki_note_style.validate_wiki_dir(wiki_dir)
+
+
+def fix_wiki_style(wiki_dir: Path, apply: bool = False, backup: bool = False) -> dict[str, Any]:
+    if not wiki_dir.exists():
+        raise MissingPathError(f"Wiki dir not found: {wiki_dir}")
+    if not wiki_dir.is_dir():
+        raise ValidationError(f"Wiki dir is not a directory: {wiki_dir}")
+    files = sorted(path for path in wiki_dir.rglob("*.md") if path.is_file())
+    reports: list[dict[str, Any]] = []
+    changed_count = 0
+    written_count = 0
+    backup_paths: list[str] = []
+    for path in files:
+        original = path.read_text(encoding="utf-8")
+        title = wiki_note_style.infer_title(original, path)
+        fixed, report = wiki_note_style.fix_note_style(original, title=title, path=str(path))
+        changed = fixed != original
+        report["changed"] = changed
+        report["would_write"] = changed
+        report["wrote"] = False
+        report["backup"] = None
+        if changed:
+            changed_count += 1
+        if apply and changed:
+            backup_path = create_backup(path) if backup else None
+            atomic_write_text(path, fixed)
+            report["wrote"] = True
+            report["backup"] = str(backup_path) if backup_path else None
+            if backup_path:
+                backup_paths.append(str(backup_path))
+            written_count += 1
+        reports.append(report)
+    return {
+        "schema": wiki_note_style.STYLE_FIX_SCHEMA,
+        "wiki_dir": str(wiki_dir),
+        "dry_run": not apply,
+        "apply": apply,
+        "backup": backup,
+        "file_count": len(files),
+        "changed_count": changed_count,
+        "written_count": written_count,
+        "error_count": sum(1 for item in reports if item["errors"]),
+        "warning_count": sum(1 for item in reports if item["warnings"]),
+        "backup_paths": backup_paths,
+        "reports": reports,
+    }
+
+
+def apply_style_rewrite(
+    target_path: Path,
+    content_path: Path,
+    *,
+    dry_run: bool = False,
+    backup: bool = False,
+) -> dict[str, Any]:
+    if not target_path.exists():
+        raise MissingPathError(f"Target note not found: {target_path}")
+    if not content_path.exists():
+        raise MissingPathError(f"Rewritten content file not found: {content_path}")
+    original = target_path.read_text(encoding="utf-8")
+    rewritten = content_path.read_text(encoding="utf-8")
+    title = wiki_note_style.infer_title(rewritten, target_path)
+    original_title = wiki_note_style.infer_title(original, target_path)
+    if original_title != target_path.stem and title != original_title:
+        raise ValidationError(f"Rewritten note title changed from {original_title!r} to {title!r}")
+    report = wiki_note_style.validate_note_style(rewritten, title=title, path=str(target_path))
+    result: dict[str, Any] = {
+        "target_path": str(target_path),
+        "content_path": str(content_path),
+        "title": title,
+        "dry_run": dry_run,
+        "backup": backup,
+        "backup_path": None,
+        "changed": rewritten != original,
+        "written": False,
+        "validation": report,
+    }
+    if report["errors"]:
+        return result
+    if not dry_run and rewritten != original:
+        backup_path = create_backup(target_path) if backup else None
+        atomic_write_text(target_path, rewritten)
+        result["written"] = True
+        result["backup_path"] = str(backup_path) if backup_path else None
+    return result
 
 
 def validate_config(config: MedConfig) -> dict[str, Any]:
@@ -1342,6 +1502,39 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(linker, suppress_defaults=True)
     linker.add_argument("--dry-run", action="store_true")
 
+    validate_note = sub.add_parser("validate-note", help="Validate one generated Wiki_Medicina note style.")
+    _add_common(validate_note, suppress_defaults=True)
+    validate_note.add_argument("--content", required=True, help="Generated Markdown note to validate.")
+    validate_note.add_argument("--title", required=True, help="Expected note title / level-1 heading.")
+    validate_note.add_argument("--raw-file", help="Optional raw chat file for exact Chat Original validation.")
+    validate_note.add_argument("--json", action="store_true", help="Emit JSON report. Accepted for explicitness; output is always JSON.")
+
+    fix_note = sub.add_parser("fix-note", help="Apply deterministic style fixes to one generated Wiki_Medicina note.")
+    _add_common(fix_note, suppress_defaults=True)
+    fix_note.add_argument("--content", required=True, help="Generated Markdown note to fix.")
+    fix_note.add_argument("--title", required=True, help="Expected note title / level-1 heading.")
+    fix_note.add_argument("--raw-file", help="Optional raw chat file for exact Chat Original validation.")
+    fix_note.add_argument("--output", required=True, help="Write fixed Markdown to this path.")
+    fix_note.add_argument("--json", action="store_true", help="Emit JSON report. Accepted for explicitness; output is always JSON.")
+
+    validate_wiki = sub.add_parser("validate-wiki", help="Audit all Markdown notes under Wiki_Medicina without writing files.")
+    _add_common(validate_wiki, suppress_defaults=True)
+    validate_wiki.add_argument("--json", action="store_true", help="Emit JSON report. Accepted for explicitness; output is always JSON.")
+
+    fix_wiki = sub.add_parser("fix-wiki", help="Apply deterministic style fixes across Wiki_Medicina.")
+    _add_common(fix_wiki, suppress_defaults=True)
+    fix_wiki.add_argument("--apply", action="store_true", help="Write changes in-place. Without this, only reports what would change.")
+    fix_wiki.add_argument("--backup", action="store_true", help="Create .bak files before mutating notes when --apply is used.")
+    fix_wiki.add_argument("--json", action="store_true", help="Emit JSON report. Accepted for explicitness; output is always JSON.")
+
+    apply_rewrite = sub.add_parser("apply-style-rewrite", help="Validate and apply an LLM-rewritten Wiki_Medicina note.")
+    _add_common(apply_rewrite, suppress_defaults=True)
+    apply_rewrite.add_argument("--target", required=True, help="Existing Wiki_Medicina note to replace.")
+    apply_rewrite.add_argument("--content", required=True, help="Temporary rewritten Markdown note.")
+    apply_rewrite.add_argument("--dry-run", action="store_true", help="Validate and report without writing.")
+    apply_rewrite.add_argument("--backup", action="store_true", help="Create a .bak file before replacing the target note.")
+    apply_rewrite.add_argument("--json", action="store_true", help="Emit JSON report. Accepted for explicitness; output is always JSON.")
+
     validate = sub.add_parser("validate", help="Print resolved paths and existence checks.")
     _add_common(validate, suppress_defaults=True)
     return parser
@@ -1440,6 +1633,45 @@ def main(argv: list[str] | None = None) -> int:
             _json(result)
             if not result.get("dry_run") and result.get("returncode", 0) != 0:
                 return EXIT_LINKER
+        elif args.command == "validate-note":
+            report = validate_note_style_file(
+                _path(args.content),
+                args.title,
+                raw_file=_path(args.raw_file) if args.raw_file else None,
+            )
+            _json(report)
+            if report["errors"]:
+                return EXIT_VALIDATION
+        elif args.command == "fix-note":
+            report = fix_note_style_file(
+                _path(args.content),
+                args.title,
+                _path(args.output),
+                raw_file=_path(args.raw_file) if args.raw_file else None,
+            )
+            _json(report)
+            if report["errors"]:
+                return EXIT_VALIDATION
+        elif args.command == "validate-wiki":
+            audit = validate_wiki_style(config.wiki_dir)
+            _json(audit)
+            if audit["error_count"]:
+                return EXIT_VALIDATION
+        elif args.command == "fix-wiki":
+            report = fix_wiki_style(config.wiki_dir, apply=args.apply, backup=args.backup)
+            _json(report)
+            if report["error_count"]:
+                return EXIT_VALIDATION
+        elif args.command == "apply-style-rewrite":
+            result = apply_style_rewrite(
+                _path(args.target),
+                _path(args.content),
+                dry_run=args.dry_run,
+                backup=args.backup,
+            )
+            _json(result)
+            if result["validation"]["errors"]:
+                return EXIT_VALIDATION
         elif args.command == "validate":
             _json(validate_config(config))
         else:  # pragma: no cover - argparse prevents this

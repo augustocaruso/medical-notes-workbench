@@ -90,6 +90,20 @@ def test_command_toml_files_parse():
         tomllib.loads(path.read_text(encoding="utf-8"))
 
 
+def test_fix_wiki_command_is_public_and_deterministic():
+    command = (EXTENSION / "commands" / "mednotes" / "fix-wiki.toml")
+    text = command.read_text(encoding="utf-8")
+
+    assert command.exists()
+    assert "fix-wiki --json" in text
+    assert "validate-wiki --json" in text
+    assert "--apply" in text
+    assert "--backup" in text
+    assert "requires_llm_rewrite: true" in text
+    assert "med-knowledge-architect" in text
+    assert "apply-style-rewrite" in text
+
+
 def test_flashcard_module_references_anki_mcp_prompt_and_ingestion_design():
     agent = (EXTENSION / "agents" / "med-flashcard-maker.md").read_text(encoding="utf-8")
     top_flashcards = (EXTENSION / "commands" / "flashcards.toml").read_text(encoding="utf-8")

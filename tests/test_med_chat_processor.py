@@ -23,6 +23,31 @@ def _write(path: Path, text: str) -> Path:
     return path
 
 
+def _raw_chat(status: str = "triado", fonte_id: str = "chat123") -> str:
+    return f"---\nstatus: {status}\ntipo: medicina\nfonte_id: {fonte_id}\n---\nChat\n"
+
+
+def _wiki_note(title: str = "ISRS", fonte_id: str = "chat123") -> str:
+    return (
+        f"---\naliases: [{title}]\n---\n"
+        f"# {title}\n\n"
+        "## 🧬 Visão Geral\n"
+        "Conteúdo didático.\n\n"
+        "## 🏁 Fechamento\n\n"
+        "### Resumo\n"
+        "Resumo de alto rendimento.\n\n"
+        "### Key Points\n"
+        "- Ponto essencial.\n\n"
+        "### Frase de Prova\n"
+        "ISRS é primeira linha em muitos transtornos ansiosos e depressivos.\n\n"
+        "## 🔗 Notas Relacionadas\n"
+        "- [[Tema Relacionado]]\n\n"
+        "---\n"
+        f"[Chat Original](https://gemini.google.com/app/{fonte_id})\n"
+        "[[_Índice_Medicina]]\n"
+    )
+
+
 def _config(raw_dir: Path, wiki_dir: Path, linker_path: Path | None = None):
     return med_ops.MedConfig(
         raw_dir=raw_dir,
@@ -236,8 +261,8 @@ def test_publish_batch_dry_run_writes_nothing(tmp_path):
     raw_dir = tmp_path / "raw"
     wiki_dir = tmp_path / "wiki"
     _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
-    raw = _write(raw_dir / "chat.md", "---\nstatus: triado\ntipo: medicina\n---\nChat\n")
-    content = _write(tmp_path / "tmp" / "nota.md", "---\naliases: [ISRS]\n---\n# Nota\n")
+    raw = _write(raw_dir / "chat.md", _raw_chat())
+    content = _write(tmp_path / "tmp" / "nota.md", _wiki_note())
     manifest = _write(
         tmp_path / "manifest.json",
         json.dumps({"raw_file": str(raw), "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}]}),
@@ -256,8 +281,8 @@ def test_publish_batch_creates_notes_then_marks_raw_processed_without_backup(tmp
     raw_dir = tmp_path / "raw"
     wiki_dir = tmp_path / "wiki"
     _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
-    raw = _write(raw_dir / "chat.md", "---\nstatus: triado\ntipo: medicina\n---\nChat\n")
-    content = _write(tmp_path / "tmp" / "nota.md", "---\naliases: [ISRS]\n---\n# Nota\n")
+    raw = _write(raw_dir / "chat.md", _raw_chat())
+    content = _write(tmp_path / "tmp" / "nota.md", _wiki_note())
     manifest = _write(
         tmp_path / "manifest.json",
         json.dumps({"raw_file": str(raw), "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}]}),
@@ -267,7 +292,7 @@ def test_publish_batch_creates_notes_then_marks_raw_processed_without_backup(tmp
 
     target = wiki_dir / "1. Clínica Médica" / "Psiquiatria" / "ISRS.md"
     assert target.exists()
-    assert "# Nota" in target.read_text(encoding="utf-8")
+    assert "# ISRS" in target.read_text(encoding="utf-8")
     assert result["created_count"] == 1
     raw_text = raw.read_text(encoding="utf-8")
     assert "status: processado" in raw_text
@@ -279,8 +304,8 @@ def test_publish_batch_can_create_backup_when_requested(tmp_path):
     raw_dir = tmp_path / "raw"
     wiki_dir = tmp_path / "wiki"
     _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
-    raw = _write(raw_dir / "chat.md", "---\nstatus: triado\ntipo: medicina\n---\nChat\n")
-    content = _write(tmp_path / "tmp" / "nota.md", "# Nota\n")
+    raw = _write(raw_dir / "chat.md", _raw_chat())
+    content = _write(tmp_path / "tmp" / "nota.md", _wiki_note())
     manifest = _write(
         tmp_path / "manifest.json",
         json.dumps({"raw_file": str(raw), "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}]}),
@@ -295,8 +320,8 @@ def test_publish_batch_can_create_backup_when_requested(tmp_path):
 def test_publish_batch_collision_abort_and_suffix(tmp_path):
     raw_dir = tmp_path / "raw"
     wiki_dir = tmp_path / "wiki"
-    raw = _write(raw_dir / "chat.md", "---\nstatus: triado\ntipo: medicina\n---\nChat\n")
-    content = _write(tmp_path / "tmp" / "nota.md", "# Nota\n")
+    raw = _write(raw_dir / "chat.md", _raw_chat())
+    content = _write(tmp_path / "tmp" / "nota.md", _wiki_note())
     _write(wiki_dir / "1. Clínica Médica" / "Psiquiatria" / "ISRS.md", "existente\n")
     manifest = _write(
         tmp_path / "manifest.json",
@@ -319,8 +344,8 @@ def test_publish_batch_blocks_taxonomy_that_repeats_title_folder(tmp_path):
     raw_dir = tmp_path / "raw"
     wiki_dir = tmp_path / "wiki"
     _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
-    raw = _write(raw_dir / "chat.md", "---\nstatus: triado\ntipo: medicina\n---\nChat\n")
-    content = _write(tmp_path / "tmp" / "nota.md", "# Nota\n")
+    raw = _write(raw_dir / "chat.md", _raw_chat())
+    content = _write(tmp_path / "tmp" / "nota.md", _wiki_note())
     manifest = _write(
         tmp_path / "manifest.json",
         json.dumps({"raw_file": str(raw), "notes": [{"taxonomy": "Psiquiatria/ISRS", "title": "ISRS", "content_path": str(content)}]}),
@@ -334,12 +359,32 @@ def test_publish_batch_blocks_taxonomy_that_repeats_title_folder(tmp_path):
         raise AssertionError("title folder duplication should fail")
 
 
+def test_stage_note_blocks_inconsistent_wiki_style(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
+    raw = _write(raw_dir / "chat.md", _raw_chat())
+    content = _write(tmp_path / "tmp" / "nota.md", "# ISRS\n\n## Diagnóstico\nTexto.\n")
+    manifest = tmp_path / "manifest.json"
+
+    try:
+        med_ops.stage_note(manifest, raw, "Psiquiatria", "ISRS", content, config=_config(raw_dir, wiki_dir))
+    except med_ops.ValidationError as exc:
+        message = str(exc)
+        assert "Wiki_Medicina style contract" in message
+        assert "[[_Índice_Medicina]]" in message
+    else:
+        raise AssertionError("inconsistent Wiki style should fail")
+
+    assert not manifest.exists()
+
+
 def test_commit_batch_cli_alias_still_works(tmp_path):
     raw_dir = tmp_path / "raw"
     wiki_dir = tmp_path / "wiki"
     _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
-    raw = _write(raw_dir / "chat.md", "---\nstatus: triado\ntipo: medicina\n---\nChat\n")
-    content = _write(tmp_path / "tmp" / "nota.md", "# Nota\n")
+    raw = _write(raw_dir / "chat.md", _raw_chat())
+    content = _write(tmp_path / "tmp" / "nota.md", _wiki_note())
     manifest = _write(
         tmp_path / "manifest.json",
         json.dumps({"raw_file": str(raw), "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}]}),

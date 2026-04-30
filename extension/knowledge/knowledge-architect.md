@@ -22,7 +22,43 @@ Toda nota médica deve ser tratada como uma aula de alto rendimento. A estrutura
     *   **Resumo/Sumário:** Breve síntese do tema.
     *   **Key Points (Essência):** Os "pulos do gato" para acertar a questão.
 9.  **🔗 Notas Relacionadas:**
-    *   Sessão baseada no `CATALOGO_WIKI.json`. Liste exaustivamente todas as notas da Wiki que possuem forte conexão clínica (fisiopatologia, diagnóstico diferencial, anatomia) com o tema atual usando Wiki-Links (ex: `- [[Nota X]]`). Se nenhuma nota do catálogo for relevante, omita a sessão.
+    *   Sessão baseada no `CATALOGO_WIKI.json`. Liste exaustivamente todas as notas da Wiki que possuem forte conexão clínica (fisiopatologia, diagnóstico diferencial, anatomia) com o tema atual usando Wiki-Links (ex: `- [[Nota X]]`). Se nenhuma nota do catálogo for relevante, mantenha a seção e não invente links.
+
+## 🧱 Contrato de Formato Wiki
+
+Para notas publicadas no `Wiki_Medicina`, o padrão visual é obrigatório e deve
+imitar uma apostila premium de residência: limpo, denso, escaneável e
+previsível.
+
+- Use `# Título Médico Preciso` como primeiro heading depois do YAML.
+- Logo após o título, escreva uma definição curta em 2-4 linhas dizendo o que é
+  o tema e por que ele importa em prova.
+- Adapte as seções ao tipo de tema, mas toda nota deve responder de algum modo:
+  "quando pensar?", "como confirmar?", "o que fazer?" e "qual pegadinha?".
+- Todo heading de nível 2 (`##`) deve começar com um único emoji sem texto antes
+  dele. Emojis semânticos preferenciais:
+  `🎯` quando pensar/usar; `🧠` ideia central/fisiopatologia; `🔎` diagnóstico;
+  `🩺` conduta/tratamento; `⚖️` estratificação/classificação; `⚠️` pegadinhas;
+  `🏁` fechamento; `🔗` notas relacionadas. `🧬` pode ser usado para mecanismo,
+  anatomia ou ciência básica quando for mais natural.
+- Mantenha uma linha em branco entre parágrafos, listas, tabelas, callouts e
+  headings. Não compacte blocos diferentes na mesma linha.
+- O fechamento deve existir exatamente como `## 🏁 Fechamento`, com os
+  subtítulos `### Resumo`, `### Key Points` e `### Frase de Prova`.
+- Use sempre a seção final `## 🔗 Notas Relacionadas` com bullet links
+  `- [[Nota Existente]]` para conexões fortes da Wiki. Use alias limpo quando
+  necessário: `[[Cineangiocoronariografia (Cateterismo)|CATE]]`, nunca
+  `[[Cineangiocoronariografia (Cateterismo)]]CATE`.
+- Depois da seção de notas relacionadas, termine a nota exatamente com:
+
+```markdown
+---
+[Chat Original](https://gemini.google.com/app/<fonte_id>)
+[[_Índice_Medicina]]
+```
+
+Não substitua esse rodapé por URL absoluta local, deeplink do Obsidian,
+`Fonte`, `Original`, índice sem acento, ou qualquer outro texto.
 
 ## 🇧🇷 Protocolo de Divergência (Brasil vs. Internacional)
 - **Regra de Ouro:** Se houver divergência entre o UpToDate e as Diretrizes Brasileiras, destaque ambas, mas sinalize qual a conduta esperada para provas brasileiras (ENARE/SES-DF).

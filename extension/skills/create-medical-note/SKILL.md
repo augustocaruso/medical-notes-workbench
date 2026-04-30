@@ -59,6 +59,14 @@ prefira o Padrão Ouro definido em `knowledge/knowledge-architect.md`: título m
 preciso, epidemiologia, etiologia/fisiopatologia, apresentação clínica,
 diferenciais, diagnóstico, manejo/tratamento, fechamento com resumo e Key
 Points, notas relacionadas e `[[_Índice_Medicina]]`.
+Nesse modo, cada heading `##` deve começar com emoji, o fechamento deve ser
+`## 🏁 Fechamento`, com `### Resumo`, `### Key Points` e
+`### Frase de Prova`; a seção final deve ser `## 🔗 Notas Relacionadas`; e o
+rodapé deve terminar com `[Chat Original](https://gemini.google.com/app/<fonte_id>)`
+seguido de `[[_Índice_Medicina]]` quando a nota vier de chat. A estética alvo é
+apostila premium de residência: definição curta após o título, parágrafos
+curtos, negrito só para limiares/condutas/exceções e links limpos com alias
+quando necessário.
 
 Para farmacologia, prefira mecanismo, indicações,
 efeitos adversos, contraindicações e interações. Para anatomia, prefira marcos,

@@ -241,6 +241,17 @@ Regras de segurança do chat processor:
 - Rodar o linker semântico uma vez ao final do lote.
 - Preservar aliases exatos, notas relacionadas, callouts e `[[_Índice_Medicina]]`
   conforme `med-knowledge-architect`.
+- Notas geradas para `Wiki_Medicina` devem obedecer ao contrato visual legado:
+  definição curta após o título, todo `##` começa com emoji semântico, há
+  `## 🏁 Fechamento` com `### Resumo`, `### Key Points` e
+  `### Frase de Prova`, há `## 🔗 Notas Relacionadas`, e o rodapé final é
+  exatamente `---`, `[Chat Original](https://gemini.google.com/app/<fonte_id>)`
+  e `[[_Índice_Medicina]]`. `stage-note` e `publish-batch --dry-run` validam
+  esse contrato e rejeitam notas fora do padrão. `validate-note`, `fix-note` e
+  `validate-wiki` em `med_ops.py` fornecem diagnóstico estruturado, correção
+  formal sem inventar conteúdo clínico e auditoria do vault inteiro. `fix-wiki`
+  roda correções formais em lote; use sem `--apply` para preview e com
+  `--apply --backup` para escrever em segurança.
 
 ### Pipeline Gemini CLI: flashcards Anki
 

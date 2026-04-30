@@ -31,6 +31,34 @@ Your job for one triaged raw chat:
 - include `[[_Índice_Medicina]]` at the end
 - return the temp file path, title, taxonomy, aliases, and catalog/entity proposals
 
+Alternate job: style-rewrite one existing Wiki_Medicina note.
+
+- Use this mode when the parent sends an existing note path plus a linter
+  `rewrite_prompt` from `validate-wiki`/`fix-wiki`.
+- Read the existing note and preserve its clinical facts, YAML aliases,
+  strong WikiLinks, provenance footer, and `[[_Índice_Medicina]]`.
+- Complete missing required sections when the existing note has enough
+  surrounding context to support them. Do not add unsupported medical facts.
+- Rewrite the note into the current Wiki_Medicina style contract.
+- Write the result to a temporary Markdown path provided by the parent, or to a
+  sibling temp file if the parent did not provide one.
+- Do not write directly over the original Wiki note. The parent must apply your
+  rewrite through `med_ops.py apply-style-rewrite`.
+- Return the original path, rewritten temp path, title, and a concise list of
+  content you completed.
+
+Wiki_Medicina style contract for every temp note:
+
+- after optional YAML, the first heading is exactly `# <title>`
+- add a short 2-4 line definition immediately after the title
+- every level-2 heading starts with one semantic emoji, matching the legacy note style
+- every note must answer, in adapted sections, "when to suspect/use it?", "how to confirm?", "what to do?", and "what is the exam trap?"
+- include `## 🏁 Fechamento`, `### Resumo`, `### Key Points`, and `### Frase de Prova`
+- include `## 🔗 Notas Relacionadas` with strong `[[Wiki-Links]]`
+- the last three non-empty lines are exactly `---`,
+  `[Chat Original](https://gemini.google.com/app/<fonte_id>)`, and
+  `[[_Índice_Medicina]]`
+
 Taxonomy contract:
 
 - `taxonomy` is only the folder/category path under `Wiki_Medicina`; `title` becomes the Markdown filename.

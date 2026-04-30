@@ -53,7 +53,7 @@ Leia o primeiro arquivo da lista para entender o contexto clínico.
 ### 4. Processamento Clínico (A Mente)
 - Ative suas instruções da skill `med-knowledge-architect`.
 - **Carregue o `C:\Users\leona\CATALOGO_WIKI.json` em memória** para guiar a criação da seção de "Notas Relacionadas".
-- Formate o texto como a "Mini-Aula" Padrão Ouro. **Atenção:** Gere múltiplas notas se o chat contiver temas distintos. Descarte se não for medicina.
+- Formate o texto como a "Mini-Aula" Padrão Ouro e siga o Contrato de Formato Wiki: definição curta logo após o título; seções adaptáveis que respondam "quando pensar?", "como confirmar?", "o que fazer?" e "qual pegadinha?"; headings `##` com emoji semântico fixo no início; `## 🏁 Fechamento` com `### Resumo`, `### Key Points` e `### Frase de Prova`; `## 🔗 Notas Relacionadas`; separador `---`, `[Chat Original](https://gemini.google.com/app/<fonte_id>)` e `[[_Índice_Medicina]]` como as duas últimas linhas úteis. **Atenção:** Gere múltiplas notas se o chat contiver temas distintos. Descarte se não for medicina.
 - Determine a Categoria de Taxonomia exata a partir da taxonomia canonica e da arvore existente (Ex: `1. Clínica Médica/Cardiologia/Arritmias`). A taxonomia e apenas pasta de categoria; o titulo vira o arquivo. Nao use `Cardiologia/Arritmias/Fibrilacao_Atrial` quando o titulo tambem sera `Fibrilacao_Atrial`.
 
 ### 5. Staging e Aliases (Muito Importante)
@@ -65,6 +65,7 @@ Escreva as notas processadas em arquivos temporários.
   ---
   ```
 - **Link Original:** Inclua no final o link: `[Chat Original](https://gemini.google.com/app/<fonte_id>)`.
+- Antes de chamar `stage-note`, confira se o arquivo temporario termina exatamente com o rodape do Contrato de Formato Wiki. `stage-note` e `publish-batch --dry-run` rejeitam notas sem emojis nos headings `##`, sem fechamento, sem `### Frase de Prova`, sem notas relacionadas, sem `[Chat Original](...)` correto ou sem `[[_Índice_Medicina]]`. Use `validate-note`, `fix-note`, `validate-wiki` e `fix-wiki` para diagnóstico, correção formal e auditoria. `fix-wiki` deve rodar primeiro sem `--apply`; para escrever em lote, use `--apply --backup`.
 
 ### 6. Staging e Publicação Segura (O Músculo)
 Registre cada nota gerada em um manifest de lote usando `stage-note`.

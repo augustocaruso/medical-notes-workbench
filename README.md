@@ -95,7 +95,7 @@ gemini extensions link dist/gemini-cli-extension
 A extensão inclui:
 
 - `GEMINI.md` com contexto operacional.
-- Slash commands `/mednotes:setup`, `/mednotes:create`, `/mednotes:enrich`, `/mednotes:process-chats`, `/mednotes:link`, `/flashcards` e `/mednotes:status`.
+- Slash commands `/mednotes:setup`, `/mednotes:create`, `/mednotes:enrich`, `/mednotes:process-chats`, `/mednotes:fix-wiki`, `/mednotes:link`, `/flashcards` e `/mednotes:status`.
 - Skills `create-medical-note` e `enrich-medical-note`.
 - Subagents Gemini para triagem, arquitetura clínica, curadoria de catálogo, guarda de publicação e criação de flashcards.
 - Knowledge docs preservando a redação original das skills médicas funcionais e
@@ -165,8 +165,23 @@ do hook (`systemMessage` ou `reason`), nunca como texto solto em stdout.
 Defaults internos preservam os caminhos Windows reais de raw/wiki/linker. O catálogo fica em `~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json`, fora da pasta auto-updatable da extensão. Para testar em macOS/Linux, use flags, variáveis `MED_RAW_DIR`/`MED_WIKI_DIR`/`MED_CATALOG_PATH`/`MED_LINKER_PATH`, ou `[chat_processor]` no `config.toml`.
 
 O subagent `med-knowledge-architect` segue o Padrão Ouro preservado em
-`extension/knowledge/knowledge-architect.md`; o linker roda no final do lote. O
-linker também pode ser chamado diretamente:
+`extension/knowledge/knowledge-architect.md`. Notas geradas para
+`Wiki_Medicina` também precisam cumprir o contrato visual legado: definição
+curta após o título, todo `##` começa com emoji semântico, há
+`## 🏁 Fechamento` com `### Resumo`, `### Key Points` e
+`### Frase de Prova`, há `## 🔗 Notas Relacionadas`, e o rodapé final é
+exatamente `---`, `[Chat Original](https://gemini.google.com/app/<fonte_id>)`
+e `[[_Índice_Medicina]]`. `stage-note` e `publish-batch --dry-run` rejeitam
+notas fora desse padrão. O linker roda no final do lote. O linker também pode
+ser chamado diretamente:
+
+```bash
+python scripts/mednotes/med_ops.py validate-note --content nota-temp.md --title "Titulo" --raw-file chat.md --json
+python scripts/mednotes/med_ops.py fix-note --content nota-temp.md --title "Titulo" --raw-file chat.md --output nota-fixed.md --json
+python scripts/mednotes/med_ops.py validate-wiki --wiki-dir ~/Wiki_Medicina --json
+python scripts/mednotes/med_ops.py fix-wiki --wiki-dir ~/Wiki_Medicina --json
+python scripts/mednotes/med_ops.py fix-wiki --wiki-dir ~/Wiki_Medicina --apply --backup --json
+```
 
 ```bash
 python scripts/mednotes/med_linker.py --wiki-dir ~/Wiki_Medicina
