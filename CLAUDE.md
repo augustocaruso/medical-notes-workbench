@@ -196,6 +196,11 @@ essas áreas; `title` vira o arquivo `.md`. O padrão correto é
 grande área correta e bloqueiam pastas inventadas; `--allow-new-taxonomy-leaf`
 só deve ser usado para uma única folha nova sob pai existente com aprovação
 explícita. `taxonomy-audit` é somente dry-run e não move arquivos.
+`taxonomy-migrate --dry-run --plan-output <plano.json>` gera um plano de
+correção para pastas legadas; `taxonomy-migrate --apply --plan <plano.json>
+--receipt <recibo.json>` aplica só movimentos inequívocos sem merge automático;
+`taxonomy-migrate --rollback --receipt <recibo.json>` desfaz o que foi aplicado.
+Se o plano tiver `blocked`, o agente deve reportar e pedir decisão, não forçar.
 
 O hook de `med_ops.py` bloqueia `publish-batch` real sem um
 `publish-batch --dry-run` recente do mesmo manifest. O recibo fica em
@@ -231,6 +236,8 @@ Regras de segurança do chat processor:
   árvore existente.
 - Permitir nova pasta apenas com `--allow-new-taxonomy-leaf`, limitada a uma
   folha sob pai existente.
+- Corrigir bagunça preexistente somente via `taxonomy-migrate`: primeiro
+  dry-run com plano, depois apply com recibo, e rollback disponível.
 - Rodar o linker semântico uma vez ao final do lote.
 - Preservar aliases exatos, notas relacionadas, callouts e `[[_Índice_Medicina]]`
   conforme `med-knowledge-architect`.

@@ -370,6 +370,8 @@ def test_original_knowledge_text_is_preserved_and_factorized():
     assert "taxonomy-canonical" in factory + command + agent
     assert "taxonomy-tree --max-depth 4" in factory + command + agent
     assert "taxonomy-audit" in factory + command
+    assert "taxonomy-migrate" in factory + command
+    assert "--rollback --receipt" in factory + command
     assert "wiki_tree.py --max-depth 4 --audit" in factory + command + agent
     assert "vira o arquivo" in architect + command
     assert "--allow-new-taxonomy-leaf" in factory + command + guard

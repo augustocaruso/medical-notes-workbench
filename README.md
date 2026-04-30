@@ -119,6 +119,9 @@ python scripts/mednotes/wiki_tree.py --max-depth 4 --audit
 python scripts/mednotes/med_ops.py taxonomy-canonical
 python scripts/mednotes/med_ops.py taxonomy-tree --max-depth 4
 python scripts/mednotes/med_ops.py taxonomy-audit
+python scripts/mednotes/med_ops.py taxonomy-migrate --dry-run --plan-output plano-taxonomia.json
+python scripts/mednotes/med_ops.py taxonomy-migrate --apply --plan plano-taxonomia.json --receipt recibo-taxonomia.json
+python scripts/mednotes/med_ops.py taxonomy-migrate --rollback --receipt recibo-taxonomia.json
 python scripts/mednotes/med_ops.py taxonomy-resolve --taxonomy "Cardiologia/Arritmias" --title "Fibrilacao Atrial"
 python scripts/mednotes/med_ops.py list-pending
 python scripts/mednotes/med_ops.py list-triados
@@ -144,7 +147,11 @@ auditoria dry-run. Os subcomandos `taxonomy-canonical`, `taxonomy-tree` e
 canonizam especialidades como `Cardiologia` para `1. Clínica Médica/Cardiologia`
 ou bloqueiam variacoes incoerentes. `taxonomy-audit` faz apenas dry-run de
 organizacao do vault e aponta movimentos sugeridos, duplicatas e pastas sem
-mapeamento. Nova pasta de taxonomia e excecao: use
+mapeamento. `taxonomy-migrate` corrige apenas movimentos inequívocos de
+diretórios legados para destinos canônicos inexistentes; destinos já existentes,
+duplicados e pastas sem mapeamento ficam bloqueados para revisão. Toda aplicação
+gera recibo JSON e pode ser revertida com `--rollback --receipt`. Nova pasta de
+taxonomia e excecao: use
 `--allow-new-taxonomy-leaf` somente para uma unica folha nova sob um pai
 existente e depois de aprovacao explicita.
 

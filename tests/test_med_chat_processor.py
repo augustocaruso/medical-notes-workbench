@@ -191,6 +191,47 @@ def test_taxonomy_audit_maps_legacy_top_level_folders_to_canonical_plan(tmp_path
     assert audit["dry_run_only"] is True
 
 
+def test_taxonomy_migration_plan_apply_and_rollback_are_reversible(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    _write(wiki_dir / "Cardiologia" / "Arritmias" / "FA.md", "# FA\n")
+
+    plan = med_ops.taxonomy_migration_plan(wiki_dir)
+
+    assert plan["summary"]["operation_count"] == 1
+    assert plan["operations"][0]["source"] == "Cardiologia"
+    assert plan["operations"][0]["destination"] == "1. Clínica Médica/Cardiologia"
+    assert plan["operations"][0]["created_parent_dirs"] == ["1. Clínica Médica"]
+
+    plan_path = _write(tmp_path / "plan.json", json.dumps(plan, ensure_ascii=False))
+    receipt_path = tmp_path / "receipt.json"
+    applied = med_ops.apply_taxonomy_migration(plan_path, _config(raw_dir, wiki_dir), receipt_path=receipt_path)
+
+    assert applied["applied_count"] == 1
+    assert not (wiki_dir / "Cardiologia").exists()
+    assert (wiki_dir / "1. Clínica Médica" / "Cardiologia" / "Arritmias" / "FA.md").exists()
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert receipt["schema"] == med_ops.MIGRATION_RECEIPT_SCHEMA
+
+    rolled_back = med_ops.rollback_taxonomy_migration(receipt_path, _config(raw_dir, wiki_dir))
+
+    assert rolled_back["rolled_back_count"] == 1
+    assert (wiki_dir / "Cardiologia" / "Arritmias" / "FA.md").exists()
+    assert not (wiki_dir / "1. Clínica Médica").exists()
+
+
+def test_taxonomy_migration_plan_blocks_existing_destination(tmp_path):
+    wiki_dir = tmp_path / "wiki"
+    _write(wiki_dir / "Cardiologia" / "Arritmias" / "FA.md", "# FA\n")
+    _write(wiki_dir / "1. Clínica Médica" / "Cardiologia" / "HAS.md", "# HAS\n")
+
+    plan = med_ops.taxonomy_migration_plan(wiki_dir)
+
+    assert plan["summary"]["operation_count"] == 0
+    assert plan["blocked"][0]["source"] == "Cardiologia"
+    assert plan["blocked"][0]["blocked_reason"] == "destination_exists"
+
+
 def test_publish_batch_dry_run_writes_nothing(tmp_path):
     raw_dir = tmp_path / "raw"
     wiki_dir = tmp_path / "wiki"
@@ -421,6 +462,35 @@ def test_wiki_tree_script_returns_canonical_and_current_tree(tmp_path):
         item["path"] for item in payload["current_tree"]["directories"]
     }
     assert payload["audit"]["dry_run_only"] is True
+
+
+def test_taxonomy_migrate_cli_writes_plan_output(tmp_path):
+    wiki_dir = tmp_path / "wiki"
+    _write(wiki_dir / "Cardiologia" / "Arritmias" / "FA.md", "# FA\n")
+    plan_path = tmp_path / "migration-plan.json"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(MED_OPS_PATH),
+            "--wiki-dir",
+            str(wiki_dir),
+            "taxonomy-migrate",
+            "--dry-run",
+            "--plan-output",
+            str(plan_path),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    stdout = json.loads(result.stdout)
+    written = json.loads(plan_path.read_text(encoding="utf-8"))
+    assert stdout["plan_path"] == str(plan_path)
+    assert written["schema"] == med_ops.MIGRATION_PLAN_SCHEMA
+    assert written["operations"][0]["destination"] == "1. Clínica Médica/Cardiologia"
 
 
 def test_run_linker_missing_path_raises(tmp_path):

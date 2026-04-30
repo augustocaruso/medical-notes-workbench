@@ -80,6 +80,10 @@ Operational rules:
   the title as the final taxonomy folder. New taxonomy folders are blocked by default; use
   `--allow-new-taxonomy-leaf` only after explicit approval for a single new
   leaf under an existing parent.
+- To correct pre-existing vault folder drift, use `med_ops.py taxonomy-migrate`
+  conservatively: generate a dry-run plan first, apply only that plan with a
+  receipt, and use rollback from the receipt if needed. Never merge into an
+  existing destination automatically; report blocked items for human review.
 - For chat-processing catalog work, the operational default is
   `~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json`, outside the
   auto-updated extension directory.

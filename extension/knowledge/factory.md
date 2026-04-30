@@ -41,6 +41,11 @@ existente mostra quais pastas ja existem. Para organizar o vault antes de
 publicar, trate `audit` como dry-run, nao como permissao para mover arquivos
 automaticamente. Os subcomandos `taxonomy-canonical`, `taxonomy-tree` e
 `taxonomy-audit` do `med_ops.py` ficam como equivalentes separados.
+Para corrigir pastas legadas de forma reversivel, use `taxonomy-migrate`:
+primeiro `--dry-run --plan-output <plano.json>`, depois, com confirmacao
+explicita, `--apply --plan <plano.json> --receipt <recibo.json>`. O recibo
+permite `--rollback --receipt <recibo.json>`. Nunca faca merge automatico em
+destino existente; reporte itens `blocked`.
 
 ### 3. Seleção e Leitura
 Leia o primeiro arquivo da lista para entender o contexto clínico.
