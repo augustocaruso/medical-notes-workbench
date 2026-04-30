@@ -66,7 +66,10 @@ rodapé deve terminar com `[Chat Original](https://gemini.google.com/app/<fonte_
 seguido de `[[_Índice_Medicina]]` quando a nota vier de chat. A estética alvo é
 apostila premium de residência: definição curta após o título, parágrafos
 curtos, negrito só para limiares/condutas/exceções e links limpos com alias
-quando necessário.
+quando necessário. Separe callouts Obsidian com linha em branco antes e depois
+do bloco. Em tabelas Markdown, mantenha o mesmo número de colunas em todas as
+linhas e escape pipes de aliases Obsidian dentro de células como
+`[[Nota\|Alias]]`.
 
 Para farmacologia, prefira mecanismo, indicações,
 efeitos adversos, contraindicações e interações. Para anatomia, prefira marcos,

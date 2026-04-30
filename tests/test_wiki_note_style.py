@@ -146,6 +146,74 @@ def test_fix_note_corrects_form_without_inventing_missing_content(tmp_path):
     assert fixed.endswith("[Chat Original](https://gemini.google.com/app/fix123)\n[[_Índice_Medicina]]\n")
 
 
+def test_fix_note_spaces_callouts_and_normalizes_tables(tmp_path):
+    raw = _raw_chat(tmp_path, fonte_id="heart123")
+    bad = _write(
+        tmp_path / "heart.md",
+        "# Escore HEART\n\n"
+        "Escore usado na avaliação inicial de dor torácica para estratificar risco e orientar alta ou internação.\n\n"
+        "## ⚖️ Estratificação\n\n"
+        "| Pontuação | Conduta Recomendada |          |\n"
+        "| :-------- | :------------------ | -------- |\n"
+        "| **0 a 3** | Alta ambulatorial.  |          |\n"
+        "| **7 a 10** | Internação + [[Cineangiocoronariografia (Cateterismo) | CATE]]. |\n\n"
+        "## ⚠️ Qual a pegadinha de prova?\n"
+        "> [!tip] CATE no baixo risco\n"
+        "> Não indicar cateterismo de urgência só por HEART baixo com fatores isolados.\n\n"
+        "## 🏁 Fechamento\n\n"
+        "### Resumo\n"
+        "HEART baixo permite alta após exclusão de IAM.\n\n"
+        "### Key Points\n"
+        "- Tabela precisa renderizar em Obsidian.\n\n"
+        "### Frase de Prova\n"
+        "HEART baixo com troponina negativa favorece alta com investigação ambulatorial.\n\n"
+        "## 🔗 Notas Relacionadas\n"
+        "- [[Dor Torácica]]\n\n"
+        "---\n"
+        "[Chat Original](https://gemini.google.com/app/heart123)\n"
+        "[[_Índice_Medicina]]\n",
+    )
+    output = tmp_path / "fixed.md"
+
+    before = wiki_note_style.validate_note_style(bad.read_text(encoding="utf-8"), title="Escore HEART")
+    before_codes = {item["code"] for item in before["errors"]}
+    before_warnings = {item["code"] for item in before["warnings"]}
+    assert "unescaped_wikilink_pipe_in_table" in before_codes
+    assert "malformed_markdown_table" in before_codes
+    assert "missing_blank_line_before_callout" in before_warnings
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(MED_OPS_PATH),
+            "fix-note",
+            "--content",
+            str(bad),
+            "--title",
+            "Escore HEART",
+            "--raw-file",
+            str(raw),
+            "--output",
+            str(output),
+            "--json",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["errors"] == []
+    assert {"escape_wikilink_pipes_in_tables", "normalize_markdown_tables", "normalize_blank_lines"} <= set(
+        payload["fixes_applied"]
+    )
+    fixed = output.read_text(encoding="utf-8")
+    assert "[[Cineangiocoronariografia (Cateterismo)\\|CATE]]" in fixed
+    assert "Conduta Recomendada |          |" not in fixed
+    assert "## ⚠️ Qual a pegadinha de prova?\n\n> [!tip]" in fixed
+
+
 def test_style_warnings_are_non_blocking(tmp_path):
     long_paragraph = " ".join(["texto"] * 140)
     content = (

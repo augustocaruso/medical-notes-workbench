@@ -142,7 +142,9 @@ Operational rules:
   section, or an incorrect final `[Chat Original]`/`[[_Índice_Medicina]]`
   footer. Use `scripts/mednotes/med_ops.py validate-note`, `fix-note`, and
   `validate-wiki` for structured diagnostics, deterministic formal fixes, and
-  whole-vault audit. Use `fix-wiki` first without `--apply` to preview whole
+  whole-vault audit. Deterministic fixes also space standalone callouts and
+  normalize Markdown tables, including escaped Obsidian wikilink alias pipes
+  inside table cells. Use `fix-wiki` first without `--apply` to preview whole
   vault fixes, then with `--apply --backup` to write deterministic formal fixes
   in-place.
 - If the user asks where to get SerpAPI, direct them to

@@ -24,6 +24,8 @@ _CHAT_ORIGINAL_ANY_RE = re.compile(r"\[Chat Original\]\(([^)\s]+)\)")
 _HEADING_EMOJI_RE = re.compile(r"^[\U0001F300-\U0001FAFF\u2600-\u27BF]")
 _LOCAL_PATH_RE = re.compile(r"(?:[A-Za-z]:\\|/Users/|/home/|/var/|/tmp/)")
 _MALFORMED_ALIAS_RE = re.compile(r"\[\[([^\]\|]+)\]\]([A-ZÁÉÍÓÚÇ]{2,12})\b")
+_WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
+_CALLOUT_START_RE = re.compile(r"^>\s*\[![A-Za-z]+]")
 
 PREFERRED_H2_EMOJIS = {"🎯", "🧠", "🔎", "🩺", "⚖️", "⚠️", "🏁", "🔗", "🧬"}
 
@@ -133,6 +135,7 @@ def validate_note_style(
     _check_headings(body, errors, warnings)
     _check_required_sections(body, errors)
     _check_footer(body, raw_meta or {}, errors)
+    _check_tables(body, errors)
     _check_style_warnings(body, warnings)
 
     error_payload = [issue.to_json() for issue in errors]
@@ -178,6 +181,16 @@ def fix_note_style(
     if alias_fixed != fixed:
         fixed = alias_fixed
         fixes.append("fix_wikilink_alias_suffixes")
+
+    table_link_fixed = _escape_wikilink_alias_pipes_in_tables(fixed)
+    if table_link_fixed != fixed:
+        fixed = table_link_fixed
+        fixes.append("escape_wikilink_pipes_in_tables")
+
+    table_fixed = _normalize_markdown_tables(fixed)
+    if table_fixed != fixed:
+        fixed = table_fixed
+        fixes.append("normalize_markdown_tables")
 
     spacing_fixed = _normalize_blank_lines(fixed)
     if spacing_fixed != fixed:
@@ -342,6 +355,21 @@ def _check_style_warnings(body: str, warnings: list[StyleIssue]) -> None:
             StyleIssue("excessive_callouts", "use callouts rarely; keep only the strongest 1-2 per note", "warning")
         )
 
+    lines = body.splitlines()
+    for idx, line in enumerate(lines):
+        if not _CALLOUT_START_RE.match(line.strip()):
+            continue
+        previous = lines[idx - 1].strip() if idx > 0 else ""
+        if previous:
+            warnings.append(
+                StyleIssue(
+                    "missing_blank_line_before_callout",
+                    "add one blank line before standalone callouts",
+                    "warning",
+                    line=idx + 1,
+                )
+            )
+
     for match in _MALFORMED_ALIAS_RE.finditer(body):
         line = body.count("\n", 0, match.start()) + 1
         warnings.append(
@@ -422,7 +450,239 @@ def _fix_malformed_alias_links(text: str) -> str:
 def _normalize_blank_lines(text: str) -> str:
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = re.sub(r"\n+(## 🔗 Notas Relacionadas)", r"\n\n\1", text)
+    text = _normalize_callout_spacing(text)
     return text
+
+
+def _check_tables(body: str, errors: list[StyleIssue]) -> None:
+    for block_lines, start_line in _iter_table_blocks(body.splitlines()):
+        if len(block_lines) < 2:
+            continue
+        protected_lines = [_escape_wikilink_alias_pipes_in_table_line(line) for line in block_lines]
+        parsed = [_split_table_cells(line) for line in protected_lines]
+        separator_index = _first_separator_index(parsed)
+        if separator_index is None:
+            errors.append(
+                StyleIssue(
+                    "malformed_markdown_table",
+                    "markdown table is missing a separator row",
+                    "error",
+                    line=start_line,
+                )
+            )
+            continue
+
+        if any(_table_line_has_unescaped_wikilink_pipe(line) for line in block_lines):
+            errors.append(
+                StyleIssue(
+                    "unescaped_wikilink_pipe_in_table",
+                    "escape Obsidian wikilink alias pipes inside markdown tables",
+                    "error",
+                    line=start_line,
+                )
+            )
+
+        expected_columns = len(_trim_trailing_empty_cells(parsed[0]))
+        if expected_columns == 0:
+            errors.append(
+                StyleIssue("malformed_markdown_table", "markdown table header has no columns", "error", line=start_line)
+            )
+            continue
+
+        for offset, cells in enumerate(parsed):
+            if offset == separator_index:
+                if len(cells) != expected_columns:
+                    errors.append(
+                        StyleIssue(
+                            "malformed_markdown_table",
+                            "markdown table separator column count does not match the header",
+                            "error",
+                            line=start_line + offset,
+                        )
+                    )
+                continue
+            if len(_trim_trailing_empty_cells(cells)) != expected_columns:
+                errors.append(
+                    StyleIssue(
+                        "malformed_markdown_table",
+                        "markdown table row column count does not match the header",
+                        "error",
+                        line=start_line + offset,
+                    )
+                )
+
+
+def _normalize_callout_spacing(text: str) -> str:
+    normalized: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        is_callout_start = bool(_CALLOUT_START_RE.match(stripped))
+        is_quote = stripped.startswith(">")
+        previous_is_quote = bool(normalized and normalized[-1].lstrip().startswith(">"))
+        if is_callout_start and normalized and normalized[-1].strip():
+            normalized.append("")
+        elif stripped and not is_quote and previous_is_quote:
+            normalized.append("")
+        normalized.append(line)
+    return "\n".join(normalized)
+
+
+def _escape_wikilink_alias_pipes_in_tables(text: str) -> str:
+    fixed_lines: list[str] = []
+    for line in text.splitlines():
+        if _is_table_line(line):
+            fixed_lines.append(_escape_wikilink_alias_pipes_in_table_line(line))
+        else:
+            fixed_lines.append(line)
+    return "\n".join(fixed_lines)
+
+
+def _escape_wikilink_alias_pipes_in_table_line(line: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        inner = match.group(1)
+        if "|" not in inner:
+            return match.group(0)
+        inner = re.sub(r"\s*(?<!\\)\|\s*", r"\\|", inner)
+        inner = re.sub(r"\s*\\\|\s*", r"\\|", inner)
+        return f"[[{inner}]]"
+
+    return _WIKILINK_RE.sub(replace, line)
+
+
+def _table_line_has_unescaped_wikilink_pipe(line: str) -> bool:
+    for match in _WIKILINK_RE.finditer(line):
+        if re.search(r"(?<!\\)\|", match.group(1)):
+            return True
+    return False
+
+
+def _normalize_markdown_tables(text: str) -> str:
+    lines = text.splitlines()
+    normalized: list[str] = []
+    cursor = 0
+    for block_lines, start_line in _iter_table_blocks(lines):
+        start_index = start_line - 1
+        normalized.extend(lines[cursor:start_index])
+        normalized.extend(_normalize_table_block(block_lines))
+        cursor = start_index + len(block_lines)
+    normalized.extend(lines[cursor:])
+    return "\n".join(normalized)
+
+
+def _iter_table_blocks(lines: list[str]) -> list[tuple[list[str], int]]:
+    blocks: list[tuple[list[str], int]] = []
+    idx = 0
+    while idx < len(lines):
+        if not _is_table_line(lines[idx]):
+            idx += 1
+            continue
+        start = idx
+        block: list[str] = []
+        while idx < len(lines) and _is_table_line(lines[idx]):
+            block.append(lines[idx])
+            idx += 1
+        if len(block) >= 2:
+            blocks.append((block, start + 1))
+    return blocks
+
+
+def _is_table_line(line: str) -> bool:
+    return line.lstrip().startswith("|")
+
+
+def _normalize_table_block(lines: list[str]) -> list[str]:
+    parsed = [_split_table_cells(line) for line in lines]
+    separator_index = _first_separator_index(parsed)
+    if separator_index is None:
+        return lines
+
+    expected_columns = len(_trim_trailing_empty_cells(parsed[0]))
+    if expected_columns == 0:
+        return lines
+
+    normalized_rows: list[list[str]] = []
+    for idx, cells in enumerate(parsed):
+        if idx == separator_index:
+            row = cells[:expected_columns]
+            row.extend(["---"] * (expected_columns - len(row)))
+        else:
+            row = _trim_trailing_empty_cells(cells)
+            if len(row) > expected_columns:
+                return lines
+            row.extend([""] * (expected_columns - len(row)))
+        normalized_rows.append([cell.strip() for cell in row])
+
+    widths = [3] * expected_columns
+    for row in normalized_rows:
+        for idx, cell in enumerate(row):
+            widths[idx] = max(widths[idx], len(cell))
+
+    rendered: list[str] = []
+    for idx, row in enumerate(normalized_rows):
+        if idx == separator_index:
+            rendered.append(_render_separator_row(row, widths))
+        else:
+            rendered.append(_render_table_row(row, widths))
+    return rendered
+
+
+def _split_table_cells(line: str) -> list[str]:
+    stripped = line.strip()
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+    if stripped.endswith("|") and not stripped.endswith("\\|"):
+        stripped = stripped[:-1]
+
+    cells: list[str] = []
+    current: list[str] = []
+    for idx, char in enumerate(stripped):
+        if char == "|" and (idx == 0 or stripped[idx - 1] != "\\"):
+            cells.append("".join(current))
+            current = []
+        else:
+            current.append(char)
+    cells.append("".join(current))
+    return cells
+
+
+def _first_separator_index(rows: list[list[str]]) -> int | None:
+    for idx, cells in enumerate(rows[:3]):
+        if _is_separator_row(cells):
+            return idx
+    return None
+
+
+def _is_separator_row(cells: list[str]) -> bool:
+    return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell.strip()) for cell in cells)
+
+
+def _trim_trailing_empty_cells(cells: list[str]) -> list[str]:
+    trimmed = list(cells)
+    while trimmed and not trimmed[-1].strip():
+        trimmed.pop()
+    return trimmed
+
+
+def _render_table_row(cells: list[str], widths: list[int]) -> str:
+    return "| " + " | ".join(cell.ljust(widths[idx]) for idx, cell in enumerate(cells)) + " |"
+
+
+def _render_separator_row(cells: list[str], widths: list[int]) -> str:
+    tokens = [_separator_token(cell, widths[idx]) for idx, cell in enumerate(cells)]
+    return "| " + " | ".join(tokens) + " |"
+
+
+def _separator_token(cell: str, width: int) -> str:
+    stripped = cell.strip()
+    left = stripped.startswith(":")
+    right = stripped.endswith(":")
+    dash_count = max(3, width - int(left) - int(right))
+    token = "-" * dash_count
+    if left:
+        token = ":" + token
+    if right:
+        token = token + ":"
+    return token.ljust(width)
 
 
 def _fix_footer(text: str, raw_meta: dict[str, str]) -> str:

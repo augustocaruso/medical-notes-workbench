@@ -43,6 +43,14 @@ previsível.
   anatomia ou ciência básica quando for mais natural.
 - Mantenha uma linha em branco entre parágrafos, listas, tabelas, callouts e
   headings. Não compacte blocos diferentes na mesma linha.
+- Callouts Obsidian devem ser blocos isolados: deixe uma linha em branco antes
+  de `> [!tip]`, `> [!warning]`, `> [!danger]` ou `> [!info]`, e outra linha
+  em branco depois do bloco antes de voltar ao texto normal.
+- Tabelas Markdown precisam ter o mesmo número de colunas no cabeçalho, na
+  linha separadora e em todas as linhas. Não crie colunas vazias no final. Se
+  uma célula contiver Wiki-Link com alias, escape o pipe do alias como
+  `[[Cineangiocoronariografia (Cateterismo)\|CATE]]`; nunca deixe
+  `[[...|...]]` cru dentro de tabela.
 - O fechamento deve existir exatamente como `## 🏁 Fechamento`, com os
   subtítulos `### Resumo`, `### Key Points` e `### Frase de Prova`.
 - Use sempre a seção final `## 🔗 Notas Relacionadas` com bullet links
@@ -70,6 +78,9 @@ Utilize Callouts nativos do Obsidian:
 - `> [!warning] Pegadinha de Banca`: Pontos de confusão frequente.
 - `> [!danger] Red Flag`: Sinais de alarme clínicos.
 - `> [!info] Diretriz Brasileira`: Quando difere do padrão internacional.
+
+Nunca cole callout imediatamente após heading, lista ou parágrafo. O bloco deve
+ficar visualmente separado por linha em branco antes e depois.
 
 ## 📂 Taxonomia e Organização
 A taxonomia operacional do pipeline e **somente o caminho de pastas de categoria** sob `Wiki_Medicina`; o `title` vira o arquivo `.md`. Portanto, use `1. Clínica Médica/Cardiologia/Arritmias` + título `Fibrilação Atrial`, e nunca `Cardiologia/Arritmias/Fibrilação Atrial` + título `Fibrilação Atrial`.

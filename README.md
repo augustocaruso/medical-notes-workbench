@@ -190,8 +190,10 @@ curta após o título, todo `##` começa com emoji semântico, há
 `### Frase de Prova`, há `## 🔗 Notas Relacionadas`, e o rodapé final é
 exatamente `---`, `[Chat Original](https://gemini.google.com/app/<fonte_id>)`
 e `[[_Índice_Medicina]]`. `stage-note` e `publish-batch --dry-run` rejeitam
-notas fora desse padrão. O linker roda no final do lote. O linker também pode
-ser chamado diretamente:
+notas fora desse padrão. O auto-fix também normaliza espaçamento de callouts
+standalone e tabelas Markdown, incluindo escape de `|` em aliases Obsidian
+dentro de células. O linker roda no final do lote. O linker também pode ser
+chamado diretamente:
 
 ```bash
 python scripts/mednotes/med_ops.py validate-note --content nota-temp.md --title "Titulo" --raw-file chat.md --json

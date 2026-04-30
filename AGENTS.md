@@ -265,7 +265,9 @@ Regras de segurança do chat processor:
   e `[[_Índice_Medicina]]`. `stage-note` e `publish-batch --dry-run` validam
   esse contrato e rejeitam notas fora do padrão. `validate-note`, `fix-note` e
   `validate-wiki` em `med_ops.py` fornecem diagnóstico estruturado, correção
-  formal sem inventar conteúdo clínico e auditoria do vault inteiro. `fix-wiki`
+  formal sem inventar conteúdo clínico e auditoria do vault inteiro. O auto-fix
+  também espaça callouts standalone e normaliza tabelas Markdown, escapando `|`
+  de aliases Obsidian dentro de células. `fix-wiki`
   roda correções formais em lote; use sem `--apply` para preview e com
   `--apply --backup` para escrever em segurança.
 

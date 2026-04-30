@@ -65,6 +65,9 @@ Wiki_Medicina style contract for every temp note:
 - add a short 2-4 line definition immediately after the title
 - every level-2 heading starts with one semantic emoji, matching the legacy note style
 - every note must answer, in adapted sections, "when to suspect/use it?", "how to confirm?", "what to do?", and "what is the exam trap?"
+- keep a blank line before standalone Obsidian callouts and another blank line after the callout block
+- markdown tables must have the same number of columns in the header, separator, and every row; do not emit trailing empty columns
+- inside markdown table cells, escape Obsidian wikilink alias pipes as `[[Note\|Alias]]`; never use raw `[[Note|Alias]]` inside a table
 - include `## 🏁 Fechamento`, `### Resumo`, `### Key Points`, and `### Frase de Prova`
 - include `## 🔗 Notas Relacionadas` with strong `[[Wiki-Links]]`
 - the last three non-empty lines are exactly `---`,
