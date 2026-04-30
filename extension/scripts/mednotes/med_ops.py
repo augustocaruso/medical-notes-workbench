@@ -8,6 +8,7 @@ the optional semantic linker call.
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 import re
@@ -15,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path, PureWindowsPath
@@ -43,6 +45,89 @@ _KEY_RE = re.compile(r"^([A-Za-z0-9_-]+)\s*:\s*(.*)$")
 _DRIVE_RE = re.compile(r"^[A-Za-z]:")
 _UNSAFE_TITLE_RE = re.compile(r'[\\/*?:"<>|\x00-\x1f]')
 _UNSAFE_TAXONOMY_RE = re.compile(r'[<>:"|?*\x00-\x1f]')
+_NEAR_DUPLICATE_CUTOFF = 0.9
+
+CANONICAL_TAXONOMY: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "1. Clínica Médica",
+        (
+            "Cardiologia",
+            "Clínica Médica",
+            "Dermatologia",
+            "Endocrinologia",
+            "Gastroenterologia",
+            "Geriatria",
+            "Hematologia",
+            "Infectologia",
+            "Medicina Interna",
+            "Nefrologia",
+            "Neurologia",
+            "Oncologia",
+            "Pneumologia",
+            "Reumatologia",
+            "Psiquiatria",
+        ),
+    ),
+    (
+        "2. Cirurgia",
+        (
+            "Cirurgia Geral",
+            "Clínica Cirúrgica",
+            "Oftalmologia",
+            "Urologia",
+            "Trauma",
+            "Anestesiologia",
+        ),
+    ),
+    (
+        "3. Ginecologia e Obstetrícia",
+        (
+            "Ginecologia e Obstetrícia",
+        ),
+    ),
+    (
+        "4. Pediatria",
+        (
+            "Pediatria",
+            "Neonatologia",
+            "Puericultura",
+            "Infecto Pediátrica",
+        ),
+    ),
+    (
+        "5. Medicina Preventiva",
+        (
+            "Medicina Preventiva",
+            "SUS",
+            "Epidemiologia",
+            "Ética Médica",
+            "Saúde do Trabalho",
+        ),
+    ),
+)
+
+CANONICAL_TAXONOMY_ALIASES: tuple[tuple[str, str, str], ...] = (
+    ("Clinica Medica", "1. Clínica Médica", "Clínica Médica"),
+    ("Clínica Médica", "1. Clínica Médica", "Clínica Médica"),
+    ("Medicina Interna", "1. Clínica Médica", "Medicina Interna"),
+    ("Cirurgia_Geral", "2. Cirurgia", "Cirurgia Geral"),
+    ("Cirurgia Geral", "2. Cirurgia", "Cirurgia Geral"),
+    ("Clinica Cirurgica", "2. Cirurgia", "Clínica Cirúrgica"),
+    ("Clínica Cirúrgica", "2. Cirurgia", "Clínica Cirúrgica"),
+    ("Ginecologia_Obstetricia", "3. Ginecologia e Obstetrícia", "Ginecologia e Obstetrícia"),
+    ("Ginecologia e Obstetricia", "3. Ginecologia e Obstetrícia", "Ginecologia e Obstetrícia"),
+    ("Ginecologia e Obstetrícia", "3. Ginecologia e Obstetrícia", "Ginecologia e Obstetrícia"),
+    ("Ginecologia", "3. Ginecologia e Obstetrícia", "Ginecologia e Obstetrícia"),
+    ("Obstetricia", "3. Ginecologia e Obstetrícia", "Ginecologia e Obstetrícia"),
+    ("Obstetrícia", "3. Ginecologia e Obstetrícia", "Ginecologia e Obstetrícia"),
+    ("Infecto Pediatrica", "4. Pediatria", "Infecto Pediátrica"),
+    ("Infecto Pediátrica", "4. Pediatria", "Infecto Pediátrica"),
+    ("Infectopediatria", "4. Pediatria", "Infecto Pediátrica"),
+    ("Etica Medica", "5. Medicina Preventiva", "Ética Médica"),
+    ("Ética Médica", "5. Medicina Preventiva", "Ética Médica"),
+    ("Saude do Trabalho", "5. Medicina Preventiva", "Saúde do Trabalho"),
+    ("Saúde do Trabalho", "5. Medicina Preventiva", "Saúde do Trabalho"),
+)
 
 
 class MedOpsError(Exception):
@@ -69,6 +154,34 @@ class MedConfig:
     wiki_dir: Path
     linker_path: Path
     catalog_path: Path
+
+
+@dataclass(frozen=True)
+class TaxonomyResolution:
+    requested_taxonomy: str
+    taxonomy: str
+    parts: tuple[str, ...]
+    canonicalized: tuple[dict[str, str], ...]
+    new_dirs: tuple[str, ...]
+
+    @property
+    def has_new_dirs(self) -> bool:
+        return bool(self.new_dirs)
+
+    def to_json(self, wiki_dir: Path, title: str | None = None) -> dict[str, Any]:
+        data: dict[str, Any] = {
+            "wiki_dir": str(wiki_dir),
+            "requested_taxonomy": self.requested_taxonomy,
+            "taxonomy": self.taxonomy,
+            "parts": list(self.parts),
+            "canonicalized": list(self.canonicalized),
+            "new_dirs": list(self.new_dirs),
+            "requires_new_folder": self.has_new_dirs,
+        }
+        if title is not None:
+            data["title"] = title
+            data["target_path"] = str(wiki_dir.joinpath(*self.parts, f"{safe_title(title)}.md"))
+        return data
 
 
 def _now_iso() -> str:
@@ -284,6 +397,13 @@ def normalize_taxonomy(taxonomy: str) -> tuple[str, ...]:
     bad = [part for part in parts if _UNSAFE_TAXONOMY_RE.search(part)]
     if bad:
         raise ValidationError(f"Taxonomy has unsafe characters: {bad[0]}")
+    folded = [_fold_taxonomy_segment(part) for part in parts]
+    empty = [part for part, folded_part in zip(parts, folded) if not folded_part]
+    if empty:
+        raise ValidationError(f"Taxonomy segment must contain letters or numbers: {empty[0]}")
+    for idx in range(1, len(folded)):
+        if folded[idx] == folded[idx - 1]:
+            raise ValidationError(f"Taxonomy has duplicated adjacent segments: {parts[idx - 1]}/{parts[idx]}")
     return parts
 
 
@@ -295,9 +415,324 @@ def safe_title(title: str) -> str:
     return cleaned
 
 
-def target_for_note(wiki_dir: Path, taxonomy: str, title: str) -> Path:
-    parts = normalize_taxonomy(taxonomy)
-    return wiki_dir.joinpath(*parts, f"{safe_title(title)}.md")
+def _fold_taxonomy_segment(value: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", value)
+    without_accents = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return re.sub(r"[^a-z0-9]+", "", without_accents.casefold())
+
+
+def _canonical_roots_by_fold() -> dict[str, str]:
+    return {_fold_taxonomy_segment(root): root for root, _specialties in CANONICAL_TAXONOMY}
+
+
+def _canonical_specialties_by_fold() -> dict[str, tuple[str, str]]:
+    mapping: dict[str, tuple[str, str]] = {}
+    for root, specialties in CANONICAL_TAXONOMY:
+        for specialty in specialties:
+            mapping[_fold_taxonomy_segment(specialty)] = (root, specialty)
+            mapping[_fold_taxonomy_segment(specialty.replace(" ", "_"))] = (root, specialty)
+    for alias, root, specialty in CANONICAL_TAXONOMY_ALIASES:
+        mapping[_fold_taxonomy_segment(alias)] = (root, specialty)
+    return mapping
+
+
+def _canonical_specialties_for_root(root: str) -> dict[str, str]:
+    specialties = next((items for candidate, items in CANONICAL_TAXONOMY if candidate == root), ())
+    mapping = {_fold_taxonomy_segment(specialty): specialty for specialty in specialties}
+    for alias, alias_root, specialty in CANONICAL_TAXONOMY_ALIASES:
+        if alias_root == root:
+            mapping[_fold_taxonomy_segment(alias)] = specialty
+    return mapping
+
+
+def canonical_taxonomy_tree() -> dict[str, Any]:
+    areas = []
+    for root, specialties in CANONICAL_TAXONOMY:
+        areas.append({"area": root, "specialties": list(specialties)})
+    return {"schema": "medical-notes-workbench.canonical-taxonomy.v1", "areas": areas}
+
+
+def _canonicalize_taxonomy_parts(parts: tuple[str, ...]) -> tuple[tuple[str, ...], tuple[dict[str, str], ...]]:
+    roots = _canonical_roots_by_fold()
+    specialties = _canonical_specialties_by_fold()
+    first = parts[0]
+    first_folded = _fold_taxonomy_segment(first)
+    canonicalized: list[dict[str, str]] = []
+
+    if first_folded in roots:
+        root = roots[first_folded]
+        if len(parts) == 1:
+            raise ValidationError(f"Taxonomy must include a specialty under canonical area: {root}")
+        root_specialties = _canonical_specialties_for_root(root)
+        second = parts[1]
+        second_folded = _fold_taxonomy_segment(second)
+        if second_folded not in root_specialties:
+            raise ValidationError(f"Unknown specialty under {root}: {second}")
+        specialty = root_specialties[second_folded]
+        canonical_parts = (root, specialty, *parts[2:])
+        if canonical_parts[:2] != parts[:2]:
+            canonicalized.append({"from": "/".join(parts[:2]), "to": "/".join(canonical_parts[:2]), "under": ""})
+        return canonical_parts, tuple(canonicalized)
+
+    if first_folded in specialties:
+        root, specialty = specialties[first_folded]
+        canonical_parts = (root, specialty, *parts[1:])
+        canonicalized.append({"from": first, "to": "/".join(canonical_parts[:2]), "under": ""})
+        return canonical_parts, tuple(canonicalized)
+
+    root_names = ", ".join(root for root, _specialties in CANONICAL_TAXONOMY)
+    raise ValidationError(
+        f"Taxonomy must start with a canonical area or known specialty. Got: {first}. "
+        f"Canonical areas: {root_names}"
+    )
+
+
+def _visible_child_dirs(path: Path) -> list[Path]:
+    if not path.exists():
+        return []
+    return sorted(
+        (child for child in path.iterdir() if child.is_dir() and not child.name.startswith(".")),
+        key=lambda child: _fold_taxonomy_segment(child.name),
+    )
+
+
+def _suggest_existing_segments(siblings: list[Path], requested: str) -> list[str]:
+    folded_to_names: dict[str, list[str]] = {}
+    for sibling in siblings:
+        folded_to_names.setdefault(_fold_taxonomy_segment(sibling.name), []).append(sibling.name)
+    requested_folded = _fold_taxonomy_segment(requested)
+    close = difflib.get_close_matches(requested_folded, list(folded_to_names), n=4, cutoff=_NEAR_DUPLICATE_CUTOFF)
+    suggestions: list[str] = []
+    for folded in close:
+        suggestions.extend(folded_to_names[folded])
+    return suggestions
+
+
+def _format_suggestions(suggestions: list[str]) -> str:
+    if not suggestions:
+        return ""
+    return " Sugestões existentes: " + ", ".join(suggestions)
+
+
+def _match_existing_segment(parent: Path, requested: str) -> tuple[str | None, list[str]]:
+    siblings = _visible_child_dirs(parent)
+    exact = [sibling.name for sibling in siblings if sibling.name == requested]
+    if exact:
+        return exact[0], []
+
+    requested_folded = _fold_taxonomy_segment(requested)
+    folded_matches = [sibling.name for sibling in siblings if _fold_taxonomy_segment(sibling.name) == requested_folded]
+    if len(folded_matches) == 1:
+        return folded_matches[0], []
+    if len(folded_matches) > 1:
+        raise ValidationError(
+            f"Taxonomy segment is ambiguous under {parent}: {requested}. Matches: {', '.join(folded_matches)}"
+        )
+    return None, _suggest_existing_segments(siblings, requested)
+
+
+def _validate_taxonomy_not_title(parts: tuple[str, ...], title: str) -> None:
+    title_key = _fold_taxonomy_segment(safe_title(title))
+    if parts and _fold_taxonomy_segment(parts[-1]) == title_key:
+        raise ValidationError(
+            "Taxonomy must be the folder/category path only; do not repeat the note title "
+            f"as the final folder: taxonomy {'/'.join(parts)} + title {title}"
+        )
+
+
+def resolve_taxonomy(
+    wiki_dir: Path,
+    taxonomy: str,
+    *,
+    title: str | None = None,
+    allow_new_leaf: bool = False,
+) -> TaxonomyResolution:
+    requested_parts = normalize_taxonomy(taxonomy)
+    canonical_request_parts, alias_canonicalized = _canonicalize_taxonomy_parts(requested_parts)
+    if title is not None:
+        _validate_taxonomy_not_title(canonical_request_parts, title)
+    if not wiki_dir.exists():
+        raise MissingPathError(f"Wiki dir not found: {wiki_dir}")
+    if not wiki_dir.is_dir():
+        raise ValidationError(f"Wiki dir is not a directory: {wiki_dir}")
+
+    canonical_parts: list[str] = []
+    canonicalized: list[dict[str, str]] = list(alias_canonicalized)
+    new_dirs: list[str] = []
+    parent = wiki_dir
+
+    for idx, requested in enumerate(canonical_request_parts):
+        is_leaf = idx == len(canonical_request_parts) - 1
+        matched, suggestions = _match_existing_segment(parent, requested)
+        if matched is None:
+            if is_leaf and allow_new_leaf and canonical_parts:
+                if suggestions:
+                    raise ValidationError(
+                        f"New taxonomy leaf '{requested}' under {'/'.join(canonical_parts)} is too similar to "
+                        f"an existing folder.{_format_suggestions(suggestions)}"
+                    )
+                canonical_parts.append(requested)
+                new_dirs.append("/".join(canonical_parts))
+                parent = parent / requested
+                continue
+            location = "/".join(canonical_parts) if canonical_parts else "<wiki-root>"
+            raise ValidationError(
+                f"Taxonomy segment must already exist under {location}: {requested}."
+                f"{_format_suggestions(suggestions)}"
+            )
+
+        if matched != requested:
+            canonicalized.append({"from": requested, "to": matched, "under": "/".join(canonical_parts)})
+        canonical_parts.append(matched)
+        parent = parent / matched
+
+    resolved_parts = tuple(canonical_parts)
+    if title is not None:
+        _validate_taxonomy_not_title(resolved_parts, title)
+    return TaxonomyResolution(
+        requested_taxonomy="/".join(requested_parts),
+        taxonomy="/".join(resolved_parts),
+        parts=resolved_parts,
+        canonicalized=tuple(canonicalized),
+        new_dirs=tuple(new_dirs),
+    )
+
+
+def resolve_target_for_note(
+    wiki_dir: Path,
+    taxonomy: str,
+    title: str,
+    *,
+    allow_new_taxonomy_leaf: bool = False,
+) -> tuple[Path, TaxonomyResolution]:
+    resolution = resolve_taxonomy(wiki_dir, taxonomy, title=title, allow_new_leaf=allow_new_taxonomy_leaf)
+    return wiki_dir.joinpath(*resolution.parts, f"{safe_title(title)}.md"), resolution
+
+
+def target_for_note(
+    wiki_dir: Path,
+    taxonomy: str,
+    title: str,
+    *,
+    allow_new_taxonomy_leaf: bool = False,
+) -> Path:
+    target, _resolution = resolve_target_for_note(
+        wiki_dir,
+        taxonomy,
+        title,
+        allow_new_taxonomy_leaf=allow_new_taxonomy_leaf,
+    )
+    return target
+
+
+def taxonomy_tree(wiki_dir: Path, max_depth: int = 0) -> dict[str, Any]:
+    if not wiki_dir.exists():
+        raise MissingPathError(f"Wiki dir not found: {wiki_dir}")
+    if not wiki_dir.is_dir():
+        raise ValidationError(f"Wiki dir is not a directory: {wiki_dir}")
+
+    directories: list[dict[str, Any]] = []
+    for path in sorted((p for p in wiki_dir.rglob("*") if p.is_dir() and not p.name.startswith(".")), key=lambda p: p.as_posix()):
+        rel = path.relative_to(wiki_dir)
+        if any(part.startswith(".") for part in rel.parts):
+            continue
+        depth = len(rel.parts)
+        if max_depth and depth > max_depth:
+            continue
+        direct_notes = sum(1 for child in path.glob("*.md") if child.is_file())
+        child_dirs = sum(1 for child in path.iterdir() if child.is_dir() and not child.name.startswith("."))
+        directories.append(
+            {
+                "path": rel.as_posix(),
+                "parts": list(rel.parts),
+                "depth": depth,
+                "direct_note_count": direct_notes,
+                "child_dir_count": child_dirs,
+            }
+        )
+    return {"wiki_dir": str(wiki_dir), "directory_count": len(directories), "directories": directories}
+
+
+def _canonical_directory_paths() -> list[tuple[str, ...]]:
+    paths: list[tuple[str, ...]] = []
+    for root, specialties in CANONICAL_TAXONOMY:
+        paths.append((root,))
+        paths.extend((root, specialty) for specialty in specialties)
+    return paths
+
+
+def taxonomy_audit(wiki_dir: Path) -> dict[str, Any]:
+    if not wiki_dir.exists():
+        raise MissingPathError(f"Wiki dir not found: {wiki_dir}")
+    if not wiki_dir.is_dir():
+        raise ValidationError(f"Wiki dir is not a directory: {wiki_dir}")
+
+    roots = _canonical_roots_by_fold()
+    specialties = _canonical_specialties_by_fold()
+    canonical_paths = _canonical_directory_paths()
+    missing_canonical_dirs = [
+        "/".join(parts)
+        for parts in canonical_paths
+        if not wiki_dir.joinpath(*parts).exists()
+    ]
+
+    proposed_moves: list[dict[str, Any]] = []
+    compliant_top_level_dirs: list[str] = []
+    unmapped_top_level_dirs: list[str] = []
+    top_level_dirs = _visible_child_dirs(wiki_dir)
+    destinations: dict[str, list[str]] = {}
+
+    for directory in top_level_dirs:
+        folded = _fold_taxonomy_segment(directory.name)
+        rel_source = directory.relative_to(wiki_dir).as_posix()
+        if folded in roots:
+            compliant_top_level_dirs.append(rel_source)
+            continue
+        if folded in specialties:
+            root, specialty = specialties[folded]
+            destination = "/".join((root, specialty))
+            destinations.setdefault(destination, []).append(rel_source)
+            proposed_moves.append(
+                {
+                    "source": rel_source,
+                    "destination": destination,
+                    "reason": "known_specialty_or_alias",
+                    "destination_exists": wiki_dir.joinpath(root, specialty).exists(),
+                }
+            )
+        else:
+            unmapped_top_level_dirs.append(rel_source)
+
+    duplicate_destinations = [
+        {"destination": destination, "sources": sources}
+        for destination, sources in sorted(destinations.items())
+        if len(sources) > 1
+    ]
+    duplicate_directory_groups: list[dict[str, list[str]]] = []
+    by_folded: dict[str, list[str]] = {}
+    for path in sorted((p for p in wiki_dir.rglob("*") if p.is_dir() and not p.name.startswith(".")), key=lambda p: p.as_posix()):
+        rel = path.relative_to(wiki_dir)
+        if any(part.startswith(".") for part in rel.parts):
+            continue
+        by_folded.setdefault(_fold_taxonomy_segment(path.name), []).append(rel.as_posix())
+    for folded, paths in sorted(by_folded.items()):
+        if len(paths) > 1:
+            duplicate_directory_groups.append({"key": folded, "paths": paths})
+
+    root_notes = sorted(path.name for path in wiki_dir.glob("*.md") if path.is_file())
+    return {
+        "wiki_dir": str(wiki_dir),
+        "canonical_taxonomy": canonical_taxonomy_tree(),
+        "missing_canonical_dirs": missing_canonical_dirs,
+        "compliant_top_level_dirs": compliant_top_level_dirs,
+        "proposed_moves": proposed_moves,
+        "unmapped_top_level_dirs": unmapped_top_level_dirs,
+        "duplicate_destinations": duplicate_destinations,
+        "duplicate_directory_groups": duplicate_directory_groups,
+        "root_notes": root_notes,
+        "requires_review": bool(unmapped_top_level_dirs or duplicate_destinations or root_notes),
+        "dry_run_only": True,
+    }
 
 
 def resolve_collision(path: Path, mode: str, reserved: set[Path]) -> Path:
@@ -316,12 +751,15 @@ def resolve_collision(path: Path, mode: str, reserved: set[Path]) -> Path:
     return candidate
 
 
-def write_new_note(path: Path, content: str, dry_run: bool = False) -> None:
+def write_new_note(path: Path, content: str, dry_run: bool = False, create_parent: bool = False) -> None:
     if dry_run:
         return
     if path.exists():
         raise CollisionError(f"Target note already exists: {path}")
-    path.parent.mkdir(parents=True, exist_ok=True)
+    if create_parent:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    elif not path.parent.exists():
+        raise MissingPathError(f"Target taxonomy directory does not exist: {path.parent}")
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.stem}.", suffix=".tmp", dir=str(path.parent))
     tmp = Path(tmp_name)
     try:
@@ -366,7 +804,12 @@ def _validate_note_item(item: Any) -> dict[str, str]:
     return {field: str(item[field]) for field in required}
 
 
-def plan_publish_batch(data: dict[str, Any], config: MedConfig, collision: str) -> list[dict[str, Any]]:
+def plan_publish_batch(
+    data: dict[str, Any],
+    config: MedConfig,
+    collision: str,
+    allow_new_taxonomy_leaf: bool = False,
+) -> list[dict[str, Any]]:
     planned_batches: list[dict[str, Any]] = []
     reserved: set[Path] = set()
     for batch in _manifest_batches(data):
@@ -387,12 +830,20 @@ def plan_publish_batch(data: dict[str, Any], config: MedConfig, collision: str) 
             content_path = _path(item["content_path"])
             if not content_path.exists():
                 raise MissingPathError(f"Content file not found: {content_path}")
-            target = target_for_note(config.wiki_dir, item["taxonomy"], item["title"])
+            target, taxonomy_resolution = resolve_target_for_note(
+                config.wiki_dir,
+                item["taxonomy"],
+                item["title"],
+                allow_new_taxonomy_leaf=allow_new_taxonomy_leaf,
+            )
             target = resolve_collision(target, collision, reserved)
             reserved.add(target)
             notes.append(
                 {
-                    "taxonomy": "/".join(normalize_taxonomy(item["taxonomy"])),
+                    "taxonomy": taxonomy_resolution.taxonomy,
+                    "taxonomy_requested": taxonomy_resolution.requested_taxonomy,
+                    "taxonomy_canonicalized": list(taxonomy_resolution.canonicalized),
+                    "taxonomy_new_dirs": list(taxonomy_resolution.new_dirs),
                     "title": item["title"],
                     "content_path": str(content_path),
                     "target_path": str(target),
@@ -408,9 +859,10 @@ def publish_batch(
     collision: str = "abort",
     dry_run: bool = False,
     backup: bool = False,
+    allow_new_taxonomy_leaf: bool = False,
 ) -> dict[str, Any]:
     data = _load_manifest(manifest)
-    plan = plan_publish_batch(data, config, collision)
+    plan = plan_publish_batch(data, config, collision, allow_new_taxonomy_leaf=allow_new_taxonomy_leaf)
     created: list[str] = []
     raw_updates: list[dict[str, Any]] = []
     if dry_run:
@@ -418,6 +870,7 @@ def publish_batch(
             "dry_run": True,
             "backup": backup,
             "manifest": str(manifest),
+            "allow_new_taxonomy_leaf": allow_new_taxonomy_leaf,
             "planned_batches": plan,
             "created": [],
             "raw_updates": [],
@@ -427,7 +880,7 @@ def publish_batch(
         for batch in plan:
             for item in batch["notes"]:
                 content = Path(item["content_path"]).read_text(encoding="utf-8")
-                write_new_note(Path(item["target_path"]), content)
+                write_new_note(Path(item["target_path"]), content, create_parent=bool(item.get("taxonomy_new_dirs")))
                 created.append(item["target_path"])
         for batch in plan:
             raw_updates.append(
@@ -448,6 +901,7 @@ def publish_batch(
         "dry_run": False,
         "backup": backup,
         "manifest": str(manifest),
+        "allow_new_taxonomy_leaf": allow_new_taxonomy_leaf,
         "created": created,
         "raw_updates": raw_updates,
         "created_count": len(created),
@@ -455,8 +909,23 @@ def publish_batch(
     }
 
 
-def stage_note(manifest: Path, raw_file: Path, taxonomy: str, title: str, content_path: Path, dry_run: bool = False) -> dict[str, Any]:
-    normalize_taxonomy(taxonomy)
+def stage_note(
+    manifest: Path,
+    raw_file: Path,
+    taxonomy: str,
+    title: str,
+    content_path: Path,
+    dry_run: bool = False,
+    config: MedConfig | None = None,
+    allow_new_taxonomy_leaf: bool = False,
+) -> dict[str, Any]:
+    taxonomy_resolution = (
+        resolve_taxonomy(config.wiki_dir, taxonomy, title=title, allow_new_leaf=allow_new_taxonomy_leaf)
+        if config is not None
+        else None
+    )
+    canonical_taxonomy = taxonomy_resolution.taxonomy if taxonomy_resolution else "/".join(normalize_taxonomy(taxonomy))
+    _validate_taxonomy_not_title(tuple(canonical_taxonomy.split("/")), title)
     safe_title(title)
     if not raw_file.exists():
         raise MissingPathError(f"Raw file not found: {raw_file}")
@@ -471,13 +940,21 @@ def stage_note(manifest: Path, raw_file: Path, taxonomy: str, title: str, conten
     notes = data.setdefault("notes", [])
     if not isinstance(notes, list):
         raise ValidationError("manifest.notes must be a list")
-    item = {"taxonomy": taxonomy, "title": title, "content_path": str(content_path)}
+    item = {"taxonomy": canonical_taxonomy, "title": title, "content_path": str(content_path)}
     if not dry_run:
         manifest.parent.mkdir(parents=True, exist_ok=True)
         data["raw_file"] = str(raw_file)
         notes.append(item)
         atomic_write_text(manifest, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
-    return {"manifest": str(manifest), "dry_run": dry_run, "staged": item, "note_count": len(notes) + (1 if dry_run else 0)}
+    result: dict[str, Any] = {
+        "manifest": str(manifest),
+        "dry_run": dry_run,
+        "staged": item,
+        "note_count": len(notes) + (1 if dry_run else 0),
+    }
+    if taxonomy_resolution is not None:
+        result["taxonomy_resolution"] = taxonomy_resolution.to_json(config.wiki_dir, title=title)
+    return result
 
 
 def run_linker(config: MedConfig, dry_run: bool = False) -> dict[str, Any]:
@@ -524,12 +1001,13 @@ def _json(data: Any) -> None:
     print(json.dumps(data, ensure_ascii=False, indent=2))
 
 
-def _add_common(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--config", help="Optional config.toml. Reads [chat_processor].")
-    parser.add_argument("--raw-dir", help="Override Chats_Raw directory.")
-    parser.add_argument("--wiki-dir", help="Override Wiki_Medicina directory.")
-    parser.add_argument("--linker-path", help="Override med-auto-linker script path.")
-    parser.add_argument("--catalog-path", help="Override CATALOGO_WIKI.json path.")
+def _add_common(parser: argparse.ArgumentParser, *, suppress_defaults: bool = False) -> None:
+    default = argparse.SUPPRESS if suppress_defaults else None
+    parser.add_argument("--config", default=default, help="Optional config.toml. Reads [chat_processor].")
+    parser.add_argument("--raw-dir", default=default, help="Override Chats_Raw directory.")
+    parser.add_argument("--wiki-dir", default=default, help="Override Wiki_Medicina directory.")
+    parser.add_argument("--linker-path", default=default, help="Override med-auto-linker script path.")
+    parser.add_argument("--catalog-path", default=default, help="Override CATALOGO_WIKI.json path.")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -538,12 +1016,32 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     pending = sub.add_parser("list-pending", help="List raw chats with no status or status=pendente.")
-    _add_common(pending)
+    _add_common(pending, suppress_defaults=True)
     triados = sub.add_parser("list-triados", help="List raw chats with status=triado and tipo=medicina.")
-    _add_common(triados)
+    _add_common(triados, suppress_defaults=True)
+
+    taxonomy_canonical = sub.add_parser("taxonomy-canonical", help="Print the canonical Wiki_Medicina taxonomy.")
+    _add_common(taxonomy_canonical, suppress_defaults=True)
+
+    taxonomy = sub.add_parser("taxonomy-tree", help="List existing Wiki_Medicina taxonomy folders.")
+    _add_common(taxonomy, suppress_defaults=True)
+    taxonomy.add_argument("--max-depth", type=int, default=0, help="Limit folder depth; 0 means all depths.")
+
+    taxonomy_audit_parser = sub.add_parser("taxonomy-audit", help="Dry-run audit of the vault against the canonical taxonomy.")
+    _add_common(taxonomy_audit_parser, suppress_defaults=True)
+
+    taxonomy_resolve = sub.add_parser("taxonomy-resolve", help="Validate and canonicalize one taxonomy against the existing wiki tree.")
+    _add_common(taxonomy_resolve, suppress_defaults=True)
+    taxonomy_resolve.add_argument("--taxonomy", required=True)
+    taxonomy_resolve.add_argument("--title", help="Optional note title; rejects taxonomy/title duplication when provided.")
+    taxonomy_resolve.add_argument(
+        "--allow-new-taxonomy-leaf",
+        action="store_true",
+        help="Permit exactly the final taxonomy folder to be created under an existing parent.",
+    )
 
     triage = sub.add_parser("triage", help="Mark one raw chat as triaged.")
-    _add_common(triage)
+    _add_common(triage, suppress_defaults=True)
     triage.add_argument("--raw-file", required=True)
     triage.add_argument("--tipo", default="medicina")
     triage.add_argument("--titulo", required=True)
@@ -552,41 +1050,56 @@ def build_parser() -> argparse.ArgumentParser:
     triage.add_argument("--backup", action="store_true", help="Create a .bak file before mutating raw chat frontmatter.")
 
     discard = sub.add_parser("discard", help="Mark one raw chat as discarded.")
-    _add_common(discard)
+    _add_common(discard, suppress_defaults=True)
     discard.add_argument("--raw-file", required=True)
     discard.add_argument("--reason", required=True)
     discard.add_argument("--dry-run", action="store_true")
     discard.add_argument("--backup", action="store_true", help="Create a .bak file before mutating raw chat frontmatter.")
 
     stage = sub.add_parser("stage-note", help="Append a generated note to a manifest.")
-    _add_common(stage)
+    _add_common(stage, suppress_defaults=True)
     stage.add_argument("--manifest", required=True)
     stage.add_argument("--raw-file", required=True)
     stage.add_argument("--taxonomy", required=True)
     stage.add_argument("--title", required=True)
     stage.add_argument("--content", required=True)
     stage.add_argument("--dry-run", action="store_true")
+    stage.add_argument(
+        "--allow-new-taxonomy-leaf",
+        action="store_true",
+        help="Permit exactly the final taxonomy folder to be created under an existing parent.",
+    )
 
     publish = sub.add_parser("publish-batch", help="Publish all notes from a manifest, then mark raw files processed.")
-    _add_common(publish)
+    _add_common(publish, suppress_defaults=True)
     publish.add_argument("--manifest", required=True)
     publish.add_argument("--dry-run", action="store_true")
     publish.add_argument("--backup", action="store_true", help="Create .bak files before mutating raw chat frontmatter.")
     publish.add_argument("--collision", choices=("abort", "suffix"), default="abort")
+    publish.add_argument(
+        "--allow-new-taxonomy-leaf",
+        action="store_true",
+        help="Permit exactly the final taxonomy folder to be created under an existing parent.",
+    )
 
     commit = sub.add_parser("commit-batch", help="Compatibility alias for publish-batch.")
-    _add_common(commit)
+    _add_common(commit, suppress_defaults=True)
     commit.add_argument("--manifest", required=True)
     commit.add_argument("--dry-run", action="store_true")
     commit.add_argument("--backup", action="store_true", help="Create .bak files before mutating raw chat frontmatter.")
     commit.add_argument("--collision", choices=("abort", "suffix"), default="abort")
+    commit.add_argument(
+        "--allow-new-taxonomy-leaf",
+        action="store_true",
+        help="Permit exactly the final taxonomy folder to be created under an existing parent.",
+    )
 
     linker = sub.add_parser("run-linker", help="Run configured semantic linker once.")
-    _add_common(linker)
+    _add_common(linker, suppress_defaults=True)
     linker.add_argument("--dry-run", action="store_true")
 
     validate = sub.add_parser("validate", help="Print resolved paths and existence checks.")
-    _add_common(validate)
+    _add_common(validate, suppress_defaults=True)
     return parser
 
 
@@ -599,6 +1112,20 @@ def main(argv: list[str] | None = None) -> int:
             _json(list_by_status(config.raw_dir, "pending"))
         elif args.command == "list-triados":
             _json(list_by_status(config.raw_dir, "triados"))
+        elif args.command == "taxonomy-canonical":
+            _json(canonical_taxonomy_tree())
+        elif args.command == "taxonomy-tree":
+            _json(taxonomy_tree(config.wiki_dir, max_depth=args.max_depth))
+        elif args.command == "taxonomy-audit":
+            _json(taxonomy_audit(config.wiki_dir))
+        elif args.command == "taxonomy-resolve":
+            resolved = resolve_taxonomy(
+                config.wiki_dir,
+                args.taxonomy,
+                title=args.title,
+                allow_new_leaf=args.allow_new_taxonomy_leaf,
+            )
+            _json(resolved.to_json(config.wiki_dir, title=args.title))
         elif args.command == "triage":
             _json(
                 mutate_raw_frontmatter(
@@ -624,7 +1151,18 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
         elif args.command == "stage-note":
-            _json(stage_note(_path(args.manifest), _path(args.raw_file), args.taxonomy, args.title, _path(args.content), args.dry_run))
+            _json(
+                stage_note(
+                    _path(args.manifest),
+                    _path(args.raw_file),
+                    args.taxonomy,
+                    args.title,
+                    _path(args.content),
+                    args.dry_run,
+                    config=config,
+                    allow_new_taxonomy_leaf=args.allow_new_taxonomy_leaf,
+                )
+            )
         elif args.command in {"publish-batch", "commit-batch"}:
             _json(
                 publish_batch(
@@ -633,6 +1171,7 @@ def main(argv: list[str] | None = None) -> int:
                     collision=args.collision,
                     dry_run=args.dry_run,
                     backup=args.backup,
+                    allow_new_taxonomy_leaf=args.allow_new_taxonomy_leaf,
                 )
             )
         elif args.command == "run-linker":

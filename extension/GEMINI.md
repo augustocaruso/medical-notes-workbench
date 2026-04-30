@@ -67,7 +67,19 @@ Operational rules:
   an empty list by design.
 - For raw chat processing, never edit raw-chat YAML/status manually. Use
   `scripts/mednotes/med_ops.py`; run `publish-batch --dry-run` before any real
-  `publish-batch`, and run the semantic linker once at the end.
+  `publish-batch`, run `scripts/mednotes/wiki_tree.py --max-depth 4 --audit`
+  before note-writing agents choose paths, and run the semantic linker once at
+  the end. The equivalent split subcommands are `taxonomy-canonical`,
+  `taxonomy-tree --max-depth 4`, and `taxonomy-audit` in `med_ops.py`.
+- For Wiki_Medicina note creation, taxonomy means existing category folders
+  only and title means the `.md` filename. Targets must live under the 5
+  canonical big areas (`1. Clínica Médica`, `2. Cirurgia`,
+  `3. Ginecologia e Obstetrícia`, `4. Pediatria`, `5. Medicina Preventiva`).
+  Specialty-first inputs such as `Cardiologia/Arritmias` are canonicalized by
+  `med_ops.py`, but agents should prefer full canonical paths. Do not repeat
+  the title as the final taxonomy folder. New taxonomy folders are blocked by default; use
+  `--allow-new-taxonomy-leaf` only after explicit approval for a single new
+  leaf under an existing parent.
 - For chat-processing catalog work, the operational default is
   `~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json`, outside the
   auto-updated extension directory.

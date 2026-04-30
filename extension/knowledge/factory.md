@@ -33,6 +33,14 @@ Antes de processar qualquer nota, você DEVE garantir que ela possui o YAML corr
 
 ### 2. Levantamento
 Execute `run_shell_command("python C:\Users\leona\.gemini\skills\med-chat-processor\med_ops.py list-triados")`.
+Antes de acionar a escrita clinica, execute
+`scripts/mednotes/wiki_tree.py --max-depth 4 --audit` e forneca esse JSON ao
+agente de arquitetura. Ele inclui a taxonomia canonica, a arvore existente e a
+auditoria dry-run. A taxonomia canonica define as 5 grandes areas; a arvore
+existente mostra quais pastas ja existem. Para organizar o vault antes de
+publicar, trate `audit` como dry-run, nao como permissao para mover arquivos
+automaticamente. Os subcomandos `taxonomy-canonical`, `taxonomy-tree` e
+`taxonomy-audit` do `med_ops.py` ficam como equivalentes separados.
 
 ### 3. Seleção e Leitura
 Leia o primeiro arquivo da lista para entender o contexto clínico.
@@ -41,7 +49,7 @@ Leia o primeiro arquivo da lista para entender o contexto clínico.
 - Ative suas instruções da skill `med-knowledge-architect`.
 - **Carregue o `C:\Users\leona\CATALOGO_WIKI.json` em memória** para guiar a criação da seção de "Notas Relacionadas".
 - Formate o texto como a "Mini-Aula" Padrão Ouro. **Atenção:** Gere múltiplas notas se o chat contiver temas distintos. Descarte se não for medicina.
-- Determine a Categoria de Taxonomia exata (Ex: `Cardiologia/Arritmias`).
+- Determine a Categoria de Taxonomia exata a partir da taxonomia canonica e da arvore existente (Ex: `1. Clínica Médica/Cardiologia/Arritmias`). A taxonomia e apenas pasta de categoria; o titulo vira o arquivo. Nao use `Cardiologia/Arritmias/Fibrilacao_Atrial` quando o titulo tambem sera `Fibrilacao_Atrial`.
 
 ### 5. Staging e Aliases (Muito Importante)
 Escreva as notas processadas em arquivos temporários.
@@ -56,6 +64,10 @@ Escreva as notas processadas em arquivos temporários.
 ### 6. Staging e Publicação Segura (O Músculo)
 Registre cada nota gerada em um manifest de lote usando `stage-note`.
 `run_shell_command("python C:\Users\leona\.gemini\skills\med-chat-processor\med_ops.py stage-note --manifest \"<batch_manifest.json>\" --raw-file \"<path_original>\" --taxonomy \"<Categoria/Subcategoria>\" --title \"<Titulo_Exato>\" --content \"C:\Users\leona\.gemini\tmp\leona\temp_gold_note.md\"")`
+O `stage-note` canoniza grafia de pastas existentes e bloqueia taxonomia que
+repete o titulo como pasta final ou inventa pastas fora da arvore. Se precisar
+de nova categoria-folha, pare e peça aprovacao antes de usar
+`--allow-new-taxonomy-leaf`.
 
 Depois que todas as notas do lote estiverem no manifest, rode primeiro a simulação:
 `run_shell_command("python C:\Users\leona\.gemini\skills\med-chat-processor\med_ops.py publish-batch --manifest \"<batch_manifest.json>\" --dry-run")`

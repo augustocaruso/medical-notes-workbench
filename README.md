@@ -115,14 +115,38 @@ Os subagents fazem raciocínio clínico e escrita; o script `scripts/mednotes/me
 
 ```bash
 python scripts/mednotes/med_ops.py validate
+python scripts/mednotes/wiki_tree.py --max-depth 4 --audit
+python scripts/mednotes/med_ops.py taxonomy-canonical
+python scripts/mednotes/med_ops.py taxonomy-tree --max-depth 4
+python scripts/mednotes/med_ops.py taxonomy-audit
+python scripts/mednotes/med_ops.py taxonomy-resolve --taxonomy "Cardiologia/Arritmias" --title "Fibrilacao Atrial"
 python scripts/mednotes/med_ops.py list-pending
 python scripts/mednotes/med_ops.py list-triados
 python scripts/mednotes/med_ops.py triage --raw-file chat.md --titulo "..."
-python scripts/mednotes/med_ops.py stage-note --manifest batch.json --raw-file chat.md --taxonomy "Psiquiatria/ISRS" --title "ISRS" --content nota-temp.md
+python scripts/mednotes/med_ops.py stage-note --manifest batch.json --raw-file chat.md --taxonomy "Psiquiatria" --title "ISRS" --content nota-temp.md
 python scripts/mednotes/med_ops.py publish-batch --manifest batch.json --dry-run
 python scripts/mednotes/med_ops.py publish-batch --manifest batch.json
 python scripts/mednotes/med_ops.py run-linker
 ```
+
+Taxonomia segue uma regra rigida: `taxonomy` e apenas o caminho de pastas de
+categoria sob as 5 grandes areas canonicas de `Wiki_Medicina`, e `title` vira o
+arquivo `.md`. As areas sao `1. Clínica Médica`, `2. Cirurgia`,
+`3. Ginecologia e Obstetrícia`, `4. Pediatria` e
+`5. Medicina Preventiva`. Assim, o destino correto e
+`1. Clínica Médica/Cardiologia/Arritmias/Fibrilacao_Atrial.md`, nao
+`Cardiologia/Arritmias/Fibrilacao_Atrial/Fibrilacao_Atrial.md`. O pipeline
+roda `scripts/mednotes/wiki_tree.py --max-depth 4 --audit` antes da escrita
+para obter, em um único JSON, a taxonomia canônica, a árvore real existente e a
+auditoria dry-run. Os subcomandos `taxonomy-canonical`, `taxonomy-tree` e
+`taxonomy-audit` continuam disponíveis separadamente em `med_ops.py`.
+`stage-note`/`publish-batch --dry-run`
+canonizam especialidades como `Cardiologia` para `1. Clínica Médica/Cardiologia`
+ou bloqueiam variacoes incoerentes. `taxonomy-audit` faz apenas dry-run de
+organizacao do vault e aponta movimentos sugeridos, duplicatas e pastas sem
+mapeamento. Nova pasta de taxonomia e excecao: use
+`--allow-new-taxonomy-leaf` somente para uma unica folha nova sob um pai
+existente e depois de aprovacao explicita.
 
 Dentro do Gemini CLI, o hook bloqueia `publish-batch` real quando nao existe um
 `publish-batch --dry-run` recente do mesmo manifest. O recibo fica em

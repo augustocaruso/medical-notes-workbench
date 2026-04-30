@@ -356,6 +356,9 @@ def test_original_knowledge_text_is_preserved_and_factorized():
     factory = (EXTENSION / "knowledge" / "factory.md").read_text(encoding="utf-8")
     architect = (EXTENSION / "knowledge" / "knowledge-architect.md").read_text(encoding="utf-8")
     linker = (EXTENSION / "knowledge" / "semantic-linker.md").read_text(encoding="utf-8")
+    command = (EXTENSION / "commands" / "mednotes" / "process-chats.toml").read_text(encoding="utf-8")
+    agent = (EXTENSION / "agents" / "med-knowledge-architect.md").read_text(encoding="utf-8")
+    guard = (EXTENSION / "agents" / "med-publish-guard.md").read_text(encoding="utf-8")
 
     assert "Med Chat Processor (A Fábrica)" in factory
     assert "Med Knowledge Architect (A Mente)" in architect
@@ -364,3 +367,10 @@ def test_original_knowledge_text_is_preserved_and_factorized():
     assert "CATALOGO_WIKI.json" in architect + linker
     assert "aliases" in factory + linker
     assert "[[_Índice_Medicina]]" in architect
+    assert "taxonomy-canonical" in factory + command + agent
+    assert "taxonomy-tree --max-depth 4" in factory + command + agent
+    assert "taxonomy-audit" in factory + command
+    assert "wiki_tree.py --max-depth 4 --audit" in factory + command + agent
+    assert "vira o arquivo" in architect + command
+    assert "--allow-new-taxonomy-leaf" in factory + command + guard
+    assert "1. Clínica Médica" in architect + command + agent + guard

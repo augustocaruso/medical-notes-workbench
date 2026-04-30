@@ -180,6 +180,23 @@ em notas Obsidian:
 guardam contexto/segurança. Toda alteração de YAML/status em `Chats_Raw`, todo
 staging e todo publish real devem passar por `med_ops.py`.
 
+Antes de criar notas, o agente principal deve rodar
+`scripts/mednotes/wiki_tree.py --max-depth 4 --audit` para obter em um único
+JSON a taxonomia canônica, a árvore real existente e a auditoria dry-run. Os
+subcomandos `med_ops.py taxonomy-canonical`,
+`med_ops.py taxonomy-tree --max-depth 4` e `med_ops.py taxonomy-audit`
+continuam disponíveis separadamente. A taxonomia canônica tem 5 grandes áreas:
+`1. Clínica Médica`, `2. Cirurgia`,
+`3. Ginecologia e Obstetrícia`, `4. Pediatria` e
+`5. Medicina Preventiva`. `taxonomy` é só caminho de pastas de categoria sob
+essas áreas; `title` vira o arquivo `.md`. O padrão correto é
+`1. Clínica Médica/Cardiologia/Arritmias` + `Fibrilacao_Atrial.md`, nunca
+`Cardiologia/Arritmias/Fibrilacao_Atrial/Fibrilacao_Atrial.md`. `stage-note` e
+`publish-batch --dry-run` canonizam atalhos como `Cardiologia/Arritmias` para a
+grande área correta e bloqueiam pastas inventadas; `--allow-new-taxonomy-leaf`
+só deve ser usado para uma única folha nova sob pai existente com aprovação
+explícita. `taxonomy-audit` é somente dry-run e não move arquivos.
+
 O hook de `med_ops.py` bloqueia `publish-batch` real sem um
 `publish-batch --dry-run` recente do mesmo manifest. O recibo fica em
 `~/.gemini/medical-notes-workbench/hooks/med-ops-dry-runs.json` por 30 minutos
@@ -209,6 +226,11 @@ Regras de segurança do chat processor:
   manifest forem escritas.
 - Não criar `.bak` por padrão; usar `--backup` apenas quando solicitado.
 - Rejeitar taxonomia absoluta, com `..`, drive letter ou caracteres inseguros.
+- Rejeitar taxonomia fora das 5 grandes áreas canônicas, que repete o título
+  como pasta final ou cria raiz, especialidade/pasta intermediária fora da
+  árvore existente.
+- Permitir nova pasta apenas com `--allow-new-taxonomy-leaf`, limitada a uma
+  folha sob pai existente.
 - Rodar o linker semântico uma vez ao final do lote.
 - Preservar aliases exatos, notas relacionadas, callouts e `[[_Índice_Medicina]]`
   conforme `med-knowledge-architect`.

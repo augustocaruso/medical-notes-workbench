@@ -36,8 +36,11 @@ Utilize Callouts nativos do Obsidian:
 - `> [!info] Diretriz Brasileira`: Quando difere do padrão internacional.
 
 ## 📂 Taxonomia e Organização
-Categorizar rigorosamente nos 4 níveis: `Área/Subespecialidade/Doença/Nota`.
-Pastas: `Cardiologia/`, `Cirurgia_Geral/`, `Neurologia/`, `Pneumologia/`, `Reumatologia/`, `Nefrologia/`, `Oftalmologia/`, `Geriatria/`, `Ginecologia_Obstetricia/`, `Pediatria/`, `Geral/`.
+A taxonomia operacional do pipeline e **somente o caminho de pastas de categoria** sob `Wiki_Medicina`; o `title` vira o arquivo `.md`. Portanto, use `1. Clínica Médica/Cardiologia/Arritmias` + título `Fibrilação Atrial`, e nunca `Cardiologia/Arritmias/Fibrilação Atrial` + título `Fibrilação Atrial`.
+
+A fonte de verdade combinada vem de `scripts/mednotes/wiki_tree.py --max-depth 4 --audit`, que retorna a taxonomia canonica, a arvore real existente e uma auditoria dry-run. Conceitualmente, a taxonomia canonica tem 5 grandes areas: `1. Clínica Médica`, `2. Cirurgia`, `3. Ginecologia e Obstetrícia`, `4. Pediatria`, `5. Medicina Preventiva`. Operacionalmente, a arvore real mostra quais pastas ja existem. Reutilize os nomes exatamente como aparecem ali, incluindo acentos, underscores e plural. Nao invente raiz, grande area, especialidade, grafia alternativa, singular/plural alternativo ou pasta intermediaria. Uma nova pasta de taxonomia so pode ser proposta como **uma unica folha nova** sob um pai existente, e depende de aprovacao explicita do agente principal/usuario via `--allow-new-taxonomy-leaf`.
+
+Distribuicao canonica: `1. Clínica Médica` inclui Cardiologia, Clínica Médica, Dermatologia, Endocrinologia, Gastroenterologia, Geriatria, Hematologia, Infectologia, Medicina Interna, Nefrologia, Neurologia, Oncologia, Pneumologia, Reumatologia e Psiquiatria; `2. Cirurgia` inclui Cirurgia Geral, Clínica Cirúrgica, Oftalmologia, Urologia, Trauma e Anestesiologia; `3. Ginecologia e Obstetrícia` consolida Ginecologia/Obstetrícia; `4. Pediatria` inclui Pediatria, Neonatologia, Puericultura e Infecto Pediátrica; `5. Medicina Preventiva` inclui Medicina Preventiva, SUS, Epidemiologia, Ética Médica e Saúde do Trabalho.
 
 ## 🔗 Estratégia de Interconexão e Triagem
 - **Conectividade:** Conectar a nota a pelo menos 2 temas existentes via `[[Wiki-Links]]`.

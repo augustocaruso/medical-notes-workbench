@@ -21,7 +21,11 @@ Check only:
 
 - the manifest contains every raw chat and every note from the current batch
 - final target paths match the intended taxonomy and titles
+- every target path starts under one of the 5 canonical big areas: `1. Clínica Médica`, `2. Cirurgia`, `3. Ginecologia e Obstetrícia`, `4. Pediatria`, `5. Medicina Preventiva`
+- taxonomy is category folders only, with the note title appearing as the `.md` filename, not as the final folder
+- all taxonomy folders already exist unless the dry-run explicitly used `allow_new_taxonomy_leaf` and lists only one new leaf under an existing parent
 - no path is absolute, surprising, empty, or collision-prone
+- no duplicate, near-duplicate, plural/singular, accent/case, or underscore/space taxonomy variants are being introduced
 - dry-run output reflects exactly the current batch
 - raw chats are only marked `processado` during final publish
 - the final plan still includes running the semantic linker once
