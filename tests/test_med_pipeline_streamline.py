@@ -328,8 +328,11 @@ def test_wiki_graph_and_linker_keep_compat_entrypoints():
     ):
         path = EXTENSION / "scripts" / "mednotes" / legacy
         text = path.read_text(encoding="utf-8")
-        assert len(text.splitlines()) <= 30
-        assert f"from wiki import {package_module} as _impl" in text
+        assert len(text.splitlines()) <= 22
+        assert f"from wiki.{package_module} import main" in text
+        assert "globals().update" not in text
+        assert "Compatibility shim" not in text
+        assert "local automation" not in text
         result = subprocess.run(
             [os.sys.executable, str(path), "--help"],
             text=True,
@@ -379,8 +382,11 @@ def test_flashcard_operations_are_extracted_into_real_modules():
     ):
         path = EXTENSION / "scripts" / "mednotes" / legacy
         text = path.read_text(encoding="utf-8")
-        assert len(text.splitlines()) <= 30
-        assert f"from flashcards import {package_module} as _impl" in text
+        assert len(text.splitlines()) <= 22
+        assert f"from flashcards.{package_module} import main" in text
+        assert "globals().update" not in text
+        assert "Compatibility shim" not in text
+        assert "local automation" not in text
         result = subprocess.run(
             [os.sys.executable, str(path), "--help"],
             text=True,

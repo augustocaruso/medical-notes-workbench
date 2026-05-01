@@ -7,8 +7,8 @@ e `../med_ops.py`, que preserva subcomandos como `fix-wiki`,
 
 Entradas publicas preservadas:
 
-- `../wiki_graph.py`: shim para `wiki.graph`.
-- `../med_linker.py`: shim para `wiki.linker`.
+- `../wiki_graph.py`: alias publico de CLI para `wiki.graph`.
+- `../med_linker.py`: alias publico de CLI para `wiki.linker`.
 
 Módulos internos:
 

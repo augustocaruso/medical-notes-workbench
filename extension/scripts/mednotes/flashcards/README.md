@@ -1,8 +1,8 @@
 # Flashcards Domain
 
 Dominio dos utilitarios determinísticos de `/flashcards`. A lógica real vive
-neste pacote; os scripts no diretório pai permanecem como shims públicos de
-compatibilidade.
+neste pacote; os scripts no diretório pai permanecem como aliases públicos de
+CLI.
 
 Módulos reais:
 
@@ -23,4 +23,4 @@ Entradas históricas preservadas:
 - `../sync_anki_twenty_rules.py`
 
 Novos utilitarios de cards devem entrar neste dominio. Scripts novos no pai
-devem ser evitados, salvo quando forem shims de compatibilidade.
+devem ser evitados, salvo quando forem aliases públicos de CLI.
