@@ -1,4 +1,4 @@
-"""Semantic linker and graph-audit orchestration used by med_ops."""
+"""Semantic linker and graph-audit orchestration for the Wiki CLI."""
 from __future__ import annotations
 
 from contextlib import redirect_stderr, redirect_stdout

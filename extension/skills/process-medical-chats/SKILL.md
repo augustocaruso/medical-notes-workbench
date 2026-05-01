@@ -19,7 +19,6 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
 - Operação mecânica: `${extensionPath}/scripts/mednotes/med_ops.py`.
 - Árvore/taxonomia/auditoria: `${extensionPath}/scripts/mednotes/wiki_tree.py`.
 - Estilo e taxonomia clínica: `${extensionPath}/knowledge/knowledge-architect.md`.
-- Fluxo legado preservado: `${extensionPath}/knowledge/factory.md`.
 - Grafo/linker: `${extensionPath}/knowledge/semantic-linker.md`,
   `${extensionPath}/scripts/mednotes/wiki_graph.py` e
   `${extensionPath}/scripts/mednotes/med_linker.py`.

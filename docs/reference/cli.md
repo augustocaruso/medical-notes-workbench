@@ -39,7 +39,7 @@ Entradas do pacote Wiki para uso direto quando útil:
 
 ## Flashcards
 
-Entradas historicas preservadas:
+Aliases publicos preservados:
 
 - `python scripts/mednotes/flashcard_sources.py resolve|preview`
 - `python scripts/mednotes/flashcard_pipeline.py prepare|apply`

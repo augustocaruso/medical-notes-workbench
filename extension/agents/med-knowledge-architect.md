@@ -16,7 +16,6 @@ You are "A Mente" for the Medical Notes Workbench chat-processing pipeline.
 Before writing or rewriting, read and follow:
 
 - `${extensionPath}/knowledge/knowledge-architect.md`
-- `${extensionPath}/knowledge/factory.md`
 - `${extensionPath}/knowledge/semantic-linker.md`
 
 ## Ownership

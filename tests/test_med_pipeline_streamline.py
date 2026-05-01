@@ -121,6 +121,16 @@ def test_public_workflows_are_preserved_and_documented():
     assert (EXTENSION / "knowledge" / "workflow-output-contract.md").exists()
 
 
+def test_extension_build_excludes_generated_python_caches():
+    build = (ROOT / "scripts" / "build_gemini_cli_extension.py").read_text(encoding="utf-8")
+
+    assert "shutil.ignore_patterns" in build
+    assert '"__pycache__"' in build
+    assert '"*.pyc"' in build
+    assert 'ROOT / "scripts" / "enrich_workflow"' in build
+    assert 'SOURCE / "scripts"' in build
+
+
 def test_launchers_are_short_and_point_to_runbooks():
     for path in (EXTENSION / "commands").rglob("*.toml"):
         text = path.read_text(encoding="utf-8")
@@ -750,28 +760,33 @@ def test_med_ops_hook_blocks_changed_manifest_after_dry_run(tmp_path):
     assert "manifest mudou" in payload["reason"]
 
 
-def test_original_knowledge_text_is_preserved_and_factorized():
-    factory = (EXTENSION / "knowledge" / "factory.md").read_text(encoding="utf-8")
+def test_knowledge_contracts_are_current_and_factorized():
+    assert not (EXTENSION / "knowledge" / "factory.md").exists()
+
+    knowledge_readme = (EXTENSION / "knowledge" / "README.md").read_text(encoding="utf-8")
     architect = (EXTENSION / "knowledge" / "knowledge-architect.md").read_text(encoding="utf-8")
     linker = (EXTENSION / "knowledge" / "semantic-linker.md").read_text(encoding="utf-8")
     command = (EXTENSION / "commands" / "mednotes" / "process-chats.toml").read_text(encoding="utf-8")
+    skill = (EXTENSION / "skills" / "process-medical-chats" / "SKILL.md").read_text(encoding="utf-8")
     process_doc = (ROOT / "docs" / "workflows" / "process-chats.md").read_text(encoding="utf-8")
     agent = (EXTENSION / "agents" / "med-knowledge-architect.md").read_text(encoding="utf-8")
     guard = (EXTENSION / "agents" / "med-publish-guard.md").read_text(encoding="utf-8")
 
-    assert "Med Chat Processor (A Fábrica)" in factory
+    assert "factory.md" not in knowledge_readme + skill + agent
+    assert "Fluxo legado" not in knowledge_readme + skill
     assert "Med Knowledge Architect (A Mente)" in architect
-    assert "Med AI Linker (O Tecelão Semântico)" in linker
+    assert "Semantic Linker Contract" in linker
     assert "O Padrão Ouro: Estrutura de Mini-Aula" in architect
     assert "CATALOGO_WIKI.json" in architect + linker
-    assert "aliases" in factory + linker
+    assert "aliases" in linker
     assert "[[_Índice_Medicina]]" in architect
-    assert "taxonomy-canonical" in factory + command + agent
-    assert "wiki_tree.py --max-depth 4 --audit" in factory + command + agent + process_doc
-    assert "taxonomy-audit" in factory + command
-    assert "taxonomy-migrate" in factory + command
-    assert "--rollback --receipt" in factory + command
-    assert "wiki_tree.py --max-depth 4 --audit" in factory + command + agent
-    assert "vira o arquivo" in architect + command
+    assert "taxonomy-canonical" in skill + agent
+    assert "wiki_tree.py --max-depth 4 --audit" in command + skill + agent + process_doc
+    assert "taxonomy-audit" in command + skill
+    assert "taxonomy-migrate" in command + skill
+    assert "--rollback --receipt" in skill
+    assert "vira o arquivo" in architect + command + skill
     assert "new leaf under an existing parent" in guard
     assert "1. Clínica Médica" in architect + command + agent + guard
+    assert "run_shell_command" not in linker
+    assert r"C:\Users\leona\.gemini\skills" not in linker

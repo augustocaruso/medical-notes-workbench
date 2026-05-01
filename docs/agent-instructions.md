@@ -42,9 +42,9 @@ Referências:
   workflows no Gemini CLI, com resumo acionável e emoji de status.
 - `extension/agents/`: subagents especializados.
 - `src/enricher/`: toolbox de imagens; não chama LLM.
-- `scripts/enrich_notes.py`: orquestrador de imagens com Gemini CLI.
-- `extension/scripts/mednotes/med_ops.py`: fachada CLI determinística dos
-  workflows Wiki.
+- `scripts/enrich_notes.py`: CLI pública do workflow de imagens com Gemini CLI.
+- `extension/scripts/mednotes/med_ops.py`: CLI pública determinística dos
+  workflows Wiki; imports Python devem usar `wiki.api` ou módulos `wiki.*`.
 
 ## Regras Operacionais
 

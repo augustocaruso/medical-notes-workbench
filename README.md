@@ -92,7 +92,7 @@ gemini extensions validate dist/gemini-cli-extension
 
 ```text
 src/enricher/                 toolbox de imagens
-scripts/enrich_notes.py       orquestrador de imagens
+scripts/enrich_notes.py       CLI pública do workflow de imagens
 extension/GEMINI.md           roteador compacto da extensão
 extension/commands/           slash-command launchers
 extension/skills/             runbooks oficiais

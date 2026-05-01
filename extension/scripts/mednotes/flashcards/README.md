@@ -13,7 +13,7 @@ Módulos reais:
 - `model.py`: valida note type/campos do Anki.
 - `sync_rules.py`: compara/atualiza a cópia local das Twenty Rules.
 
-Entradas históricas preservadas:
+Aliases públicos preservados:
 
 - `../flashcard_sources.py`
 - `../flashcard_pipeline.py`

@@ -17,7 +17,7 @@ from wiki.common import MissingPathError, ValidationError
 DEFAULT_RAW_DIR = r"C:\Users\leona\OneDrive\Chats_Raw"
 DEFAULT_WIKI_DIR = r"C:\Users\leona\iCloudDrive\iCloud~md~obsidian\Wiki_Medicina"
 DEFAULT_CATALOG_PATH = "~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json"
-DEFAULT_LINKER_PATH = r"C:\Users\leona\.gemini\skills\med-auto-linker\med_linker.py"
+DEFAULT_LINKER_PATH = "med_linker.py"
 
 
 @dataclass(frozen=True)
