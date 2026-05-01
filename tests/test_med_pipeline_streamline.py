@@ -292,11 +292,7 @@ def test_wiki_operations_are_extracted_into_real_modules():
     style_text = (script_dir / "wiki" / "style.py").read_text(encoding="utf-8")
     assert "import wiki_note_style" not in style_text
     assert "from wiki import note_style" in style_text
-
-    style_shim = script_dir / "wiki_note_style.py"
-    style_shim_text = style_shim.read_text(encoding="utf-8")
-    assert len(style_shim_text.splitlines()) <= 25
-    assert "from wiki import note_style as _impl" in style_shim_text
+    assert not (script_dir / "wiki_note_style.py").exists()
 
     facade = MED_OPS.read_text(encoding="utf-8")
     assert "from wiki.api import *" in facade

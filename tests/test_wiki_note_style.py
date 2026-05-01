@@ -56,29 +56,6 @@ def _valid_note(title: str, related: str = "ISRS") -> str:
     )
 
 
-def test_legacy_wiki_note_style_shim_exports_public_surface():
-    import importlib.util
-
-    style_path = SCRIPT_DIR / "wiki_note_style.py"
-    spec = importlib.util.spec_from_file_location("wiki_note_style_compat", style_path)
-    compat = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(compat)
-
-    for name in (
-        "STYLE_AUDIT_SCHEMA",
-        "STYLE_FIX_SCHEMA",
-        "STYLE_REPORT_SCHEMA",
-        "StyleIssue",
-        "fix_note_style",
-        "infer_title",
-        "raw_meta_from_file",
-        "validate_note_style",
-        "validate_wiki_dir",
-    ):
-        assert getattr(compat, name) is getattr(note_style, name)
-
-
 def test_golden_wiki_style_fixtures_pass():
     for path in sorted(FIXTURES.glob("wiki_style_*.md")):
         content = path.read_text(encoding="utf-8")
