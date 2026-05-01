@@ -301,8 +301,16 @@ def test_wiki_operations_are_extracted_into_real_modules():
     assert not (script_dir / "wiki_note_style.py").exists()
 
     facade = MED_OPS.read_text(encoding="utf-8")
-    assert "from wiki.api import *" in facade
-    assert "from wiki.cli import build_parser, main" in facade
+    assert "from wiki.cli import main" in facade
+    assert "from wiki.api import *" not in facade
+    assert "build_parser" not in facade
+    assert "__all__" not in facade
+    assert "globals().update" not in facade
+    assert "Compatibility shim" not in facade
+    assert "import surface" not in facade
+    wiki_tree = (script_dir / "wiki_tree.py").read_text(encoding="utf-8")
+    assert "import med_ops" not in wiki_tree
+    assert "from wiki import api as wiki_api" in wiki_tree
 
 
 def test_domain_script_wrappers_expose_help():

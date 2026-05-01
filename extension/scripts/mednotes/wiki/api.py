@@ -1,8 +1,7 @@
 """Stable programmatic API for deterministic Wiki workflows.
 
-This module gathers the import surface that historically lived on
-``med_ops.py``. Keep it explicit so the compatibility shim can stay tiny while
-tests and scripts can import the real domain modules through one stable place.
+Use this module, or the narrower ``wiki.*`` modules, for Python imports.
+``med_ops.py`` is only the public terminal entrypoint.
 """
 from __future__ import annotations
 

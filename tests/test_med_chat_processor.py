@@ -1,4 +1,3 @@
-import importlib.util
 import json
 import subprocess
 import sys
@@ -748,20 +747,6 @@ def test_resolve_config_prefers_bundled_linker_when_no_override(monkeypatch, tmp
     assert cfg.linker_path.name == "med_linker.py"
     assert cfg.linker_path.parts[-2:] == ("mednotes", "med_linker.py")
     assert cfg.catalog_path.parts[-3:] == (".gemini", "medical-notes-workbench", "CATALOGO_WIKI.json")
-
-
-def test_med_ops_compat_import_surface():
-    spec = importlib.util.spec_from_file_location("med_ops_compat", MED_OPS_PATH)
-    med_ops_compat = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(med_ops_compat)
-
-    assert med_ops_compat.MedConfig is wiki_api.MedConfig
-    assert med_ops_compat.ValidationError is wiki_api.ValidationError
-    assert med_ops_compat.publish_batch is wiki_api.publish_batch
-    assert med_ops_compat.resolve_config is wiki_api.resolve_config
-    assert med_ops_compat.build_parser is wiki_cli.build_parser
-    assert med_ops_compat.main is wiki_cli.main
 
 
 def test_public_med_ops_commands_still_work_after_cli_split(tmp_path):

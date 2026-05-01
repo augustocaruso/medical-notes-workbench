@@ -12,7 +12,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-import med_ops  # noqa: E402
+from wiki import api as wiki_api  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -28,14 +28,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def taxonomy_context(args: argparse.Namespace) -> dict[str, Any]:
-    config = med_ops.resolve_config(args)
+    config = wiki_api.resolve_config(args)
     payload = {
         "wiki_dir": str(config.wiki_dir),
-        "canonical_taxonomy": med_ops.canonical_taxonomy_tree(),
-        "current_tree": med_ops.taxonomy_tree(config.wiki_dir, max_depth=args.max_depth),
+        "canonical_taxonomy": wiki_api.canonical_taxonomy_tree(),
+        "current_tree": wiki_api.taxonomy_tree(config.wiki_dir, max_depth=args.max_depth),
     }
     if args.audit:
-        payload["audit"] = med_ops.taxonomy_audit(config.wiki_dir)
+        payload["audit"] = wiki_api.taxonomy_audit(config.wiki_dir)
     return payload
 
 
@@ -44,8 +44,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         print(json.dumps(taxonomy_context(args), ensure_ascii=False, indent=2))
-        return med_ops.EXIT_OK
-    except med_ops.MedOpsError as exc:
+        return wiki_api.EXIT_OK
+    except wiki_api.MedOpsError as exc:
         print(str(exc), file=sys.stderr)
         return exc.exit_code
 

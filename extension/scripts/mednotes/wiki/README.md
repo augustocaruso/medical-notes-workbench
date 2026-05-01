@@ -1,7 +1,7 @@
 # Wiki Scripts
 
-Este diretorio marca o dominio wiki dentro da extensao. A fachada publica ainda
-e `../med_ops.py`, que preserva subcomandos como `fix-wiki`,
+Este diretorio marca o dominio wiki dentro da extensao. A CLI publica
+preservada e `../med_ops.py`, que preserva subcomandos como `fix-wiki`,
 `publish-batch`, `taxonomy-migrate`, `graph-audit`, `run-linker` e
 `plan-subagents`.
 
@@ -12,7 +12,7 @@ Entradas publicas preservadas:
 
 Módulos internos:
 
-- `api.py`: superfície programática legada que antes era importada de `med_ops.py`.
+- `api.py`: superfície programática explícita para imports Python.
 - `cli.py`: parser e dispatch dos subcomandos públicos.
 - `config.py`: paths, variáveis de ambiente e `config.toml`.
 - `raw_chats.py`: leitura/listagem/mutação de frontmatter dos chats brutos.
@@ -28,4 +28,5 @@ Módulos internos:
 - `link_terms.py`: helpers compartilhados de aliases, catálogo e normalização.
 - `linking.py`: chamada direta do linker e auditoria do grafo para `med_ops`.
 
-`med_ops.py` deve permanecer como shim mínimo de compatibilidade.
+`med_ops.py` deve permanecer como alias público de CLI; imports Python devem
+usar `wiki.api` ou os módulos `wiki.*`.
