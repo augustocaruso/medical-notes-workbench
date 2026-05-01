@@ -32,10 +32,8 @@ contagens, arquivos relevantes, warnings/blockers e proxima acao.
 - `python scripts/mednotes/med_ops.py taxonomy-canonical|taxonomy-tree|taxonomy-audit|taxonomy-resolve|taxonomy-migrate`
 - `python scripts/mednotes/med_ops.py graph-audit|run-linker`
 
-Domain entries are also available for clearer script organization:
+Entradas do pacote Wiki para uso direto quando útil:
 
-- `python scripts/mednotes/wiki/ops.py ...`
-- `python scripts/mednotes/wiki/tree.py ...`
 - `python scripts/mednotes/wiki/graph.py ...`
 - `python scripts/mednotes/wiki/linker.py ...`
 
@@ -59,4 +57,3 @@ Entradas do pacote interno:
 - `python scripts/mednotes/flashcards/index.py ...`
 - `python scripts/mednotes/flashcards/model.py ...`
 - `python scripts/mednotes/flashcards/sync_rules.py ...`
-- `python scripts/mednotes/obsidian/notes.py ...`

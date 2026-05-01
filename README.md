@@ -101,7 +101,7 @@ extension/agents/             subagents especializados
 extension/scripts/mednotes/   CLIs determinísticas dos workflows
 extension/scripts/mednotes/wiki/        domínio Wiki
 extension/scripts/mednotes/flashcards/  domínio /flashcards
-extension/scripts/mednotes/obsidian/    wrappers do domínio Obsidian
+extension/scripts/mednotes/obsidian/    documentação do domínio Obsidian
 docs/workflows/               documentação operacional por workflow
 docs/reference/               referência técnica
 ```

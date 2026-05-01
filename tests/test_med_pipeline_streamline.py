@@ -207,11 +207,12 @@ def test_domain_script_layout_is_declared():
     assert (EXTENSION / "scripts" / "mednotes" / "wiki" / "README.md").exists()
     assert (EXTENSION / "scripts" / "mednotes" / "flashcards" / "README.md").exists()
     assert (EXTENSION / "scripts" / "mednotes" / "obsidian" / "README.md").exists()
-    assert (EXTENSION / "scripts" / "mednotes" / "wiki" / "ops.py").exists()
     assert (EXTENSION / "scripts" / "mednotes" / "wiki" / "linker.py").exists()
     assert (EXTENSION / "scripts" / "mednotes" / "flashcards" / "sources.py").exists()
     assert (EXTENSION / "scripts" / "mednotes" / "flashcards" / "pipeline.py").exists()
-    assert (EXTENSION / "scripts" / "mednotes" / "obsidian" / "notes.py").exists()
+    assert not (EXTENSION / "scripts" / "mednotes" / "wiki" / "ops.py").exists()
+    assert not (EXTENSION / "scripts" / "mednotes" / "wiki" / "tree.py").exists()
+    assert not (EXTENSION / "scripts" / "mednotes" / "obsidian" / "notes.py").exists()
 
 
 def test_wiki_operations_are_extracted_into_real_modules():
@@ -301,7 +302,6 @@ def test_wiki_operations_are_extracted_into_real_modules():
 
 def test_domain_script_wrappers_expose_help():
     for path in (
-        EXTENSION / "scripts" / "mednotes" / "wiki" / "ops.py",
         EXTENSION / "scripts" / "mednotes" / "wiki" / "linker.py",
         EXTENSION / "scripts" / "mednotes" / "wiki" / "graph.py",
         EXTENSION / "scripts" / "mednotes" / "flashcards" / "sources.py",
@@ -310,7 +310,6 @@ def test_domain_script_wrappers_expose_help():
         EXTENSION / "scripts" / "mednotes" / "flashcards" / "report.py",
         EXTENSION / "scripts" / "mednotes" / "flashcards" / "model.py",
         EXTENSION / "scripts" / "mednotes" / "flashcards" / "sync_rules.py",
-        EXTENSION / "scripts" / "mednotes" / "obsidian" / "notes.py",
     ):
         result = subprocess.run(
             [os.sys.executable, str(path), "--help"],

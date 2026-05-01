@@ -7,8 +7,6 @@ e `../med_ops.py`, que preserva subcomandos como `fix-wiki`,
 
 Entradas publicas preservadas:
 
-- `ops.py`: delega para `../med_ops.py`.
-- `tree.py`: delega para `../wiki_tree.py`.
 - `../wiki_graph.py`: shim para `wiki.graph`.
 - `../med_linker.py`: shim para `wiki.linker`.
 
