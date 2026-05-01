@@ -10,6 +10,8 @@ Gemini/subagents provide judgment, reranking, writing, and review.
 
 Long workflow detail lives in activatable skills and `docs/workflows/`.
 Durable contracts live in `knowledge/`. Do not duplicate those runbooks here.
+User-visible workflow summaries follow `knowledge/workflow-output-contract.md`;
+operational JSON is for agents, hooks, and tests unless the user asks for it.
 
 ## Routing
 
@@ -26,6 +28,9 @@ Durable contracts live in `knowledge/`. Do not duplicate those runbooks here.
 ## Global Rules
 
 - Keep public workflow names, JSON contracts, hooks, and settings stable.
+- For workflow results, summarize in Brazilian Portuguese with the status emoji,
+  key counts, relevant files, warnings/blockers, and next action from
+  `knowledge/workflow-output-contract.md`; do not dump raw JSON by default.
 - Prefer `${extensionPath}`; fallback root is
   `~/.gemini/extensions/medical-notes-workbench`.
 - Use the extension-local `.venv`: Windows `.\.venv\Scripts\python.exe`,

@@ -6,6 +6,7 @@ description: Enriquece notas médicas em Markdown com imagens usando o módulo e
 # Skill: enrich-medical-note
 
 Resumo canônico do workflow: `docs/workflows/enrich.md`.
+Resposta ao usuário: `knowledge/workflow-output-contract.md`.
 
 ## Quando usar
 
@@ -114,6 +115,10 @@ Reporte ao usuário:
 - Fontes usadas (`wikimedia`, `web_search`, etc.).
 - Caminhos finais das notas.
 - Falhas toleradas, como downloads `403` ou thumbs indisponíveis.
+
+Use o contrato de saída para transformar logs e JSON em resumo curto com status
+emoji, contagens, arquivos relevantes, warnings e próxima ação. Não despeje JSON
+bruto por padrão.
 
 ## Falhas comuns
 

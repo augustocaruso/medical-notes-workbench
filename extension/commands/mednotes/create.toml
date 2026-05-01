@@ -6,6 +6,8 @@ Argumentos do usuario: {{args}}
 
 Use a skill `create-medical-note` desta extensão. Ela é o runbook oficial para
 nota didática; para Wiki_Medicina, carregue também `knowledge/knowledge-architect.md`.
+Use `knowledge/workflow-output-contract.md` para terminar com status, destino e
+próxima ação quando salvar arquivo.
 
 Launcher:
 1. Identifique tema, objetivo de estudo, publico-alvo e nivel de detalhe a

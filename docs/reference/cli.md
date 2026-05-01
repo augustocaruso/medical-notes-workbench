@@ -1,5 +1,10 @@
 # CLI Reference
 
+As CLIs operacionais priorizam stdout JSON parseavel para automacao, testes e
+agentes. No Gemini CLI, os slash commands devem transformar esse JSON em resumo
+humano seguindo `extension/knowledge/workflow-output-contract.md`, com status,
+contagens, arquivos relevantes, warnings/blockers e proxima acao.
+
 ## Enricher toolbox
 
 - `enricher sections <nota.md>`

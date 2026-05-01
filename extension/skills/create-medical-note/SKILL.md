@@ -5,6 +5,8 @@ description: Cria notas médicas didáticas em Markdown para estudo, com estrutu
 
 # Skill: create-medical-note
 
+Resposta ao usuário: `knowledge/workflow-output-contract.md`.
+
 ## Quando usar
 
 - O usuário quer criar uma nota médica didática a partir de um tema, outline,
@@ -89,3 +91,6 @@ relações, irrigação, inervação e correlações clínicas.
 
 Se o usuário pedir para salvar em arquivo, use nome curto em kebab-case com
 extensão `.md`. Antes de sobrescrever arquivo existente, confirme com o usuário.
+Ao finalizar, indique status emoji, caminho salvo quando houver, se alguma
+sobrescrita foi evitada, pontos visuais sugeridos e próximo workflow natural
+(`/mednotes:enrich`, `/mednotes:link` ou `/flashcards`).

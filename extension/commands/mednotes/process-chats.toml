@@ -6,6 +6,8 @@ Argumentos do usuário: {{args}}
 
 Use a skill `process-medical-chats`. Ela é o runbook oficial; o resumo do
 workflow está em `docs/workflows/process-chats.md`.
+Use também `knowledge/workflow-output-contract.md` para responder com resumo
+legível, status com emoji e próxima ação.
 
 Invariantes do launcher:
 - Rode `med_ops.py validate` e `wiki_tree.py --max-depth 4 --audit` antes de fan-out.
@@ -15,4 +17,6 @@ Invariantes do launcher:
 - Sempre rode `publish-batch --dry-run` antes do publish real.
 - Publique só após `med-publish-guard approve`.
 - Rode `run-linker` uma única vez ao final.
+- Não despeje manifests ou JSON bruto por padrão; resuma triagem, notas
+  staged/publicadas, dry-run, publish, linker, blockers e decisões pendentes.
 '''

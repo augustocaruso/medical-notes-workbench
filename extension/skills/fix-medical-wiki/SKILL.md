@@ -6,6 +6,7 @@ description: Audita e corrige a saude da Wiki_Medicina com fix-wiki, taxonomia, 
 # Skill: fix-medical-wiki
 
 Resumo canônico do workflow: `docs/workflows/fix-wiki.md`.
+Resposta ao usuário: `knowledge/workflow-output-contract.md`.
 
 ## Quando usar
 
@@ -23,6 +24,7 @@ necessárias e grafo.
   `${extensionPath}/scripts/mednotes/med_linker.py`.
 - Reescrita LLM: subagent `med-knowledge-architect`, apenas quando a CLI
   reportar `requires_llm_rewrite: true`.
+- Saída visível: `${extensionPath}/knowledge/workflow-output-contract.md`.
 
 ## Fluxo
 
@@ -91,8 +93,9 @@ necessárias e grafo.
 
     Depois, se o usuário autorizar, aplique com `taxonomy-migrate --apply
     --plan <plano.json> --receipt <recibo.json>`. Rollback deve usar o recibo.
-12. Responda com arquivos alterados, notas reescritas, links inseridos, backups
-    criados, blockers de grafo, problemas de hierarquia e próximas ações.
+12. Responda usando o contrato de saída: status emoji, contagens, arquivos
+    alterados, notas reescritas, links inseridos, backups criados, blockers de
+    grafo, problemas de hierarquia e próximas ações.
 
 ## Limites
 

@@ -6,6 +6,8 @@ Argumentos do usuário: {{args}}
 
 Use a skill `fix-medical-wiki`. Ela é o runbook oficial; o resumo do workflow
 está em `docs/workflows/fix-wiki.md`.
+Use também `knowledge/workflow-output-contract.md` para transformar o JSON em
+resumo legível, status com emoji e próxima ação.
 
 Invariantes do launcher:
 - Preview primeiro: `med_ops.py fix-wiki --json`.
@@ -16,4 +18,6 @@ Invariantes do launcher:
 - `fix-wiki` não publica chats e não move taxonomia. Se `taxonomy_action_required`
   vier verdadeiro, aponte `taxonomy-migrate`.
 - Use `/mednotes:link` para linkagem pura.
+- Não mostre JSON bruto por padrão; resuma arquivos que mudariam/mudaram,
+  blockers, backups, grafo/linker e reescritas necessárias.
 '''

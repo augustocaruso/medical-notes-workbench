@@ -6,6 +6,7 @@ description: Cria flashcards médicos no Anki a partir de notas, pastas, tags Ob
 # Skill: create-medical-flashcards
 
 Resumo canônico do workflow: `docs/workflows/flashcards.md`.
+Resposta ao usuário: `knowledge/workflow-output-contract.md`.
 
 ## Quando usar
 
@@ -19,6 +20,7 @@ globs, tags Obsidian, filtros em linguagem natural ou texto/briefing colado.
 - Resolver fontes: `${extensionPath}/scripts/mednotes/flashcard_sources.py`.
 - Plano/aplicação: `${extensionPath}/scripts/mednotes/flashcard_pipeline.py`.
 - Relatórios: `${extensionPath}/scripts/mednotes/flashcard_report.py`.
+- Saída visível: `${extensionPath}/knowledge/workflow-output-contract.md`.
 - Deeplink/tag Obsidian: `${extensionPath}/scripts/mednotes/obsidian_note_utils.py`.
 
 `/twenty_rules` sem namespace é o prompt MCP do servidor global `anki-mcp`.
@@ -98,6 +100,9 @@ antes de `/flashcards`.
     ```bash
     python "${extensionPath}/scripts/mednotes/flashcard_report.py" final --input -
     ```
+
+    Use o contrato de saída para terminar com status emoji, fontes, candidatos,
+    duplicados, criados, notas marcadas com `anki`, bloqueios e próxima ação.
 
 ## Requisitos Anki
 

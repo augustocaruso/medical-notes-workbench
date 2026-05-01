@@ -110,6 +110,7 @@ def test_public_workflows_are_preserved_and_documented():
         assert (ROOT / "docs" / "workflows" / f"{doc}.md").exists()
     for doc in ("cli", "json-contracts", "extension"):
         assert (ROOT / "docs" / "reference" / f"{doc}.md").exists()
+    assert (EXTENSION / "knowledge" / "workflow-output-contract.md").exists()
 
 
 def test_launchers_are_short_and_point_to_runbooks():
@@ -120,6 +121,40 @@ def test_launchers_are_short_and_point_to_runbooks():
     assert "docs/workflows/fix-wiki.md" in (EXTENSION / "commands" / "mednotes" / "fix-wiki.toml").read_text(encoding="utf-8")
     assert "docs/workflows/process-chats.md" in (EXTENSION / "commands" / "mednotes" / "process-chats.toml").read_text(encoding="utf-8")
     assert "docs/workflows/flashcards.md" in (EXTENSION / "commands" / "flashcards.toml").read_text(encoding="utf-8")
+
+
+def test_public_workflows_point_to_output_contract():
+    contract = EXTENSION / "knowledge" / "workflow-output-contract.md"
+    contract_text = contract.read_text(encoding="utf-8")
+
+    assert "✅" in contract_text
+    assert "👀" in contract_text
+    assert "⚠️" in contract_text
+    assert "⛔" in contract_text
+    assert "🧭" in contract_text
+
+    command_paths = (
+        EXTENSION / "commands" / "flashcards.toml",
+        EXTENSION / "commands" / "mednotes" / "create.toml",
+        EXTENSION / "commands" / "mednotes" / "enrich.toml",
+        EXTENSION / "commands" / "mednotes" / "fix-wiki.toml",
+        EXTENSION / "commands" / "mednotes" / "link.toml",
+        EXTENSION / "commands" / "mednotes" / "process-chats.toml",
+    )
+    skill_paths = (
+        EXTENSION / "skills" / "create-medical-flashcards" / "SKILL.md",
+        EXTENSION / "skills" / "create-medical-note" / "SKILL.md",
+        EXTENSION / "skills" / "enrich-medical-note" / "SKILL.md",
+        EXTENSION / "skills" / "fix-medical-wiki" / "SKILL.md",
+        EXTENSION / "skills" / "link-medical-wiki" / "SKILL.md",
+        EXTENSION / "skills" / "process-medical-chats" / "SKILL.md",
+    )
+
+    for path in command_paths + skill_paths:
+        text = path.read_text(encoding="utf-8")
+        assert "workflow-output-contract.md" in text
+    assert "workflow-output-contract.md" in (EXTENSION / "GEMINI.md").read_text(encoding="utf-8")
+    assert "workflow-output-contract.md" in (ROOT / "docs" / "reference" / "json-contracts.md").read_text(encoding="utf-8")
 
 
 def test_root_agent_docs_are_mirrors_of_canonical_instructions():

@@ -2,6 +2,10 @@
 
 Todos os utilitarios operacionais emitem JSON parseavel na stdout em sucesso.
 Mensagens humanas e erros ficam em stderr com exit code diferente de zero.
+No Gemini CLI, a resposta final ao usuario segue
+`extension/knowledge/workflow-output-contract.md`: o agente transforma JSON em
+resumo curto, acionavel e com emoji de status. JSON bruto so deve aparecer
+quando solicitado.
 
 ## Principios
 
@@ -24,4 +28,3 @@ Mensagens humanas e erros ficam em stderr com exit code diferente de zero.
 
 Novos contratos devem seguir a mesma familia e ser cobertos por teste antes de
 entrar em um workflow publico.
-

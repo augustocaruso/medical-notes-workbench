@@ -30,6 +30,7 @@ Referências:
 - `docs/reference/cli.md`
 - `docs/reference/json-contracts.md`
 - `docs/reference/extension.md`
+- `extension/knowledge/workflow-output-contract.md`
 
 ## Fontes De Verdade
 
@@ -37,6 +38,8 @@ Referências:
 - `extension/commands/`: launchers curtos dos comandos públicos.
 - `extension/skills/`: runbooks oficiais dos workflows.
 - `extension/knowledge/`: contratos duráveis e metodologia preservada.
+- `extension/knowledge/workflow-output-contract.md`: resposta final dos
+  workflows no Gemini CLI, com resumo acionável e emoji de status.
 - `extension/agents/`: subagents especializados.
 - `src/enricher/`: toolbox de imagens; não chama LLM.
 - `scripts/enrich_notes.py`: orquestrador de imagens com Gemini CLI.
@@ -65,6 +68,9 @@ Referências:
   testes.
 - Adapters de fonte precisam de teste com fixture HTTP local.
 - Subcomandos CLI devem emitir JSON parseável na stdout em sucesso.
+- Respostas visíveis no Gemini CLI devem resumir JSON/logs conforme
+  `extension/knowledge/workflow-output-contract.md`, sem despejar JSON bruto por
+  padrão.
 - Mudança observável deve atualizar README, docs canônicos e os espelhos
   `AGENTS.md`/`CLAUDE.md` quando necessário.
 - Antes de fechar tarefa: `.venv/bin/python -m pytest`.
@@ -81,4 +87,3 @@ Publicação auto-updatable:
 ```bash
 npm run publish:gemini-cli-extension
 ```
-

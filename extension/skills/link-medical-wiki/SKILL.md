@@ -6,6 +6,7 @@ description: Roda o linker semântico da Wiki_Medicina com dry-run auditável, c
 # Skill: link-medical-wiki
 
 Resumo canônico do workflow: `docs/workflows/link.md`.
+Resposta ao usuário: `knowledge/workflow-output-contract.md`.
 
 ## Quando usar
 
@@ -17,6 +18,7 @@ linker semântico, atualizar links internos ou linkar uma nota recém-criada.
 - Script: `${extensionPath}/scripts/mednotes/med_linker.py`.
 - Auditoria objetiva: `${extensionPath}/scripts/mednotes/wiki_graph.py`.
 - Regras semânticas: `${extensionPath}/knowledge/semantic-linker.md`.
+- Saída visível: `${extensionPath}/knowledge/workflow-output-contract.md`.
 - Catálogo preferencial: caminho configurado ou
   `~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json`.
 
@@ -38,8 +40,9 @@ linker semântico, atualizar links internos ou linkar uma nota recém-criada.
    quais termos vieram do catálogo e quais vieram do fallback dinâmico.
 7. Se não houver blockers, rode sem `--dry-run` para aplicar. O linker bloqueia
    aplicação quando o grafo já tem erro crítico.
-8. Responda em português com arquivos alterados, links inseridos, uso do
-   catálogo, blockers e avisos de validação.
+8. Responda usando o contrato de saída, com status emoji, arquivos alterados,
+   links inseridos, uso do catálogo, blockers, avisos de validação e próxima
+   ação.
 
 ## Limites
 

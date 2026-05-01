@@ -6,6 +6,7 @@ description: Processa Chats_Raw médicos em notas Wiki_Medicina usando med_ops.p
 # Skill: process-medical-chats
 
 Resumo canônico do workflow: `docs/workflows/process-chats.md`.
+Resposta ao usuário: `knowledge/workflow-output-contract.md`.
 
 ## Quando usar
 
@@ -22,6 +23,7 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
 - Grafo/linker: `${extensionPath}/knowledge/semantic-linker.md`,
   `${extensionPath}/scripts/mednotes/wiki_graph.py` e
   `${extensionPath}/scripts/mednotes/med_linker.py`.
+- Saída visível: `${extensionPath}/knowledge/workflow-output-contract.md`.
 
 ## Invariantes
 
@@ -107,9 +109,9 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
 
     O `run-linker` faz preflight de grafo, aplica apenas se não houver blockers
     e retorna auditoria final.
-14. Responda em português com triados, descartados, notas criadas, raw chats
-    processados, canonizações de taxonomia, colisões, resultado do linker e
-    warnings de estilo.
+14. Responda usando o contrato de saída, com status emoji, triados,
+    descartados, notas criadas, raw chats processados, canonizações de
+    taxonomia, colisões, resultado do linker, warnings de estilo e próxima ação.
 
 ## Paralelização
 
