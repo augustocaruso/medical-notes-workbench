@@ -12,6 +12,10 @@
 - `extension/hooks/`: declaracao dos hooks.
 - `extension/scripts/`: scripts empacotados no bundle.
 
+Hooks usam uma entrada publica unica, `scripts/hooks/mednotes_hook.mjs`. A logica
+interna fica em `scripts/hooks/mednotes_hook/` para manter guardas, recibos,
+preflight do Anki e runtime JSON separados sem mudar o contrato de `hooks.json`.
+
 ## Comandos Publicos Preservados
 
 - `/mednotes:setup`

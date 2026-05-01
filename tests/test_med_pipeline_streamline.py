@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 EXTENSION = ROOT / "extension"
 HOOK = EXTENSION / "scripts" / "hooks" / "mednotes_hook.mjs"
+HOOK_MODULE_DIR = EXTENSION / "scripts" / "hooks" / "mednotes_hook"
 MED_OPS = EXTENSION / "scripts" / "mednotes" / "med_ops.py"
 
 
@@ -23,6 +24,13 @@ def _frontmatter(path: Path) -> dict[str, str]:
             key, value = line.split(":", 1)
             parsed[key.strip()] = value.strip()
     return parsed
+
+
+def _hook_source_text() -> str:
+    parts = [HOOK.read_text(encoding="utf-8")]
+    if HOOK_MODULE_DIR.exists():
+        parts.extend(path.read_text(encoding="utf-8") for path in sorted(HOOK_MODULE_DIR.glob("*.mjs")))
+    return "\n".join(parts)
 
 
 def test_semantic_medical_skills_are_not_activatable_skills():
@@ -436,7 +444,7 @@ def test_flashcard_module_references_anki_mcp_prompt_and_ingestion_design():
     twenty_rules = (EXTENSION / "knowledge" / "anki-mcp-twenty-rules.md").read_text(
         encoding="utf-8"
     )
-    hook = HOOK.read_text(encoding="utf-8")
+    hook = _hook_source_text()
     note_utils = EXTENSION / "scripts" / "mednotes" / "obsidian_note_utils.py"
     source_resolver = EXTENSION / "scripts" / "mednotes" / "flashcard_sources.py"
     flashcard_index = EXTENSION / "scripts" / "mednotes" / "flashcard_index.py"
@@ -531,15 +539,54 @@ def _hook_env(tmp_path: Path) -> dict[str, str]:
 
 
 def test_hook_contract_avoids_blocking_io_and_beforetool_additional_context():
-    hook = HOOK.read_text(encoding="utf-8")
+    hook = _hook_source_text()
 
     assert "readFileSync(0" not in hook
     assert "spawnSync" not in hook
     assert "additionalContext" not in hook
 
 
+def test_hook_runtime_is_single_public_entrypoint_with_internal_modules(tmp_path):
+    expected_modules = {
+        "anki_preflight.mjs",
+        "cli.mjs",
+        "commands.mjs",
+        "diagnostics.mjs",
+        "med_ops_guard.mjs",
+        "receipts.mjs",
+        "runtime.mjs",
+    }
+    hooks = json.loads((EXTENSION / "hooks" / "hooks.json").read_text(encoding="utf-8"))
+    serialized_hooks = json.dumps(hooks)
+
+    assert HOOK.exists()
+    assert {path.name for path in HOOK_MODULE_DIR.glob("*.mjs")} == expected_modules
+    assert "mednotes_hook.mjs" in serialized_hooks
+    assert "mednotes_hook/" not in serialized_hooks
+
+    shim = HOOK.read_text(encoding="utf-8")
+    assert len(shim.splitlines()) <= 8
+    assert 'from "./mednotes_hook/cli.mjs"' in shim
+
+    for path in [HOOK, *sorted(HOOK_MODULE_DIR.glob("*.mjs"))]:
+        result = subprocess.run(["node", "--check", str(path)], text=True, capture_output=True, check=False)
+        assert result.returncode == 0, result.stderr
+
+    diagnose = subprocess.run(
+        ["node", str(HOOK), "diagnose"],
+        text=True,
+        capture_output=True,
+        check=False,
+        env=_hook_env(tmp_path),
+    )
+    assert diagnose.returncode == 0
+    payload = json.loads(diagnose.stdout)
+    assert payload["dry_run_receipt_count"] == 0
+    assert payload["hook_state_dir"].endswith("hook-state")
+
+
 def test_ensure_anki_hook_preserves_windows_minimize_strategy():
-    hook = HOOK.read_text(encoding="utf-8")
+    hook = (HOOK_MODULE_DIR / "anki_preflight.mjs").read_text(encoding="utf-8")
 
     assert "Start-Process -FilePath $ankiPath -WindowStyle Minimized" in hook
     assert "public static extern bool ShowWindow" in hook
