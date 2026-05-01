@@ -131,14 +131,34 @@ def test_root_agent_docs_are_mirrors_of_canonical_instructions():
 def test_image_orchestrator_has_clear_name_and_compatibility_wrapper():
     canonical = ROOT / "scripts" / "enrich_notes.py"
     wrapper = ROOT / "scripts" / "run_agent.py"
+    package = ROOT / "scripts" / "enrich_workflow"
     build = (ROOT / "scripts" / "build_gemini_cli_extension.py").read_text(encoding="utf-8")
     command = (EXTENSION / "commands" / "mednotes" / "enrich.toml").read_text(encoding="utf-8")
 
     assert canonical.exists()
     assert wrapper.exists()
+    for module in ("models", "gemini", "prompts", "parsing", "candidates", "inputs", "runner", "cli"):
+        assert (package / f"{module}.py").exists()
     assert "scripts/enrich_notes.py" in command
     assert '"enrich_notes.py"' in build
+    assert '"enrich_workflow"' in build
+    assert "from enrich_workflow.cli import main as _workflow_main" in canonical.read_text(encoding="utf-8")
     assert "Compatibility launcher" in wrapper.read_text(encoding="utf-8")
+
+    script_dir = str(ROOT / "scripts")
+    added_path = script_dir not in sys.path
+    if added_path:
+        sys.path.insert(0, script_dir)
+    try:
+        assert hasattr(importlib.import_module("enrich_workflow.cli"), "main")
+        assert hasattr(importlib.import_module("enrich_workflow.prompts"), "build_anchors_prompt")
+        assert hasattr(importlib.import_module("enrich_workflow.candidates"), "fetch_thumbs")
+    finally:
+        if added_path:
+            try:
+                sys.path.remove(script_dir)
+            except ValueError:
+                pass
 
 
 def test_domain_script_layout_is_declared():

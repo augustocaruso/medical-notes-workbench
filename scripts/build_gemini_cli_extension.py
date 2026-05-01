@@ -98,6 +98,7 @@ def main() -> int:
     extension_scripts = SOURCE / "scripts"
     if extension_scripts.exists():
         _copy_tree(extension_scripts, DIST / "scripts")
+    _copy_tree(ROOT / "scripts" / "enrich_workflow", DIST / "scripts" / "enrich_workflow")
     _copy_file(ROOT / "scripts" / "enrich_notes.py", DIST / "scripts" / "enrich_notes.py")
     _copy_file(ROOT / "scripts" / "run_agent.py", DIST / "scripts" / "run_agent.py")
 

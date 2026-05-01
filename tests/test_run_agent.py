@@ -20,12 +20,38 @@ if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
 import run_agent  # noqa: E402
+from enrich_workflow import candidates as workflow_candidates  # noqa: E402
+from enrich_workflow import gemini as workflow_gemini  # noqa: E402
+from enrich_workflow import inputs as workflow_inputs  # noqa: E402
+from enrich_workflow import parsing as workflow_parsing  # noqa: E402
+from enrich_workflow import prompts as workflow_prompts  # noqa: E402
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
 # --- helpers de mock ------------------------------------------------
+
+
+def test_legacy_orchestrator_import_surface_is_preserved():
+    assert run_agent.GeminiError is workflow_gemini.GeminiError
+    assert run_agent._resolve_note_inputs is workflow_inputs._resolve_note_inputs
+    assert run_agent.parse_anchors_json is workflow_parsing.parse_anchors_json
+    assert run_agent.build_anchors_prompt is workflow_prompts.build_anchors_prompt
+    assert run_agent.fetch_thumbs
+    assert run_agent.main
+
+
+def test_enrich_entrypoints_expose_help():
+    for script in ("enrich_notes.py", "run_agent.py"):
+        result = subprocess.run(
+            [sys.executable, str(_SCRIPTS / script), "--help"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert result.returncode == 0
+        assert "enrich_notes" in result.stdout
 
 
 def _png_bytes(size=(400, 300), color=(50, 100, 200)) -> bytes:
@@ -149,7 +175,7 @@ def test_resolve_note_inputs_expande_diretorio_recursivo_e_ignora_anexos(tmp_pat
     (root / ".obsidian").mkdir()
     (root / ".obsidian" / "D.md").write_text("# D\n", encoding="utf-8")
 
-    notes, errors = run_agent._resolve_note_inputs([root])
+    notes, errors = workflow_inputs._resolve_note_inputs([root])
 
     assert errors == []
     assert [path.name for path in notes] == ["A.md", "B.md"]
@@ -164,7 +190,7 @@ def test_resolve_note_inputs_expande_glob_e_deduplica(tmp_path):
     b.write_text("# B\n", encoding="utf-8")
     (root / "C.txt").write_text("x\n", encoding="utf-8")
 
-    notes, errors = run_agent._resolve_note_inputs([root / "*.md", a])
+    notes, errors = workflow_inputs._resolve_note_inputs([root / "*.md", a])
 
     assert errors == []
     assert [path.name for path in notes] == ["A.md", "B.md"]
@@ -174,7 +200,7 @@ def test_resolve_note_inputs_reporta_glob_ou_diretorio_sem_notas(tmp_path):
     empty = tmp_path / "empty"
     empty.mkdir()
 
-    notes, errors = run_agent._resolve_note_inputs([tmp_path / "*.md", empty])
+    notes, errors = workflow_inputs._resolve_note_inputs([tmp_path / "*.md", empty])
 
     assert notes == []
     assert len(errors) == 2
@@ -188,7 +214,7 @@ def test_resolve_note_inputs_reporta_glob_ou_diretorio_sem_notas(tmp_path):
 
 def test_parse_anchors_aceita_json_com_fences_de_codigo():
     raw = '```json\n[{"section_path":["X"],"concept":"c","visual_type":"diagram","search_queries":["q"]}]\n```'
-    out = run_agent.parse_anchors_json(raw)
+    out = workflow_parsing.parse_anchors_json(raw)
     assert len(out) == 1
     assert out[0]["anchor_id"] == "a1"  # default gerado
 
@@ -196,12 +222,12 @@ def test_parse_anchors_aceita_json_com_fences_de_codigo():
 def test_parse_anchors_rejeita_anchor_sem_chave_obrigatoria():
     raw = '[{"section_path":["X"],"concept":"c"}]'  # sem visual_type / search_queries
     with pytest.raises(ValueError, match="visual_type"):
-        run_agent.parse_anchors_json(raw)
+        workflow_parsing.parse_anchors_json(raw)
 
 
 def test_anchors_prompt_pt_br_pede_query_em_portugues():
     sections = [{"section_path": ["X"], "level": 1}]
-    prompt = run_agent.build_anchors_prompt(
+    prompt = workflow_prompts.build_anchors_prompt(
         "nota", sections, max_anchors=3, preferred_language="pt-br"
     )
     assert "português" in prompt or "PT" in prompt
@@ -209,7 +235,7 @@ def test_anchors_prompt_pt_br_pede_query_em_portugues():
 
 def test_anchors_prompt_en_pede_so_ingles():
     sections = [{"section_path": ["X"], "level": 1}]
-    prompt = run_agent.build_anchors_prompt(
+    prompt = workflow_prompts.build_anchors_prompt(
         "nota", sections, max_anchors=3, preferred_language="en"
     )
     # Não pede PT
@@ -231,15 +257,15 @@ def test_rerank_prompt_pt_br_inclui_hint_de_idioma():
             license="CC0", score=None,
         )
     ]
-    p_pt = run_agent.build_rerank_prompt(anchor, candidates, preferred_language="pt-br")
-    p_en = run_agent.build_rerank_prompt(anchor, candidates, preferred_language="en")
+    p_pt = workflow_prompts.build_rerank_prompt(anchor, candidates, preferred_language="pt-br")
+    p_en = workflow_prompts.build_rerank_prompt(anchor, candidates, preferred_language="en")
     assert "português" in p_pt.lower()
     assert "português" not in p_en.lower()
 
 
 def test_parse_rerank_aceita_chosen_index_null():
     raw = '{"chosen_index": null, "reason": "nada serve"}'
-    out = run_agent.parse_rerank_json(raw)
+    out = workflow_parsing.parse_rerank_json(raw)
     assert out["chosen_index"] is None
 
 
@@ -247,10 +273,10 @@ def test_invoke_gemini_timeout_vira_gemini_error(monkeypatch):
     def fake_run(*_args, **_kwargs):
         raise subprocess.TimeoutExpired(cmd=["gemini"], timeout=3)
 
-    monkeypatch.setattr(run_agent.subprocess, "run", fake_run)
+    monkeypatch.setattr(workflow_gemini.subprocess, "run", fake_run)
 
-    with pytest.raises(run_agent.GeminiError, match="timeout de 3s"):
-        run_agent._invoke_gemini(["gemini"], timeout_seconds=3)
+    with pytest.raises(workflow_gemini.GeminiError, match="timeout de 3s"):
+        workflow_gemini._invoke_gemini(["gemini"], timeout_seconds=3)
 
 
 def test_call_gemini_json_retry_corrige_resposta_invalida(monkeypatch):
@@ -261,11 +287,11 @@ def test_call_gemini_json_retry_corrige_resposta_invalida(monkeypatch):
         "search_queries": ["serotonin synapse"],
     }])
     queue = GeminiQueue(["vou responder em JSON daqui a pouco", valid])
-    monkeypatch.setattr(run_agent, "_invoke_gemini", queue)
+    monkeypatch.setattr(workflow_gemini, "_invoke_gemini", queue)
 
-    anchors, raw = run_agent.call_gemini_json_with_retry(
+    anchors, raw = workflow_gemini.call_gemini_json_with_retry(
         "prompt original",
-        run_agent.parse_anchors_json,
+        workflow_parsing.parse_anchors_json,
         binary="gemini",
         model="x",
         label="âncoras",
@@ -289,7 +315,7 @@ def test_fetch_thumbs_tenta_thumbnail_quando_original_falha(monkeypatch, tmp_pat
             raise DownloadError("403")
         return {"path": str(tmp_path / "thumb.webp")}
 
-    monkeypatch.setattr(run_agent, "download_image", fake_download)
+    monkeypatch.setattr(workflow_candidates, "download_image", fake_download)
     candidate = ImageCandidate(
         source="web_search",
         source_url="https://example.org/page",
@@ -303,7 +329,7 @@ def test_fetch_thumbs_tenta_thumbnail_quando_original_falha(monkeypatch, tmp_pat
         thumbnail_url="https://serpapi.com/thumb.jpg",
     )
 
-    out = run_agent.fetch_thumbs([candidate], tmp_dir=tmp_path)
+    out = workflow_candidates.fetch_thumbs([candidate], tmp_dir=tmp_path)
 
     assert calls == [
         "https://blocked.example/original.png",
