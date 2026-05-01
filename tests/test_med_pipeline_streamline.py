@@ -185,7 +185,12 @@ def test_image_orchestrator_has_single_clear_entrypoint():
     assert '"enrich_notes.py"' in build
     assert '"enrich_workflow"' in build
     assert "run_agent.py" not in build
-    assert "from enrich_workflow.cli import main as _workflow_main" in canonical.read_text(encoding="utf-8")
+    canonical_text = canonical.read_text(encoding="utf-8")
+    assert "from enrich_workflow.cli import main" in canonical_text
+    assert "_sync_compat_seams" not in canonical_text
+    assert "__all__" not in canonical_text
+    assert "import surface" not in canonical_text
+    assert "local automation" not in canonical_text
 
     script_dir = str(ROOT / "scripts")
     added_path = script_dir not in sys.path

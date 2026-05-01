@@ -1,7 +1,8 @@
-"""Testes do orquestrador `scripts/enrich_notes.py`.
+"""Testes do workflow de enriquecimento de notas.
 
-Estratégia: mockar dois seams — (1) ``_invoke_gemini`` que retorna stdout do
-gemini CLI, e (2) ``httpx.Client`` que serve bytes/JSON canned. Sem rede.
+Estratégia: mockar dois seams reais do pacote — (1) ``gemini._invoke_gemini``
+que retorna stdout do gemini CLI, e (2) ``httpx.Client`` que serve bytes/JSON
+canned. Sem rede.
 """
 import io
 import json
@@ -14,13 +15,13 @@ import pytest
 from PIL import Image
 
 
-# Adiciona scripts/ ao path para importar o orquestrador.
+# Adiciona scripts/ ao path para importar o pacote interno do workflow.
 _SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-import enrich_notes  # noqa: E402
 from enrich_workflow import candidates as workflow_candidates  # noqa: E402
+from enrich_workflow import cli as workflow_cli  # noqa: E402
 from enrich_workflow import gemini as workflow_gemini  # noqa: E402
 from enrich_workflow import inputs as workflow_inputs  # noqa: E402
 from enrich_workflow import parsing as workflow_parsing  # noqa: E402
@@ -33,13 +34,13 @@ FIXTURES = Path(__file__).parent / "fixtures"
 # --- helpers de mock ------------------------------------------------
 
 
-def test_enrich_orchestrator_import_surface_is_preserved():
-    assert enrich_notes.GeminiError is workflow_gemini.GeminiError
-    assert enrich_notes._resolve_note_inputs is workflow_inputs._resolve_note_inputs
-    assert enrich_notes.parse_anchors_json is workflow_parsing.parse_anchors_json
-    assert enrich_notes.build_anchors_prompt is workflow_prompts.build_anchors_prompt
-    assert enrich_notes.fetch_thumbs
-    assert enrich_notes.main
+def test_enrich_workflow_modules_expose_real_api():
+    assert workflow_gemini.GeminiError
+    assert workflow_inputs._resolve_note_inputs
+    assert workflow_parsing.parse_anchors_json
+    assert workflow_prompts.build_anchors_prompt
+    assert workflow_candidates.fetch_thumbs
+    assert workflow_cli.main
 
 
 def test_enrich_entrypoints_expose_help():
@@ -361,7 +362,7 @@ def test_orquestrador_e2e_anchors_e_rerank(monkeypatch, tmp_path, capsys):
     }])
     rerank_json = json.dumps({"chosen_index": 0, "reason": "diagrama claro"})
     queue = GeminiQueue([anchors_json, rerank_json])
-    monkeypatch.setattr(enrich_notes, "_invoke_gemini", queue)
+    monkeypatch.setattr(workflow_gemini, "_invoke_gemini", queue)
 
     # Wikimedia API → 1 candidata; downloads (thumb + full) → mesmo PNG
     wiki_response = {
@@ -387,7 +388,7 @@ def test_orquestrador_e2e_anchors_e_rerank(monkeypatch, tmp_path, capsys):
     _mock_httpx(monkeypatch, json_responses={"commons.wikimedia.org": wiki_response},
                 bytes_response=_png_bytes())
 
-    rc = enrich_notes.main([str(note), "--config", str(cfg)])
+    rc = workflow_cli.main([str(note), "--config", str(cfg)])
     assert rc == 0
 
     # 2 chamadas ao gemini: anchors + rerank
@@ -427,14 +428,14 @@ def test_orquestrador_batch_duas_notas_enriquece_em_ordem(monkeypatch, tmp_path,
         _anchors_json(concept="bloqueio do SERT por ISRS"),
         rerank_json,
     ])
-    monkeypatch.setattr(enrich_notes, "_invoke_gemini", queue)
+    monkeypatch.setattr(workflow_gemini, "_invoke_gemini", queue)
     _mock_httpx(
         monkeypatch,
         json_responses={"commons.wikimedia.org": _wiki_image_response()},
         bytes_response=_png_bytes(),
     )
 
-    rc = enrich_notes.main([str(note1), str(note2), "--config", str(cfg)])
+    rc = workflow_cli.main([str(note1), str(note2), "--config", str(cfg)])
 
     assert rc == 0
     assert len(queue.calls) == 4
@@ -458,9 +459,9 @@ def test_orquestrador_batch_continua_apos_falha(monkeypatch, tmp_path, capsys):
     good.write_text("# T\n\n## S\n\nbody.\n", encoding="utf-8")
 
     queue = GeminiQueue([json.dumps([])])
-    monkeypatch.setattr(enrich_notes, "_invoke_gemini", queue)
+    monkeypatch.setattr(workflow_gemini, "_invoke_gemini", queue)
 
-    rc = enrich_notes.main([str(bad), str(good), "--config", str(cfg)])
+    rc = workflow_cli.main([str(bad), str(good), "--config", str(cfg)])
 
     assert rc == 6
     assert len(queue.calls) == 1
@@ -488,20 +489,20 @@ def test_orquestrador_cota_serpapi_interrompe_lote(monkeypatch, tmp_path, capsys
         "anchor_id": "a1",
     }])
     queue = GeminiQueue([anchors_json])
-    monkeypatch.setattr(enrich_notes, "_invoke_gemini", queue)
+    monkeypatch.setattr(workflow_gemini, "_invoke_gemini", queue)
     search_calls = 0
 
     def quota_search(*_args, **_kwargs):
         nonlocal search_calls
         search_calls += 1
-        raise enrich_notes.SourceQuotaExceeded(
+        raise workflow_candidates.SourceQuotaExceeded(
             "web_search",
             "SerpAPI bloqueou a busca por cota/limite: quota exceeded",
         )
 
-    monkeypatch.setattr(enrich_notes.web_search, "search", quota_search)
+    monkeypatch.setattr(workflow_candidates.web_search, "search", quota_search)
 
-    rc = enrich_notes.main([str(note1), str(note2), "--config", str(cfg)])
+    rc = workflow_cli.main([str(note1), str(note2), "--config", str(cfg)])
 
     assert rc == 9
     assert search_calls == 1
@@ -524,9 +525,9 @@ def test_orquestrador_idempotente_se_ja_enriquecida(monkeypatch, tmp_path, capsy
 
     # Gemini não deve ser chamado
     queue = GeminiQueue([])
-    monkeypatch.setattr(enrich_notes, "_invoke_gemini", queue)
+    monkeypatch.setattr(workflow_gemini, "_invoke_gemini", queue)
 
-    rc = enrich_notes.main([str(note), "--config", str(cfg)])
+    rc = workflow_cli.main([str(note), "--config", str(cfg)])
     assert rc == 0
     assert queue.calls == []
     err = capsys.readouterr().err
@@ -544,9 +545,9 @@ def test_orquestrador_force_pula_idempotencia(monkeypatch, tmp_path):
     )
 
     queue = GeminiQueue([json.dumps([])])  # gemini decide 0 âncoras
-    monkeypatch.setattr(enrich_notes, "_invoke_gemini", queue)
+    monkeypatch.setattr(workflow_gemini, "_invoke_gemini", queue)
 
-    rc = enrich_notes.main([str(note), "--config", str(cfg), "--force"])
+    rc = workflow_cli.main([str(note), "--config", str(cfg), "--force"])
     assert rc == 0
     assert len(queue.calls) == 1  # gemini foi chamado pra anchors
 
@@ -559,9 +560,9 @@ def test_orquestrador_sem_ancoras_sai_limpo(monkeypatch, tmp_path):
     note.write_text("# T\n\n## S\n\nbody.\n", encoding="utf-8")
 
     queue = GeminiQueue([json.dumps([])])
-    monkeypatch.setattr(enrich_notes, "_invoke_gemini", queue)
+    monkeypatch.setattr(workflow_gemini, "_invoke_gemini", queue)
 
-    rc = enrich_notes.main([str(note), "--config", str(cfg)])
+    rc = workflow_cli.main([str(note), "--config", str(cfg)])
     assert rc == 0
     body = note.read_text(encoding="utf-8")
     assert "images_enriched" not in body  # nada foi inserido
@@ -582,12 +583,12 @@ def test_orquestrador_anchor_sem_candidatas_eh_pulada(monkeypatch, tmp_path, cap
         "anchor_id": "a1",
     }])
     queue = GeminiQueue([anchors_json])  # só anchors; rerank não deve ser chamado
-    monkeypatch.setattr(enrich_notes, "_invoke_gemini", queue)
+    monkeypatch.setattr(workflow_gemini, "_invoke_gemini", queue)
 
     # Wikimedia retorna 0 páginas
     _mock_httpx(monkeypatch, json_responses={"commons.wikimedia.org": {"query": {"pages": []}}})
 
-    rc = enrich_notes.main([str(note), "--config", str(cfg)])
+    rc = workflow_cli.main([str(note), "--config", str(cfg)])
     assert rc == 0
     assert len(queue.calls) == 1  # rerank não foi chamado
     assert "sem candidatas" in capsys.readouterr().out
@@ -609,7 +610,7 @@ def test_orquestrador_rerank_null_pula_ancora(monkeypatch, tmp_path):
     }])
     rerank_json = json.dumps({"chosen_index": None, "reason": "nada serve"})
     queue = GeminiQueue([anchors_json, rerank_json])
-    monkeypatch.setattr(enrich_notes, "_invoke_gemini", queue)
+    monkeypatch.setattr(workflow_gemini, "_invoke_gemini", queue)
 
     wiki_response = {
         "query": {
@@ -629,7 +630,7 @@ def test_orquestrador_rerank_null_pula_ancora(monkeypatch, tmp_path):
     _mock_httpx(monkeypatch, json_responses={"commons.wikimedia.org": wiki_response},
                 bytes_response=_png_bytes())
 
-    rc = enrich_notes.main([str(note), "--config", str(cfg)])
+    rc = workflow_cli.main([str(note), "--config", str(cfg)])
     assert rc == 0
     body = note.read_text(encoding="utf-8")
     assert "![[" not in body  # nada foi inserido
@@ -643,9 +644,9 @@ def test_orquestrador_falha_se_gemini_devolve_lixo(monkeypatch, tmp_path, capsys
     note.write_text("# T\n\n## S\n\nbody.\n", encoding="utf-8")
 
     queue = GeminiQueue(["isso não é JSON nenhum", "continua sem JSON"])
-    monkeypatch.setattr(enrich_notes, "_invoke_gemini", queue)
+    monkeypatch.setattr(workflow_gemini, "_invoke_gemini", queue)
 
-    rc = enrich_notes.main([str(note), "--config", str(cfg)])
+    rc = workflow_cli.main([str(note), "--config", str(cfg)])
     assert rc == 7
     assert len(queue.calls) == 2
     assert "gemini falhou ao gerar âncoras" in capsys.readouterr().err
@@ -659,10 +660,10 @@ def test_orquestrador_timeout_de_anchors_retorna_7(monkeypatch, tmp_path, capsys
     note.write_text("# T\n\n## S\n\nbody.\n", encoding="utf-8")
 
     def timeout(*_args, **_kwargs):
-        raise enrich_notes.GeminiError("gemini CLI excedeu timeout de 42s")
+        raise workflow_gemini.GeminiError("gemini CLI excedeu timeout de 42s")
 
-    monkeypatch.setattr(enrich_notes, "_invoke_gemini", timeout)
+    monkeypatch.setattr(workflow_gemini, "_invoke_gemini", timeout)
 
-    rc = enrich_notes.main([str(note), "--config", str(cfg)])
+    rc = workflow_cli.main([str(note), "--config", str(cfg)])
     assert rc == 7
     assert "timeout de 42s" in capsys.readouterr().err
