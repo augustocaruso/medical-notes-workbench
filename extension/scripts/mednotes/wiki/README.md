@@ -12,5 +12,14 @@ Wrappers disponíveis:
 - `graph.py`: delega para `../wiki_graph.py`.
 - `linker.py`: delega para `../med_linker.py`.
 
-Ao extrair codigo de `med_ops.py`, mover primeiro para modulos deste dominio e
-manter `med_ops.py` como CLI fina.
+Módulos internos:
+
+- `config.py`: paths, variáveis de ambiente e `config.toml`.
+- `raw_chats.py`: leitura/listagem/mutação de frontmatter dos chats brutos.
+- `taxonomy.py`: taxonomia canônica, resolução, auditoria, migração e rollback.
+- `publish.py`: `stage-note`, `publish-batch` e colisões de destino.
+- `style.py`: validação e correções formais de notas Wiki.
+- `health.py`: orquestração do `fix-wiki`.
+- `linking.py`: chamada controlada do linker e auditoria do grafo.
+
+`med_ops.py` deve permanecer como CLI fina e fachada de compatibilidade.

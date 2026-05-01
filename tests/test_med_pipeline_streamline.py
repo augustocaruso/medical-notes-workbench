@@ -1,6 +1,8 @@
 import json
+import importlib
 import os
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -150,9 +152,48 @@ def test_domain_script_layout_is_declared():
     assert (EXTENSION / "scripts" / "mednotes" / "obsidian" / "notes.py").exists()
 
 
+def test_wiki_operations_are_extracted_into_real_modules():
+    script_dir = EXTENSION / "scripts" / "mednotes"
+    script_dir_str = str(script_dir)
+    added_path = script_dir_str not in sys.path
+    if added_path:
+        sys.path.insert(0, script_dir_str)
+    try:
+        modules = {
+            "config": importlib.import_module("wiki.config"),
+            "raw_chats": importlib.import_module("wiki.raw_chats"),
+            "taxonomy": importlib.import_module("wiki.taxonomy"),
+            "publish": importlib.import_module("wiki.publish"),
+            "style": importlib.import_module("wiki.style"),
+            "health": importlib.import_module("wiki.health"),
+            "linking": importlib.import_module("wiki.linking"),
+        }
+    finally:
+        if added_path:
+            try:
+                sys.path.remove(script_dir_str)
+            except ValueError:
+                pass
+
+    assert hasattr(modules["config"], "resolve_config")
+    assert hasattr(modules["raw_chats"], "mutate_raw_frontmatter")
+    assert hasattr(modules["taxonomy"], "taxonomy_migration_plan")
+    assert hasattr(modules["publish"], "publish_batch")
+    assert hasattr(modules["style"], "validate_wiki_style")
+    assert hasattr(modules["health"], "fix_wiki_health")
+    assert hasattr(modules["linking"], "run_linker")
+
+    facade = MED_OPS.read_text(encoding="utf-8")
+    assert "from wiki.health import fix_wiki_health" in facade
+    assert "from wiki.publish import" in facade
+    assert "from wiki.taxonomy import" in facade
+    assert "from wiki.linking import graph_audit, run_linker" in facade
+
+
 def test_domain_script_wrappers_expose_help():
     for path in (
         EXTENSION / "scripts" / "mednotes" / "wiki" / "ops.py",
+        EXTENSION / "scripts" / "mednotes" / "wiki" / "linker.py",
         EXTENSION / "scripts" / "mednotes" / "flashcards" / "sources.py",
         EXTENSION / "scripts" / "mednotes" / "obsidian" / "notes.py",
     ):
