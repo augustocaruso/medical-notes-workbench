@@ -163,22 +163,21 @@ def test_root_agent_docs_are_mirrors_of_canonical_instructions():
     assert (ROOT / "CLAUDE.md").read_text(encoding="utf-8") == canonical
 
 
-def test_image_orchestrator_has_clear_name_and_compatibility_wrapper():
+def test_image_orchestrator_has_single_clear_entrypoint():
     canonical = ROOT / "scripts" / "enrich_notes.py"
-    wrapper = ROOT / "scripts" / "run_agent.py"
     package = ROOT / "scripts" / "enrich_workflow"
     build = (ROOT / "scripts" / "build_gemini_cli_extension.py").read_text(encoding="utf-8")
     command = (EXTENSION / "commands" / "mednotes" / "enrich.toml").read_text(encoding="utf-8")
 
     assert canonical.exists()
-    assert wrapper.exists()
+    assert not (ROOT / "scripts" / "run_agent.py").exists()
     for module in ("models", "gemini", "prompts", "parsing", "candidates", "inputs", "runner", "cli"):
         assert (package / f"{module}.py").exists()
     assert "scripts/enrich_notes.py" in command
     assert '"enrich_notes.py"' in build
     assert '"enrich_workflow"' in build
+    assert "run_agent.py" not in build
     assert "from enrich_workflow.cli import main as _workflow_main" in canonical.read_text(encoding="utf-8")
-    assert "Compatibility launcher" in wrapper.read_text(encoding="utf-8")
 
     script_dir = str(ROOT / "scripts")
     added_path = script_dir not in sys.path

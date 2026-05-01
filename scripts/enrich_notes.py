@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Compatibility facade for the image enrichment orchestrator.
+"""CLI facade for the image enrichment orchestrator.
 
-The implementation lives in ``scripts/enrich_workflow/``. Keep this module as
-an import-compatible surface for old ``run_agent`` habits and tests.
+The implementation lives in ``scripts/enrich_workflow/``. This module keeps a
+small import surface for tests and local automation while exposing the public
+``scripts/enrich_notes.py`` entrypoint.
 """
 from __future__ import annotations
 

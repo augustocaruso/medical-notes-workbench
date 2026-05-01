@@ -15,7 +15,6 @@ contagens, arquivos relevantes, warnings/blockers e proxima acao.
 ## Image orchestrator
 
 - `python scripts/enrich_notes.py <nota|pasta|glob> [mais alvos] [--config config.toml] [--force]`
-- `python scripts/run_agent.py ...` existe apenas como ponte de compatibilidade local.
 
 ## Wiki operations
 

@@ -50,8 +50,6 @@ Orquestrador canônico:
 python scripts/enrich_notes.py nota.md pasta/ "Wiki/**/*.md" [--config config.toml] [--force]
 ```
 
-`scripts/run_agent.py` permanece apenas como ponte local para hábitos antigos.
-
 ## Gemini CLI Extension
 
 ```bash
