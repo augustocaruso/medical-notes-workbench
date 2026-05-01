@@ -160,6 +160,8 @@ def test_wiki_operations_are_extracted_into_real_modules():
         sys.path.insert(0, script_dir_str)
     try:
         modules = {
+            "api": importlib.import_module("wiki.api"),
+            "cli": importlib.import_module("wiki.cli"),
             "config": importlib.import_module("wiki.config"),
             "raw_chats": importlib.import_module("wiki.raw_chats"),
             "taxonomy": importlib.import_module("wiki.taxonomy"),
@@ -175,6 +177,9 @@ def test_wiki_operations_are_extracted_into_real_modules():
             except ValueError:
                 pass
 
+    assert hasattr(modules["api"], "MedConfig")
+    assert hasattr(modules["cli"], "build_parser")
+    assert hasattr(modules["cli"], "main")
     assert hasattr(modules["config"], "resolve_config")
     assert hasattr(modules["raw_chats"], "mutate_raw_frontmatter")
     assert hasattr(modules["taxonomy"], "taxonomy_migration_plan")
@@ -184,10 +189,8 @@ def test_wiki_operations_are_extracted_into_real_modules():
     assert hasattr(modules["linking"], "run_linker")
 
     facade = MED_OPS.read_text(encoding="utf-8")
-    assert "from wiki.health import fix_wiki_health" in facade
-    assert "from wiki.publish import" in facade
-    assert "from wiki.taxonomy import" in facade
-    assert "from wiki.linking import graph_audit, run_linker" in facade
+    assert "from wiki.api import *" in facade
+    assert "from wiki.cli import build_parser, main" in facade
 
 
 def test_domain_script_wrappers_expose_help():

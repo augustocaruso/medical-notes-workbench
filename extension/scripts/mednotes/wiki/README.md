@@ -14,6 +14,8 @@ Wrappers disponíveis:
 
 Módulos internos:
 
+- `api.py`: superfície programática legada que antes era importada de `med_ops.py`.
+- `cli.py`: parser e dispatch dos subcomandos públicos.
 - `config.py`: paths, variáveis de ambiente e `config.toml`.
 - `raw_chats.py`: leitura/listagem/mutação de frontmatter dos chats brutos.
 - `taxonomy.py`: taxonomia canônica, resolução, auditoria, migração e rollback.
@@ -22,4 +24,4 @@ Módulos internos:
 - `health.py`: orquestração do `fix-wiki`.
 - `linking.py`: chamada controlada do linker e auditoria do grafo.
 
-`med_ops.py` deve permanecer como CLI fina e fachada de compatibilidade.
+`med_ops.py` deve permanecer como shim mínimo de compatibilidade.
