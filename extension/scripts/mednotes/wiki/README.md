@@ -5,12 +5,12 @@ e `../med_ops.py`, que preserva subcomandos como `fix-wiki`,
 `publish-batch`, `taxonomy-migrate`, `graph-audit`, `run-linker` e
 `plan-subagents`.
 
-Wrappers disponíveis:
+Entradas publicas preservadas:
 
 - `ops.py`: delega para `../med_ops.py`.
 - `tree.py`: delega para `../wiki_tree.py`.
-- `graph.py`: delega para `../wiki_graph.py`.
-- `linker.py`: delega para `../med_linker.py`.
+- `../wiki_graph.py`: shim para `wiki.graph`.
+- `../med_linker.py`: shim para `wiki.linker`.
 
 Módulos internos:
 
@@ -23,6 +23,9 @@ Módulos internos:
 - `publish.py`: `stage-note`, `publish-batch` e colisões de destino.
 - `style.py`: validação e correções formais de notas Wiki.
 - `health.py`: orquestração do `fix-wiki`.
-- `linking.py`: chamada controlada do linker e auditoria do grafo.
+- `graph.py`: auditoria de grafo, WikiLinks, catálogo e aliases.
+- `linker.py`: vocabulário, planejamento, aplicação e CLI do linker.
+- `link_terms.py`: helpers compartilhados de aliases, catálogo e normalização.
+- `linking.py`: chamada direta do linker e auditoria do grafo para `med_ops`.
 
 `med_ops.py` deve permanecer como shim mínimo de compatibilidade.

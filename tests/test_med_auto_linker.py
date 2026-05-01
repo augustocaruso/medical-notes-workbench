@@ -1,18 +1,14 @@
-import importlib.util
 import json
 import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-LINKER_PATH = ROOT / "extension" / "scripts" / "mednotes" / "med_linker.py"
+SCRIPT_DIR = ROOT / "extension" / "scripts" / "mednotes"
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
-
-spec = importlib.util.spec_from_file_location("med_linker", LINKER_PATH)
-med_linker = importlib.util.module_from_spec(spec)
-assert spec.loader is not None
-sys.modules["med_linker"] = med_linker
-spec.loader.exec_module(med_linker)
+from wiki import linker as med_linker  # noqa: E402
 
 
 def test_extract_aliases_inline_and_multiline():

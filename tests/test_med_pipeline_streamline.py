@@ -228,6 +228,9 @@ def test_wiki_operations_are_extracted_into_real_modules():
             "style": importlib.import_module("wiki.style"),
             "health": importlib.import_module("wiki.health"),
             "linking": importlib.import_module("wiki.linking"),
+            "graph": importlib.import_module("wiki.graph"),
+            "linker": importlib.import_module("wiki.linker"),
+            "link_terms": importlib.import_module("wiki.link_terms"),
         }
     finally:
         if added_path:
@@ -259,6 +262,10 @@ def test_wiki_operations_are_extracted_into_real_modules():
     assert hasattr(modules["style"], "validate_wiki_style")
     assert hasattr(modules["health"], "fix_wiki_health")
     assert hasattr(modules["linking"], "run_linker")
+    assert hasattr(modules["graph"], "audit_wiki_graph")
+    assert hasattr(modules["linker"], "build_vocabulary")
+    assert hasattr(modules["link_terms"], "extract_aliases")
+    assert "subprocess" not in (script_dir / "wiki" / "linking.py").read_text(encoding="utf-8")
 
     facade = MED_OPS.read_text(encoding="utf-8")
     assert "from wiki.api import *" in facade
@@ -269,6 +276,7 @@ def test_domain_script_wrappers_expose_help():
     for path in (
         EXTENSION / "scripts" / "mednotes" / "wiki" / "ops.py",
         EXTENSION / "scripts" / "mednotes" / "wiki" / "linker.py",
+        EXTENSION / "scripts" / "mednotes" / "wiki" / "graph.py",
         EXTENSION / "scripts" / "mednotes" / "flashcards" / "sources.py",
         EXTENSION / "scripts" / "mednotes" / "flashcards" / "pipeline.py",
         EXTENSION / "scripts" / "mednotes" / "flashcards" / "index.py",
@@ -277,6 +285,25 @@ def test_domain_script_wrappers_expose_help():
         EXTENSION / "scripts" / "mednotes" / "flashcards" / "sync_rules.py",
         EXTENSION / "scripts" / "mednotes" / "obsidian" / "notes.py",
     ):
+        result = subprocess.run(
+            [os.sys.executable, str(path), "--help"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert result.returncode == 0
+        assert "usage:" in result.stdout
+
+
+def test_wiki_graph_and_linker_keep_compat_entrypoints():
+    for legacy, package_module in (
+        ("med_linker.py", "linker"),
+        ("wiki_graph.py", "graph"),
+    ):
+        path = EXTENSION / "scripts" / "mednotes" / legacy
+        text = path.read_text(encoding="utf-8")
+        assert len(text.splitlines()) <= 30
+        assert f"from wiki import {package_module} as _impl" in text
         result = subprocess.run(
             [os.sys.executable, str(path), "--help"],
             text=True,

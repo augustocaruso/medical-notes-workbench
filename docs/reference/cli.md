@@ -32,7 +32,7 @@ contagens, arquivos relevantes, warnings/blockers e proxima acao.
 - `python scripts/mednotes/med_ops.py taxonomy-canonical|taxonomy-tree|taxonomy-audit|taxonomy-resolve|taxonomy-migrate`
 - `python scripts/mednotes/med_ops.py graph-audit|run-linker`
 
-Domain wrappers are also available for clearer script organization:
+Domain entries are also available for clearer script organization:
 
 - `python scripts/mednotes/wiki/ops.py ...`
 - `python scripts/mednotes/wiki/tree.py ...`

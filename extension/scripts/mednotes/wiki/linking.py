@@ -1,13 +1,13 @@
 """Semantic linker and graph-audit orchestration used by med_ops."""
 from __future__ import annotations
 
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 import json
-import os
-import subprocess
-import sys
 from typing import Any
 
-import wiki_graph
+from wiki import graph as wiki_graph
+from wiki import linker as wiki_linker
 from wiki.common import MissingPathError
 from wiki.config import MedConfig
 
@@ -16,24 +16,20 @@ def run_linker(config: MedConfig, dry_run: bool = False) -> dict[str, Any]:
     linker = config.linker_path
     if not linker.exists():
         raise MissingPathError(f"Semantic linker not found: {linker}")
-    env = os.environ.copy()
-    env.setdefault("MED_WIKI_DIR", str(config.wiki_dir))
-    env.setdefault("MED_CATALOG_PATH", str(config.catalog_path))
-    command = [
-        sys.executable,
-        str(linker),
-        "--wiki-dir",
-        str(config.wiki_dir),
-        "--catalog",
-        str(config.catalog_path),
-        "--json",
-        "--no-verify",
-    ]
-    if dry_run:
-        command.append("--dry-run")
-    result = subprocess.run(command, text=True, capture_output=True, check=False, env=env)
+    stdout = StringIO()
+    stderr = StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        returncode = wiki_linker.run(
+            config.wiki_dir,
+            catalog_path=config.catalog_path,
+            dry_run=dry_run,
+            json_output=True,
+            verify=False,
+        )
+    stdout_text = stdout.getvalue()
+    stderr_text = stderr.getvalue()
     try:
-        payload = json.loads(result.stdout) if result.stdout.strip() else {}
+        payload = json.loads(stdout_text) if stdout_text.strip() else {}
     except json.JSONDecodeError:
         payload = {"ok": False, "parse_error": "linker stdout was not JSON"}
     if not isinstance(payload, dict):
@@ -42,9 +38,9 @@ def run_linker(config: MedConfig, dry_run: bool = False) -> dict[str, Any]:
         {
             "dry_run": dry_run,
             "linker_path": str(linker),
-            "returncode": result.returncode,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
+            "returncode": returncode,
+            "stdout": stdout_text,
+            "stderr": stderr_text,
         }
     )
     return payload

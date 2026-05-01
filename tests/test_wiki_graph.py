@@ -1,18 +1,14 @@
-import importlib.util
 import json
 import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-GRAPH_PATH = ROOT / "extension" / "scripts" / "mednotes" / "wiki_graph.py"
+SCRIPT_DIR = ROOT / "extension" / "scripts" / "mednotes"
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
-
-spec = importlib.util.spec_from_file_location("wiki_graph", GRAPH_PATH)
-wiki_graph = importlib.util.module_from_spec(spec)
-assert spec.loader is not None
-sys.modules["wiki_graph"] = wiki_graph
-spec.loader.exec_module(wiki_graph)
+from wiki import graph as wiki_graph  # noqa: E402
 
 
 def _write(path: Path, text: str) -> Path:
