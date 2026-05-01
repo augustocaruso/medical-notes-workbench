@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import wiki_note_style
+from wiki import note_style
 from wiki.common import MissingPathError, ValidationError
 from wiki.raw_chats import atomic_write_text, create_backup, read_note_meta
 
@@ -17,7 +17,7 @@ def _style_report_error_message(report: dict[str, Any]) -> str:
 def validate_wiki_note_contract(content: str, *, title: str, raw_file: Path) -> dict[str, Any]:
     """Reject generated Wiki_Medicina notes that drift from the house style."""
 
-    report = wiki_note_style.validate_note_style(
+    report = note_style.validate_note_style(
         content,
         title=title,
         raw_meta=read_note_meta(raw_file),
@@ -33,8 +33,8 @@ def validate_note_style_file(content_path: Path, title: str, raw_file: Path | No
         raise MissingPathError(f"Content file not found: {content_path}")
     if raw_file is not None and not raw_file.exists():
         raise MissingPathError(f"Raw file not found: {raw_file}")
-    raw_meta = wiki_note_style.raw_meta_from_file(raw_file) if raw_file is not None else {}
-    return wiki_note_style.validate_note_style(
+    raw_meta = note_style.raw_meta_from_file(raw_file) if raw_file is not None else {}
+    return note_style.validate_note_style(
         content_path.read_text(encoding="utf-8"),
         title=title,
         raw_meta=raw_meta,
@@ -52,8 +52,8 @@ def fix_note_style_file(
         raise MissingPathError(f"Content file not found: {content_path}")
     if raw_file is not None and not raw_file.exists():
         raise MissingPathError(f"Raw file not found: {raw_file}")
-    raw_meta = wiki_note_style.raw_meta_from_file(raw_file) if raw_file is not None else {}
-    fixed_content, report = wiki_note_style.fix_note_style(
+    raw_meta = note_style.raw_meta_from_file(raw_file) if raw_file is not None else {}
+    fixed_content, report = note_style.fix_note_style(
         content_path.read_text(encoding="utf-8"),
         title=title,
         raw_meta=raw_meta,
@@ -71,7 +71,7 @@ def validate_wiki_style(wiki_dir: Path) -> dict[str, Any]:
         raise MissingPathError(f"Wiki dir not found: {wiki_dir}")
     if not wiki_dir.is_dir():
         raise ValidationError(f"Wiki dir is not a directory: {wiki_dir}")
-    return wiki_note_style.validate_wiki_dir(wiki_dir)
+    return note_style.validate_wiki_dir(wiki_dir)
 
 
 def fix_wiki_style(wiki_dir: Path, apply: bool = False, backup: bool = False) -> dict[str, Any]:
@@ -86,8 +86,8 @@ def fix_wiki_style(wiki_dir: Path, apply: bool = False, backup: bool = False) ->
     backup_paths: list[str] = []
     for path in files:
         original = path.read_text(encoding="utf-8")
-        title = wiki_note_style.infer_title(original, path)
-        fixed, report = wiki_note_style.fix_note_style(original, title=title, path=str(path))
+        title = note_style.infer_title(original, path)
+        fixed, report = note_style.fix_note_style(original, title=title, path=str(path))
         changed = fixed != original
         report["changed"] = changed
         report["would_write"] = changed
@@ -105,7 +105,7 @@ def fix_wiki_style(wiki_dir: Path, apply: bool = False, backup: bool = False) ->
             written_count += 1
         reports.append(report)
     return {
-        "schema": wiki_note_style.STYLE_FIX_SCHEMA,
+        "schema": note_style.STYLE_FIX_SCHEMA,
         "wiki_dir": str(wiki_dir),
         "dry_run": not apply,
         "apply": apply,
@@ -137,11 +137,11 @@ def apply_style_rewrite(
         raise MissingPathError(f"Rewritten content file not found: {content_path}")
     original = target_path.read_text(encoding="utf-8")
     rewritten = content_path.read_text(encoding="utf-8")
-    title = wiki_note_style.infer_title(rewritten, target_path)
-    original_title = wiki_note_style.infer_title(original, target_path)
+    title = note_style.infer_title(rewritten, target_path)
+    original_title = note_style.infer_title(original, target_path)
     if original_title != target_path.stem and title != original_title:
         raise ValidationError(f"Rewritten note title changed from {original_title!r} to {title!r}")
-    report = wiki_note_style.validate_note_style(rewritten, title=title, path=str(target_path))
+    report = note_style.validate_note_style(rewritten, title=title, path=str(target_path))
     result: dict[str, Any] = {
         "target_path": str(target_path),
         "content_path": str(content_path),

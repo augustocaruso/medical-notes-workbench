@@ -22,6 +22,8 @@ Módulos internos:
   auditoria, migração e rollback.
 - `publish.py`: `stage-note`, `publish-batch` e colisões de destino.
 - `style.py`: validação e correções formais de notas Wiki.
+- `note_style/`: contrato de estilo das notas, com frontmatter, validação,
+  fixes determinísticos, tabelas e prompt de reescrita controlada.
 - `health.py`: orquestração do `fix-wiki`.
 - `graph.py`: auditoria de grafo, WikiLinks, catálogo e aliases.
 - `linker.py`: vocabulário, planejamento, aplicação e CLI do linker.

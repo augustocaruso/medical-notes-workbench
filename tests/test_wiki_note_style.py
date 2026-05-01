@@ -1,4 +1,3 @@
-import importlib.util
 import json
 import subprocess
 import sys
@@ -6,16 +5,14 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-STYLE_PATH = ROOT / "extension" / "scripts" / "mednotes" / "wiki_note_style.py"
+SCRIPT_DIR = ROOT / "extension" / "scripts" / "mednotes"
 MED_OPS_PATH = ROOT / "extension" / "scripts" / "mednotes" / "med_ops.py"
 FIXTURES = ROOT / "tests" / "fixtures"
 
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
-spec = importlib.util.spec_from_file_location("wiki_note_style", STYLE_PATH)
-wiki_note_style = importlib.util.module_from_spec(spec)
-assert spec.loader is not None
-sys.modules["wiki_note_style"] = wiki_note_style
-spec.loader.exec_module(wiki_note_style)
+from wiki import note_style  # noqa: E402
 
 
 def _write(path: Path, text: str) -> Path:
@@ -59,10 +56,33 @@ def _valid_note(title: str, related: str = "ISRS") -> str:
     )
 
 
+def test_legacy_wiki_note_style_shim_exports_public_surface():
+    import importlib.util
+
+    style_path = SCRIPT_DIR / "wiki_note_style.py"
+    spec = importlib.util.spec_from_file_location("wiki_note_style_compat", style_path)
+    compat = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(compat)
+
+    for name in (
+        "STYLE_AUDIT_SCHEMA",
+        "STYLE_FIX_SCHEMA",
+        "STYLE_REPORT_SCHEMA",
+        "StyleIssue",
+        "fix_note_style",
+        "infer_title",
+        "raw_meta_from_file",
+        "validate_note_style",
+        "validate_wiki_dir",
+    ):
+        assert getattr(compat, name) is getattr(note_style, name)
+
+
 def test_golden_wiki_style_fixtures_pass():
     for path in sorted(FIXTURES.glob("wiki_style_*.md")):
         content = path.read_text(encoding="utf-8")
-        report = wiki_note_style.validate_note_style(content, title=_title_from_fixture(path), path=str(path))
+        report = note_style.validate_note_style(content, title=_title_from_fixture(path), path=str(path))
 
         assert report["ok"], path
         assert report["errors"] == []
@@ -196,7 +216,7 @@ def test_fix_note_spaces_callouts_and_normalizes_tables(tmp_path):
     )
     output = tmp_path / "fixed.md"
 
-    before = wiki_note_style.validate_note_style(bad.read_text(encoding="utf-8"), title="Escore HEART")
+    before = note_style.validate_note_style(bad.read_text(encoding="utf-8"), title="Escore HEART")
     before_codes = {item["code"] for item in before["errors"]}
     before_warnings = {item["code"] for item in before["warnings"]}
     assert "unescaped_wikilink_pipe_in_table" in before_codes
@@ -262,7 +282,7 @@ def test_style_warnings_are_non_blocking(tmp_path):
         "[[_Índice_Medicina]]\n"
     )
 
-    report = wiki_note_style.validate_note_style(content, title="Nota com Avisos")
+    report = note_style.validate_note_style(content, title="Nota com Avisos")
 
     assert report["ok"] is True
     codes = {item["code"] for item in report["warnings"]}

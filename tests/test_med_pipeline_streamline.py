@@ -226,6 +226,13 @@ def test_wiki_operations_are_extracted_into_real_modules():
             "taxonomy_migration": importlib.import_module("wiki.taxonomy.migration"),
             "publish": importlib.import_module("wiki.publish"),
             "style": importlib.import_module("wiki.style"),
+            "note_style": importlib.import_module("wiki.note_style"),
+            "note_style_models": importlib.import_module("wiki.note_style.models"),
+            "note_style_frontmatter": importlib.import_module("wiki.note_style.frontmatter"),
+            "note_style_validate": importlib.import_module("wiki.note_style.validate"),
+            "note_style_fixes": importlib.import_module("wiki.note_style.fixes"),
+            "note_style_tables": importlib.import_module("wiki.note_style.tables"),
+            "note_style_prompts": importlib.import_module("wiki.note_style.prompts"),
             "health": importlib.import_module("wiki.health"),
             "linking": importlib.import_module("wiki.linking"),
             "graph": importlib.import_module("wiki.graph"),
@@ -260,12 +267,28 @@ def test_wiki_operations_are_extracted_into_real_modules():
     assert hasattr(modules["taxonomy_migration"], "apply_taxonomy_migration")
     assert hasattr(modules["publish"], "publish_batch")
     assert hasattr(modules["style"], "validate_wiki_style")
+    assert hasattr(modules["note_style"], "validate_note_style")
+    assert hasattr(modules["note_style"], "fix_note_style")
+    assert hasattr(modules["note_style_models"], "StyleIssue")
+    assert hasattr(modules["note_style_frontmatter"], "raw_meta_from_file")
+    assert hasattr(modules["note_style_validate"], "validate_wiki_dir")
+    assert hasattr(modules["note_style_fixes"], "fix_note_style")
+    assert hasattr(modules["note_style_tables"], "normalize_markdown_tables")
+    assert hasattr(modules["note_style_prompts"], "rewrite_prompt")
     assert hasattr(modules["health"], "fix_wiki_health")
     assert hasattr(modules["linking"], "run_linker")
     assert hasattr(modules["graph"], "audit_wiki_graph")
     assert hasattr(modules["linker"], "build_vocabulary")
     assert hasattr(modules["link_terms"], "extract_aliases")
     assert "subprocess" not in (script_dir / "wiki" / "linking.py").read_text(encoding="utf-8")
+    style_text = (script_dir / "wiki" / "style.py").read_text(encoding="utf-8")
+    assert "import wiki_note_style" not in style_text
+    assert "from wiki import note_style" in style_text
+
+    style_shim = script_dir / "wiki_note_style.py"
+    style_shim_text = style_shim.read_text(encoding="utf-8")
+    assert len(style_shim_text.splitlines()) <= 25
+    assert "from wiki import note_style as _impl" in style_shim_text
 
     facade = MED_OPS.read_text(encoding="utf-8")
     assert "from wiki.api import *" in facade
