@@ -2,7 +2,8 @@
 
 These files preserve working Gemini CLI instructions that inform the
 chat-processing and flashcard pipelines. They are reference material for
-commands and subagents, not activatable Gemini skills.
+commands, runbook skills, and subagents; they are not activatable Gemini skills
+themselves.
 
 - `factory.md`: original `med-chat-processor` workflow, "A Fábrica".
 - `knowledge-architect.md`: original Padrão Ouro, "A Mente".
@@ -14,5 +15,7 @@ commands and subagents, not activatable Gemini skills.
   creation from Obsidian notes.
 
 When adapting the pipeline, keep the original wording as intact as practical.
-Put extension-specific behavior in commands, agents, or scripts instead of
-rewriting these source documents.
+Put extension-specific workflow behavior in activatable skills, commands,
+agents, or scripts instead of rewriting these source documents. Keep
+`GEMINI.md` as a compact routing kernel and load these documents only when a
+workflow needs them.

@@ -31,7 +31,7 @@ _DEFAULTS: dict[str, Any] = {
         ],
         "top_k_per_source": 4,
     },
-    # `[gemini]` é consumido pelo orquestrador (`scripts/run_agent.py`),
+    # `[gemini]` é consumido pelo orquestrador (`scripts/enrich_notes.py`),
     # não pelo toolbox em si. O enricher core não invoca LLM.
     "gemini": {
         "binary": "gemini",

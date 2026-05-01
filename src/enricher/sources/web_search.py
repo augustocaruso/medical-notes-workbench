@@ -2,7 +2,8 @@
 
 Pra cobrir o que Wikimedia/fontes médicas curadas não têm. Pago — usuário
 fornece ``SERPAPI_KEY`` no ambiente. Sem a chave, ``search`` devolve ``[]``
-silenciosamente (contrato: falha de fonte não derruba o resto do agente).
+silenciosamente. Cota/limite esgotado levanta ``SourceQuotaExceeded`` para o
+orquestrador parar o lote e avisar o usuário.
 """
 from __future__ import annotations
 
@@ -12,12 +13,24 @@ from typing import Any
 
 import httpx
 
-from enricher.sources import ImageCandidate
+from enricher.sources import ImageCandidate, SourceQuotaExceeded
 
 
 NAME = "web_search"
 
 _ENDPOINT = "https://serpapi.com/search.json"
+_QUOTA_STATUS_CODES = {402, 429}
+_QUOTA_MARKERS = (
+    "quota",
+    "exceeded",
+    "exhaust",
+    "run out",
+    "monthly search",
+    "searches per month",
+    "credits",
+    "rate limit",
+    "too many requests",
+)
 
 
 _LANGUAGE_TO_GOOGLE_PARAMS = {
@@ -94,13 +107,56 @@ def search(
         client = httpx.Client(timeout=15.0)
     try:
         resp = client.get(_ENDPOINT, params=params)
+        error_message = _response_error_message(resp)
+        if _is_quota_error(resp.status_code, error_message):
+            raise SourceQuotaExceeded(
+                NAME,
+                f"SerpAPI bloqueou a busca por cota/limite: "
+                f"{error_message or f'HTTP {resp.status_code}'}",
+            )
         resp.raise_for_status()
         data = resp.json()
+        api_error = _api_error_message(data)
+        if _is_quota_error(resp.status_code, api_error):
+            raise SourceQuotaExceeded(
+                NAME,
+                f"SerpAPI bloqueou a busca por cota/limite: {api_error}",
+            )
     finally:
         if owns_client:
             client.close()
 
     return _parse(data, top_k=top_k)
+
+
+def _response_error_message(resp: httpx.Response) -> str:
+    try:
+        data = resp.json()
+    except ValueError:
+        return resp.text.strip()
+    return _api_error_message(data)
+
+
+def _api_error_message(data: Any) -> str:
+    if not isinstance(data, dict):
+        return ""
+    for key in ("error", "message"):
+        value = data.get(key)
+        if value:
+            return str(value)
+    errors = data.get("errors")
+    if isinstance(errors, list):
+        return "; ".join(str(item) for item in errors if item)
+    if errors:
+        return str(errors)
+    return ""
+
+
+def _is_quota_error(status_code: int, message: str) -> bool:
+    lowered = (message or "").lower()
+    if status_code in _QUOTA_STATUS_CODES:
+        return True
+    return bool(lowered and any(marker in lowered for marker in _QUOTA_MARKERS))
 
 
 def _parse(data: dict[str, Any], *, top_k: int) -> list[ImageCandidate]:

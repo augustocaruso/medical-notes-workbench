@@ -32,6 +32,7 @@ if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 import wiki_note_style  # noqa: E402
+import wiki_graph  # noqa: E402
 
 
 DEFAULT_RAW_DIR = r"C:\Users\leona\OneDrive\Chats_Raw"
@@ -49,6 +50,7 @@ EXIT_LINKER = 6
 MIGRATION_PLAN_SCHEMA = "medical-notes-workbench.taxonomy-migration-plan.v1"
 MIGRATION_RECEIPT_SCHEMA = "medical-notes-workbench.taxonomy-migration-receipt.v1"
 SUBAGENT_PLAN_SCHEMA = "medical-notes-workbench.subagent-plan.v1"
+WIKI_HEALTH_FIX_SCHEMA = "medical-notes-workbench.wiki-health-fix.v1"
 
 _FRONTMATTER_DELIM = "---"
 _KEY_RE = re.compile(r"^([A-Za-z0-9_-]+)\s*:\s*(.*)$")
@@ -750,7 +752,7 @@ def resolve_taxonomy(
     taxonomy: str,
     *,
     title: str | None = None,
-    allow_new_leaf: bool = False,
+    allow_new_leaf: bool = True,
 ) -> TaxonomyResolution:
     requested_parts = normalize_taxonomy(taxonomy)
     canonical_request_parts, alias_canonicalized = _canonicalize_taxonomy_parts(requested_parts)
@@ -770,6 +772,11 @@ def resolve_taxonomy(
         is_leaf = idx == len(canonical_request_parts) - 1
         matched, suggestions = _match_existing_segment(parent, requested)
         if matched is None:
+            if idx < 2:
+                canonical_parts.append(requested)
+                new_dirs.append("/".join(canonical_parts))
+                parent = parent / requested
+                continue
             if is_leaf and allow_new_leaf and canonical_parts:
                 if suggestions:
                     raise ValidationError(
@@ -808,7 +815,7 @@ def resolve_target_for_note(
     taxonomy: str,
     title: str,
     *,
-    allow_new_taxonomy_leaf: bool = False,
+    allow_new_taxonomy_leaf: bool = True,
 ) -> tuple[Path, TaxonomyResolution]:
     resolution = resolve_taxonomy(wiki_dir, taxonomy, title=title, allow_new_leaf=allow_new_taxonomy_leaf)
     return wiki_dir.joinpath(*resolution.parts, f"{safe_title(title)}.md"), resolution
@@ -819,7 +826,7 @@ def target_for_note(
     taxonomy: str,
     title: str,
     *,
-    allow_new_taxonomy_leaf: bool = False,
+    allow_new_taxonomy_leaf: bool = True,
 ) -> Path:
     target, _resolution = resolve_target_for_note(
         wiki_dir,
@@ -1244,7 +1251,7 @@ def plan_publish_batch(
     data: dict[str, Any],
     config: MedConfig,
     collision: str,
-    allow_new_taxonomy_leaf: bool = False,
+    allow_new_taxonomy_leaf: bool = True,
 ) -> list[dict[str, Any]]:
     planned_batches: list[dict[str, Any]] = []
     reserved: set[Path] = set()
@@ -1297,7 +1304,7 @@ def publish_batch(
     collision: str = "abort",
     dry_run: bool = False,
     backup: bool = False,
-    allow_new_taxonomy_leaf: bool = False,
+    allow_new_taxonomy_leaf: bool = True,
 ) -> dict[str, Any]:
     data = _load_manifest(manifest)
     plan = plan_publish_batch(data, config, collision, allow_new_taxonomy_leaf=allow_new_taxonomy_leaf)
@@ -1355,7 +1362,7 @@ def stage_note(
     content_path: Path,
     dry_run: bool = False,
     config: MedConfig | None = None,
-    allow_new_taxonomy_leaf: bool = False,
+    allow_new_taxonomy_leaf: bool = True,
 ) -> dict[str, Any]:
     taxonomy_resolution = (
         resolve_taxonomy(config.wiki_dir, taxonomy, title=title, allow_new_leaf=allow_new_taxonomy_leaf)
@@ -1399,8 +1406,6 @@ def stage_note(
 
 def run_linker(config: MedConfig, dry_run: bool = False) -> dict[str, Any]:
     linker = config.linker_path
-    if dry_run:
-        return {"dry_run": True, "linker_path": str(linker), "would_run": linker.exists()}
     if not linker.exists():
         raise MissingPathError(f"Semantic linker not found: {linker}")
     env = os.environ.copy()
@@ -1413,15 +1418,32 @@ def run_linker(config: MedConfig, dry_run: bool = False) -> dict[str, Any]:
         str(config.wiki_dir),
         "--catalog",
         str(config.catalog_path),
+        "--json",
+        "--no-verify",
     ]
+    if dry_run:
+        command.append("--dry-run")
     result = subprocess.run(command, text=True, capture_output=True, check=False, env=env)
-    return {
-        "dry_run": False,
-        "linker_path": str(linker),
-        "returncode": result.returncode,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
-    }
+    try:
+        payload = json.loads(result.stdout) if result.stdout.strip() else {}
+    except json.JSONDecodeError:
+        payload = {"ok": False, "parse_error": "linker stdout was not JSON"}
+    if not isinstance(payload, dict):
+        payload = {"ok": False, "parse_error": "linker stdout JSON was not an object"}
+    payload.update(
+        {
+            "dry_run": dry_run,
+            "linker_path": str(linker),
+            "returncode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        }
+    )
+    return payload
+
+
+def graph_audit(config: MedConfig) -> dict[str, Any]:
+    return wiki_graph.audit_wiki_graph(config.wiki_dir, catalog_path=config.catalog_path)
 
 
 def validate_note_style_file(content_path: Path, title: str, raw_file: Path | None = None) -> dict[str, Any]:
@@ -1516,6 +1538,74 @@ def fix_wiki_style(wiki_dir: Path, apply: bool = False, backup: bool = False) ->
     }
 
 
+def _requires_style_rewrite(audit: dict[str, Any]) -> bool:
+    return any(report.get("requires_llm_rewrite") for report in audit.get("reports", []))
+
+
+def _style_rewrite_plan_if_needed(config: MedConfig, audit: dict[str, Any]) -> dict[str, Any] | None:
+    if not _requires_style_rewrite(audit):
+        return None
+    return plan_subagents(config, "style-rewrite", max_concurrency=3)
+
+
+def _taxonomy_action_issue_count(audit: dict[str, Any]) -> int:
+    action_keys = (
+        "proposed_moves",
+        "unmapped_top_level_dirs",
+        "duplicate_destinations",
+        "duplicate_directory_groups",
+        "root_notes",
+    )
+    return sum(len(audit.get(key, [])) for key in action_keys)
+
+
+def fix_wiki_health(config: MedConfig, apply: bool = False, backup: bool = False) -> dict[str, Any]:
+    taxonomy_report = taxonomy_audit(config.wiki_dir)
+    taxonomy_issue_count = _taxonomy_action_issue_count(taxonomy_report)
+    style_fix = fix_wiki_style(config.wiki_dir, apply=apply, backup=backup)
+    style_audit = validate_wiki_style(config.wiki_dir)
+    rewrite_plan = _style_rewrite_plan_if_needed(config, style_audit)
+    graph_before = graph_audit(config)
+    linker_dry_run = run_linker(config, dry_run=True)
+    linker_apply: dict[str, Any] | None = None
+    linker_skipped_reason = ""
+
+    if apply:
+        if rewrite_plan and rewrite_plan.get("item_count", 0):
+            linker_skipped_reason = "requires_llm_rewrite"
+        elif linker_dry_run.get("blocker_count", 0):
+            linker_skipped_reason = "graph_blockers"
+        else:
+            linker_apply = run_linker(config, dry_run=False)
+
+    graph_after = graph_audit(config)
+    return {
+        **style_fix,
+        "schema": WIKI_HEALTH_FIX_SCHEMA,
+        "style_fix": style_fix,
+        "style_audit": style_audit,
+        "taxonomy_audit": taxonomy_report,
+        "taxonomy_action_required": bool(taxonomy_issue_count),
+        "taxonomy_issue_count": taxonomy_issue_count,
+        "taxonomy_missing_canonical_dir_count": len(taxonomy_report.get("missing_canonical_dirs", [])),
+        "taxonomy_proposed_move_count": len(taxonomy_report.get("proposed_moves", [])),
+        "taxonomy_unmapped_top_level_dir_count": len(taxonomy_report.get("unmapped_top_level_dirs", [])),
+        "taxonomy_duplicate_destination_count": len(taxonomy_report.get("duplicate_destinations", [])),
+        "taxonomy_duplicate_directory_group_count": len(taxonomy_report.get("duplicate_directory_groups", [])),
+        "taxonomy_root_note_count": len(taxonomy_report.get("root_notes", [])),
+        "requires_llm_rewrite_count": sum(1 for item in style_audit.get("reports", []) if item.get("requires_llm_rewrite")),
+        "style_rewrite_plan": rewrite_plan,
+        "graph_audit": graph_before,
+        "graph_error_count": graph_before.get("error_count", 0),
+        "graph_warning_count": graph_before.get("warning_count", 0),
+        "linker_dry_run": linker_dry_run,
+        "linker_apply": linker_apply,
+        "linker_applied": bool(linker_apply and linker_apply.get("returncode") == 0),
+        "linker_skipped_reason": linker_skipped_reason,
+        "graph_audit_final": graph_after,
+    }
+
+
 def apply_style_rewrite(
     target_path: Path,
     content_path: Path,
@@ -1581,6 +1671,22 @@ def _add_common(parser: argparse.ArgumentParser, *, suppress_defaults: bool = Fa
     parser.add_argument("--catalog-path", default=default, help="Override CATALOGO_WIKI.json path.")
 
 
+def _add_taxonomy_creation_mode(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(allow_new_taxonomy_leaf=True)
+    parser.add_argument(
+        "--strict-existing-taxonomy",
+        action="store_false",
+        dest="allow_new_taxonomy_leaf",
+        help="Require the final non-canonical taxonomy leaf to already exist.",
+    )
+    parser.add_argument(
+        "--allow-new-taxonomy-leaf",
+        action="store_true",
+        dest="allow_new_taxonomy_leaf",
+        help=argparse.SUPPRESS,
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Medical Notes Workbench deterministic chat-processing operations.")
     _add_common(parser)
@@ -1621,11 +1727,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(taxonomy_resolve, suppress_defaults=True)
     taxonomy_resolve.add_argument("--taxonomy", required=True)
     taxonomy_resolve.add_argument("--title", help="Optional note title; rejects taxonomy/title duplication when provided.")
-    taxonomy_resolve.add_argument(
-        "--allow-new-taxonomy-leaf",
-        action="store_true",
-        help="Permit exactly the final taxonomy folder to be created under an existing parent.",
-    )
+    _add_taxonomy_creation_mode(taxonomy_resolve)
 
     triage = sub.add_parser("triage", help="Mark one raw chat as triaged.")
     _add_common(triage, suppress_defaults=True)
@@ -1651,11 +1753,7 @@ def build_parser() -> argparse.ArgumentParser:
     stage.add_argument("--title", required=True)
     stage.add_argument("--content", required=True)
     stage.add_argument("--dry-run", action="store_true")
-    stage.add_argument(
-        "--allow-new-taxonomy-leaf",
-        action="store_true",
-        help="Permit exactly the final taxonomy folder to be created under an existing parent.",
-    )
+    _add_taxonomy_creation_mode(stage)
 
     publish = sub.add_parser("publish-batch", help="Publish all notes from a manifest, then mark raw files processed.")
     _add_common(publish, suppress_defaults=True)
@@ -1663,11 +1761,7 @@ def build_parser() -> argparse.ArgumentParser:
     publish.add_argument("--dry-run", action="store_true")
     publish.add_argument("--backup", action="store_true", help="Create .bak files before mutating raw chat frontmatter.")
     publish.add_argument("--collision", choices=("abort", "suffix"), default="abort")
-    publish.add_argument(
-        "--allow-new-taxonomy-leaf",
-        action="store_true",
-        help="Permit exactly the final taxonomy folder to be created under an existing parent.",
-    )
+    _add_taxonomy_creation_mode(publish)
 
     commit = sub.add_parser("commit-batch", help="Compatibility alias for publish-batch.")
     _add_common(commit, suppress_defaults=True)
@@ -1675,15 +1769,16 @@ def build_parser() -> argparse.ArgumentParser:
     commit.add_argument("--dry-run", action="store_true")
     commit.add_argument("--backup", action="store_true", help="Create .bak files before mutating raw chat frontmatter.")
     commit.add_argument("--collision", choices=("abort", "suffix"), default="abort")
-    commit.add_argument(
-        "--allow-new-taxonomy-leaf",
-        action="store_true",
-        help="Permit exactly the final taxonomy folder to be created under an existing parent.",
-    )
+    _add_taxonomy_creation_mode(commit)
 
     linker = sub.add_parser("run-linker", help="Run configured semantic linker once.")
     _add_common(linker, suppress_defaults=True)
     linker.add_argument("--dry-run", action="store_true")
+    linker.add_argument("--json", action="store_true", help="Emit JSON report. Accepted for explicitness; output is always JSON.")
+
+    graph = sub.add_parser("graph-audit", help="Audit Wiki_Medicina link graph health without writing files.")
+    _add_common(graph, suppress_defaults=True)
+    graph.add_argument("--json", action="store_true", help="Emit JSON report. Accepted for explicitness; output is always JSON.")
 
     validate_note = sub.add_parser("validate-note", help="Validate one generated Wiki_Medicina note style.")
     _add_common(validate_note, suppress_defaults=True)
@@ -1704,7 +1799,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(validate_wiki, suppress_defaults=True)
     validate_wiki.add_argument("--json", action="store_true", help="Emit JSON report. Accepted for explicitness; output is always JSON.")
 
-    fix_wiki = sub.add_parser("fix-wiki", help="Apply deterministic style fixes across Wiki_Medicina.")
+    fix_wiki = sub.add_parser("fix-wiki", help="Audit/fix Wiki_Medicina style and graph health.")
     _add_common(fix_wiki, suppress_defaults=True)
     fix_wiki.add_argument("--apply", action="store_true", help="Write changes in-place. Without this, only reports what would change.")
     fix_wiki.add_argument("--backup", action="store_true", help="Create .bak files before mutating notes when --apply is used.")
@@ -1825,6 +1920,11 @@ def main(argv: list[str] | None = None) -> int:
             _json(result)
             if not result.get("dry_run") and result.get("returncode", 0) != 0:
                 return EXIT_LINKER
+        elif args.command == "graph-audit":
+            report = graph_audit(config)
+            _json(report)
+            if report.get("error_count", 0):
+                return EXIT_VALIDATION
         elif args.command == "validate-note":
             report = validate_note_style_file(
                 _path(args.content),
@@ -1850,10 +1950,13 @@ def main(argv: list[str] | None = None) -> int:
             if audit["error_count"]:
                 return EXIT_VALIDATION
         elif args.command == "fix-wiki":
-            report = fix_wiki_style(config.wiki_dir, apply=args.apply, backup=args.backup)
+            report = fix_wiki_health(config, apply=args.apply, backup=args.backup)
             _json(report)
-            if report["error_count"]:
+            if report["error_count"] or report.get("graph_error_count", 0) or report.get("taxonomy_action_required"):
                 return EXIT_VALIDATION
+            linker_apply = report.get("linker_apply")
+            if isinstance(linker_apply, dict) and linker_apply.get("returncode", 0) != 0:
+                return EXIT_LINKER
         elif args.command == "apply-style-rewrite":
             result = apply_style_rewrite(
                 _path(args.target),

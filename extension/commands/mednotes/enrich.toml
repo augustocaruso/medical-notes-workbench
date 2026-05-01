@@ -1,18 +1,15 @@
-description = "Enriquece uma nota medica Markdown com imagens."
+description = "Enriquece uma ou mais notas medicas Markdown com imagens."
 prompt = '''
-Enriqueça a nota medica Markdown indicada pelo usuario.
+Enriqueça notas médicas Markdown com imagens.
 
-Argumentos do usuario: {{args}}
+Argumentos do usuário: {{args}}
 
-Use a skill `enrich-medical-note` desta extensao. A raiz padrao da extensao instalada e `~/.gemini/extensions/medical-notes-workbench`; se ela nao existir, localize a extensao ou pergunte ao usuario.
+Use a skill `enrich-medical-note`. Ela é o runbook oficial; o resumo do workflow
+está em `docs/workflows/enrich.md`.
 
-Fluxo:
-1. Identifique o caminho da nota `.md` em `{{args}}`. Se ausente, peça o caminho.
-2. Garanta que `.venv` existe e que o pacote esta instalado. Use `.\.venv\Scripts\python.exe` no Windows ou `.venv/bin/python` em macOS/Linux.
-3. Garanta que `config.toml` existe e que `[vault].path` aponta para o vault Obsidian. Se estiver vazio, peça o caminho e atualize o arquivo.
-4. Rode o Python da venv com `scripts/run_agent.py "<nota.md>" --config config.toml`.
-5. Se a nota ja tiver `images_enriched: true` e o usuario pediu refazer, rode novamente com `--force`.
-6. Resuma quantas imagens foram inseridas, quais fontes foram usadas e o caminho da nota.
-
-Nao edite o conteudo textual da nota fora dos blocos de imagem/caption gerados pelo enricher.
+Invariantes do launcher:
+- Identifique arquivos `.md`, diretórios, globs e menções `@...`; peça caminho se não houver alvo.
+- Execute o orquestrador canônico `scripts/enrich_notes.py` com todos os alvos em uma invocação.
+- Use `--force` somente se o usuário pedir refazer.
+- Não edite texto clínico fora dos blocos de imagem/caption do enricher.
 '''

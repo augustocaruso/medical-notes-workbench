@@ -1,14 +1,16 @@
 ---
 name: enrich-medical-note
-description: Enriquece notas médicas em Markdown com imagens usando o módulo enricher empacotado no Medical Notes Workbench. Use quando o usuário pedir para enriquecer, ilustrar, adicionar figuras ou buscar imagens para uma nota médica `.md`.
+description: Enriquece notas médicas em Markdown com imagens usando o módulo enricher empacotado no Medical Notes Workbench. Use quando o usuário pedir para enriquecer, ilustrar, adicionar figuras ou buscar imagens para uma ou mais notas médicas `.md`.
 ---
 
 # Skill: enrich-medical-note
 
+Resumo canônico do workflow: `docs/workflows/enrich.md`.
+
 ## Quando usar
 
-- O usuário pede para enriquecer/ilustrar uma nota Markdown médica.
-- O usuário aponta um `.md` e quer figuras de anatomia, histologia, mecanismos,
+- O usuário pede para enriquecer/ilustrar uma ou mais notas Markdown médicas.
+- O usuário aponta um ou mais `.md` e quer figuras de anatomia, histologia, mecanismos,
   esquemas, radiologia ou fotos clínicas.
 - O usuário quer embutir imagens no formato Obsidian `![[...]]`.
 
@@ -28,10 +30,10 @@ hidratado pelo Gemini CLI, use o caminho padrão:
 
 ## Pré-condições
 
-1. A nota é um arquivo `.md` legível.
+1. Cada nota alvo é um arquivo `.md` legível.
 2. `${extensionPath}/config.toml` existe e tem `[vault].path` preenchido.
 3. `${extensionPath}/.venv` existe com o pacote instalado em modo editável.
-4. O `gemini` CLI está autenticado, pois `scripts/run_agent.py` chama o Gemini
+4. O `gemini` CLI está autenticado, pois `scripts/enrich_notes.py` chama o Gemini
    para âncoras e rerank visual.
 
 Se faltar ambiente Python:
@@ -61,21 +63,44 @@ Depois peça o caminho do vault Obsidian e preencha `[vault].path`.
 ```bash
 cd "${extensionPath}"
 # Windows
-.\.venv\Scripts\python.exe scripts/run_agent.py "<caminho-da-nota.md>" --config config.toml
+.\.venv\Scripts\python.exe scripts/enrich_notes.py "<caminho-da-nota.md>" --config config.toml
 
 # macOS/Linux
-.venv/bin/python scripts/run_agent.py "<caminho-da-nota.md>" --config config.toml
+.venv/bin/python scripts/enrich_notes.py "<caminho-da-nota.md>" --config config.toml
 ```
 
-Para refazer uma nota já enriquecida:
+Para enriquecer várias notas na mesma invocação:
 
 ```bash
 cd "${extensionPath}"
 # Windows
-.\.venv\Scripts\python.exe scripts/run_agent.py "<caminho-da-nota.md>" --config config.toml --force
+.\.venv\Scripts\python.exe scripts/enrich_notes.py "<nota1.md>" "<nota2.md>" --config config.toml
 
 # macOS/Linux
-.venv/bin/python scripts/run_agent.py "<caminho-da-nota.md>" --config config.toml --force
+.venv/bin/python scripts/enrich_notes.py "<nota1.md>" "<nota2.md>" --config config.toml
+```
+
+Também é possível passar diretórios e globs; diretórios são expandidos
+recursivamente para `.md`, com dedupe e ignorando anexos/cache:
+
+```bash
+cd "${extensionPath}"
+# Windows
+.\.venv\Scripts\python.exe scripts/enrich_notes.py "<pasta-de-notas>" "**\*.md" --config config.toml
+
+# macOS/Linux
+.venv/bin/python scripts/enrich_notes.py "<pasta-de-notas>" "**/*.md" --config config.toml
+```
+
+Para refazer notas já enriquecidas, aplique `--force` ao lote:
+
+```bash
+cd "${extensionPath}"
+# Windows
+.\.venv\Scripts\python.exe scripts/enrich_notes.py "<nota1.md>" "<nota2.md>" --config config.toml --force
+
+# macOS/Linux
+.venv/bin/python scripts/enrich_notes.py "<nota1.md>" "<nota2.md>" --config config.toml --force
 ```
 
 ## Como interpretar
@@ -84,8 +109,10 @@ Reporte ao usuário:
 
 - Número de âncoras encontradas.
 - Quantas imagens foram inseridas.
+- Notas puladas por `images_enriched: true`.
+- Notas sem inserção e falhas por nota.
 - Fontes usadas (`wikimedia`, `web_search`, etc.).
-- Caminho final da nota.
+- Caminhos finais das notas.
 - Falhas toleradas, como downloads `403` ou thumbs indisponíveis.
 
 ## Falhas comuns
@@ -98,5 +125,8 @@ Reporte ao usuário:
   `gemini extensions config medical-notes-workbench SERPAPI_KEY`.
   A chave é uma setting sensível da extensão e não precisa ser digitada a cada
   update normal.
+- **Cota/limite SerpAPI esgotado**: o lote para imediatamente com `rc=9` e
+  aviso claro para evitar novas chamadas à API. Oriente o usuário a renovar a
+  cota/chave ou rodar novamente só com fontes disponíveis.
 - **Downloads 403**: o downloader tenta headers browser-like e fallback de
   thumbnail SerpAPI quando disponível; se ainda falhar, pule a candidata.

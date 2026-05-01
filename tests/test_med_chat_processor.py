@@ -255,7 +255,7 @@ def test_resolve_taxonomy_rejects_new_intermediate_or_title_as_folder(tmp_path):
             raise AssertionError(f"taxonomy should fail: {taxonomy}")
 
 
-def test_resolve_taxonomy_can_allow_one_explicit_new_leaf(tmp_path):
+def test_resolve_taxonomy_creates_one_new_leaf_by_default(tmp_path):
     wiki_dir = tmp_path / "wiki"
     _write(wiki_dir / "1. Clínica Médica" / "Cardiologia" / "Arritmias" / "existente.md", "# Existente\n")
 
@@ -263,11 +263,71 @@ def test_resolve_taxonomy_can_allow_one_explicit_new_leaf(tmp_path):
         wiki_dir,
         "Cardiologia/Eletrofisiologia",
         title="Estudo Eletrofisiológico",
-        allow_new_leaf=True,
     )
 
     assert resolved.taxonomy == "1. Clínica Médica/Cardiologia/Eletrofisiologia"
     assert resolved.new_dirs == ("1. Clínica Médica/Cardiologia/Eletrofisiologia",)
+
+
+def test_resolve_taxonomy_can_require_existing_leaf_when_strict(tmp_path):
+    wiki_dir = tmp_path / "wiki"
+    _write(wiki_dir / "1. Clínica Médica" / "Cardiologia" / "Arritmias" / "existente.md", "# Existente\n")
+
+    try:
+        med_ops.resolve_taxonomy(
+            wiki_dir,
+            "Cardiologia/Eletrofisiologia",
+            title="Estudo Eletrofisiológico",
+            allow_new_leaf=False,
+        )
+    except med_ops.ValidationError as exc:
+        assert "Taxonomy segment must already exist under 1. Clínica Médica/Cardiologia" in str(exc)
+    else:
+        raise AssertionError("strict taxonomy should require the leaf to already exist")
+
+
+def test_resolve_taxonomy_materializes_missing_canonical_area_and_specialty(tmp_path):
+    wiki_dir = tmp_path / "wiki"
+    wiki_dir.mkdir()
+
+    resolved = med_ops.resolve_taxonomy(wiki_dir, "Psiquiatria", title="ISRS")
+
+    assert resolved.taxonomy == "1. Clínica Médica/Psiquiatria"
+    assert resolved.new_dirs == ("1. Clínica Médica", "1. Clínica Médica/Psiquiatria")
+
+
+def test_resolve_taxonomy_can_materialize_canonical_prefix_and_one_new_leaf(tmp_path):
+    wiki_dir = tmp_path / "wiki"
+    wiki_dir.mkdir()
+
+    resolved = med_ops.resolve_taxonomy(
+        wiki_dir,
+        "Cardiologia/Arritmias",
+        title="Fibrilação Atrial",
+    )
+
+    assert resolved.taxonomy == "1. Clínica Médica/Cardiologia/Arritmias"
+    assert resolved.new_dirs == (
+        "1. Clínica Médica",
+        "1. Clínica Médica/Cardiologia",
+        "1. Clínica Médica/Cardiologia/Arritmias",
+    )
+
+
+def test_resolve_taxonomy_blocks_new_noncanonical_intermediate_by_default(tmp_path):
+    wiki_dir = tmp_path / "wiki"
+    wiki_dir.mkdir()
+
+    try:
+        med_ops.resolve_taxonomy(
+            wiki_dir,
+            "Cardiologia/Ritmo/Supraventriculares",
+            title="Taquicardia Supraventricular",
+        )
+    except med_ops.ValidationError as exc:
+        assert "Taxonomy segment must already exist" in str(exc)
+    else:
+        raise AssertionError("noncanonical intermediate directory should fail")
 
 
 def test_taxonomy_audit_maps_legacy_top_level_folders_to_canonical_plan(tmp_path):
@@ -371,6 +431,26 @@ def test_publish_batch_creates_notes_then_marks_raw_processed_without_backup(tmp
     assert not (raw_dir / "chat.md.bak").exists()
 
 
+def test_publish_batch_creates_new_taxonomy_leaf_by_default(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    _mkdir_canonical(wiki_dir, "1. Clínica Médica/Cardiologia")
+    raw = _write(raw_dir / "chat.md", _raw_chat())
+    title = "Estudo Eletrofisiológico"
+    content = _write(tmp_path / "tmp" / "nota.md", _wiki_note(title=title))
+    manifest = _write(
+        tmp_path / "manifest.json",
+        json.dumps({"raw_file": str(raw), "notes": [{"taxonomy": "Cardiologia/Eletrofisiologia", "title": title, "content_path": str(content)}]}),
+    )
+
+    result = med_ops.publish_batch(manifest, _config(raw_dir, wiki_dir))
+
+    target = wiki_dir / "1. Clínica Médica" / "Cardiologia" / "Eletrofisiologia" / "Estudo Eletrofisiológico.md"
+    assert target.exists()
+    assert result["allow_new_taxonomy_leaf"] is True
+    assert result["created"] == [str(target)]
+
+
 def test_publish_batch_can_create_backup_when_requested(tmp_path):
     raw_dir = tmp_path / "raw"
     wiki_dir = tmp_path / "wiki"
@@ -423,7 +503,7 @@ def test_publish_batch_blocks_taxonomy_that_repeats_title_folder(tmp_path):
     )
 
     try:
-        med_ops.publish_batch(manifest, _config(raw_dir, wiki_dir), allow_new_taxonomy_leaf=True)
+        med_ops.publish_batch(manifest, _config(raw_dir, wiki_dir))
     except med_ops.ValidationError as exc:
         assert "do not repeat the note title" in str(exc)
     else:
@@ -617,6 +697,23 @@ def test_run_linker_missing_path_raises(tmp_path):
         pass
     else:
         raise AssertionError("missing linker should raise")
+
+
+def test_graph_audit_and_linker_dry_run_return_structured_reports(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    linker = MED_OPS_PATH.with_name("med_linker.py")
+    _write(wiki_dir / "Infarto.md", "---\naliases: [IAM]\n---\n# Infarto\n")
+    _write(wiki_dir / "Dor.md", "IAM deve ser lembrado.\n\n## 🔗 Notas Relacionadas\n- [[Infarto]]\n")
+    cfg = _config(raw_dir, wiki_dir, linker_path=linker)
+
+    graph = med_ops.graph_audit(cfg)
+    linker_plan = med_ops.run_linker(cfg, dry_run=True)
+
+    assert graph["schema"] == "medical-notes-workbench.wiki-graph-audit.v1"
+    assert linker_plan["dry_run"] is True
+    assert linker_plan["links_planned"] == 1
+    assert linker_plan["plans"][0]["insertions"][0]["target"] == "Infarto"
 
 
 def test_resolve_config_prefers_bundled_linker_when_no_override(monkeypatch, tmp_path):

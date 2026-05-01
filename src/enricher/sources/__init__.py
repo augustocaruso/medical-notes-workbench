@@ -4,13 +4,22 @@ Cada adapter expõe:
 - ``NAME``: identificador curto (``"wikimedia"``, ``"openstax"``, ...).
 - ``search(query, visual_type, *, top_k=4, client=None) -> list[ImageCandidate]``.
 
-Falha de um adapter não derruba os outros — a etapa de busca chama todos em
-paralelo e ignora exceções individuais.
+Falha comum de um adapter não derruba os outros — a etapa de busca chama todos
+e ignora exceções individuais. Exceções fatais, como cota paga esgotada, devem
+parar o orquestrador para evitar que o lote continue batendo na API.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional
+
+
+class SourceQuotaExceeded(RuntimeError):
+    """Erro fatal quando uma fonte paga bloqueia busca por cota/limite."""
+
+    def __init__(self, source: str, message: str):
+        super().__init__(message)
+        self.source = source
 
 
 @dataclass(frozen=True)
@@ -27,4 +36,4 @@ class ImageCandidate:
     thumbnail_url: Optional[str] = None  # fallback/proxy quando o original bloqueia
 
 
-__all__ = ["ImageCandidate"]
+__all__ = ["ImageCandidate", "SourceQuotaExceeded"]

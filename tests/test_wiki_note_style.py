@@ -38,6 +38,27 @@ def _title_from_fixture(path: Path) -> str:
     raise AssertionError(f"fixture has no title: {path}")
 
 
+def _valid_note(title: str, related: str = "ISRS") -> str:
+    return (
+        f"# {title}\n\n"
+        "Definição curta para manter o contrato visual.\n\n"
+        "## 🧬 Visão Geral\n"
+        "Texto.\n\n"
+        "## 🏁 Fechamento\n\n"
+        "### Resumo\n"
+        "Resumo.\n\n"
+        "### Key Points\n"
+        "- Ponto.\n\n"
+        "### Frase de Prova\n"
+        "Frase.\n\n"
+        "## 🔗 Notas Relacionadas\n"
+        f"- [[{related}]]\n\n"
+        "---\n"
+        "[Chat Original](https://gemini.google.com/app/batch)\n"
+        "[[_Índice_Medicina]]\n"
+    )
+
+
 def test_golden_wiki_style_fixtures_pass():
     for path in sorted(FIXTURES.glob("wiki_style_*.md")):
         content = path.read_text(encoding="utf-8")
@@ -281,8 +302,9 @@ def test_validate_wiki_audits_existing_notes_without_writing(tmp_path):
 
 def test_fix_wiki_dry_run_reports_batch_changes_without_writing(tmp_path):
     wiki = tmp_path / "Wiki_Medicina"
+    folder = wiki / "1. Clínica Médica" / "Cardiologia"
     note = _write(
-        wiki / "ISRS.md",
+        folder / "ISRS.md",
         "# ISRS\n\n"
         "Definição curta.\n\n"
         "## Diagnóstico\n"
@@ -298,8 +320,10 @@ def test_fix_wiki_dry_run_reports_batch_changes_without_writing(tmp_path):
         "- [[Depressão]]\n\n"
         "---\n"
         "[Chat Original](https://gemini.google.com/app/batch)\n"
-        "[[_Índice_Medicina]]\n",
+            "[[_Índice_Medicina]]\n",
     )
+    _write(folder / "Depressão.md", _valid_note("Depressão"))
+    _write(folder / "Cineangiocoronariografia (Cateterismo).md", _valid_note("CATE"))
     original = note.read_text(encoding="utf-8")
 
     result = subprocess.run(
@@ -321,14 +345,18 @@ def test_fix_wiki_dry_run_reports_batch_changes_without_writing(tmp_path):
     assert payload["dry_run"] is True
     assert payload["changed_count"] == 1
     assert payload["written_count"] == 0
-    assert payload["reports"][0]["would_write"] is True
+    assert payload["taxonomy_action_required"] is False
+    assert payload["taxonomy_audit"]["dry_run_only"] is True
+    isrs_report = next(item for item in payload["reports"] if item["path"].endswith("ISRS.md"))
+    assert isrs_report["would_write"] is True
     assert note.read_text(encoding="utf-8") == original
 
 
 def test_fix_wiki_apply_writes_batch_changes_and_can_backup(tmp_path):
     wiki = tmp_path / "Wiki_Medicina"
+    folder = wiki / "1. Clínica Médica" / "Cardiologia"
     note = _write(
-        wiki / "ISRS.md",
+        folder / "ISRS.md",
         "# ISRS\n\n"
         "Definição curta.\n\n"
         "## Diagnóstico\n"
@@ -344,8 +372,10 @@ def test_fix_wiki_apply_writes_batch_changes_and_can_backup(tmp_path):
         "- [[Depressão]]\n\n"
         "---\n"
         "[Chat Original](https://gemini.google.com/app/batch)\n"
-        "[[_Índice_Medicina]]\n",
+            "[[_Índice_Medicina]]\n",
     )
+    _write(folder / "Depressão.md", _valid_note("Depressão"))
+    _write(folder / "Cineangiocoronariografia (Cateterismo).md", _valid_note("CATE"))
 
     result = subprocess.run(
         [
@@ -368,13 +398,45 @@ def test_fix_wiki_apply_writes_batch_changes_and_can_backup(tmp_path):
     assert payload["dry_run"] is False
     assert payload["changed_count"] == 1
     assert payload["written_count"] == 1
-    assert payload["reports"][0]["wrote"] is True
-    assert Path(payload["reports"][0]["backup"]).exists()
+    assert payload["taxonomy_action_required"] is False
+    isrs_report = next(item for item in payload["reports"] if item["path"].endswith("ISRS.md"))
+    assert isrs_report["wrote"] is True
+    assert Path(isrs_report["backup"]).exists()
     fixed = note.read_text(encoding="utf-8")
     assert "## 🔎 Diagnóstico" in fixed
     assert "## 🏁 Fechamento" in fixed
     assert "## 🔗 Notas Relacionadas" in fixed
     assert "[[Cineangiocoronariografia (Cateterismo)|CATE]]" in fixed
+
+
+def test_fix_wiki_reports_taxonomy_issues_without_migrating(tmp_path):
+    wiki = tmp_path / "Wiki_Medicina"
+    legacy = wiki / "Cardiologia"
+    _write(legacy / "FA.md", _valid_note("FA", related="IAM"))
+    _write(legacy / "IAM.md", _valid_note("IAM", related="FA"))
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(MED_OPS_PATH),
+            "--wiki-dir",
+            str(wiki),
+            "fix-wiki",
+            "--json",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 3
+    payload = json.loads(result.stdout)
+    assert payload["taxonomy_action_required"] is True
+    assert payload["taxonomy_issue_count"] == 1
+    assert payload["taxonomy_proposed_move_count"] == 1
+    assert payload["taxonomy_audit"]["proposed_moves"][0]["source"] == "Cardiologia"
+    assert payload["taxonomy_audit"]["proposed_moves"][0]["destination"] == "1. Clínica Médica/Cardiologia"
+    assert (legacy / "FA.md").exists()
 
 
 def test_apply_style_rewrite_validates_and_replaces_existing_note(tmp_path):

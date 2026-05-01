@@ -1,35 +1,19 @@
-description = "Audita e corrige formalmente o estilo das notas Wiki_Medicina."
-prompt = """
-Audite e corrija formalmente o estilo das notas da Wiki_Medicina.
+description = "Audita e corrige a saude da Wiki_Medicina: estilo, reescritas e grafo."
+prompt = '''
+Audite ou corrija a saúde da Wiki_Medicina.
 
-Argumentos do usuario: {{args}}
+Argumentos do usuário: {{args}}
 
-Use o script empacotado desta extensao. A raiz padrao instalada e `~/.gemini/extensions/medical-notes-workbench`; se `${extensionPath}` estiver disponivel, prefira esse valor.
+Use a skill `fix-medical-wiki`. Ela é o runbook oficial; o resumo do workflow
+está em `docs/workflows/fix-wiki.md`.
 
-Fluxo:
-1. Localize `${extensionPath}/scripts/mednotes/med_ops.py`.
-2. Rode `fix-wiki --json` primeiro, sem `--apply`, para preview. Se o usuario passou `--wiki-dir`, `MED_WIKI_DIR` ou um path de Wiki, use esse destino.
-3. Mostre um resumo do preview: `file_count`, `changed_count`, `error_count`, `warning_count` e exemplos de arquivos que seriam alterados.
-4. So aplique se o usuario pediu explicitamente `--apply`, `--yes`, "aplicar", "corrigir de verdade" ou equivalente. Ao aplicar, inclua `--backup` por padrao, a menos que o usuario tenha pedido explicitamente sem backup.
-5. Depois do fix deterministico aplicado, rode `validate-wiki --json` para auditar o resultado.
-6. Se qualquer relatório tiver `requires_llm_rewrite: true`, gere a worklist deterministica com:
-   `python "<script>" plan-subagents --phase style-rewrite --max-concurrency 3 --temp-root <tmp-rewrites>`.
-   Use `batches[]`: acione o subagent `med-knowledge-architect` em lotes de no maximo 3 notas, uma nota por agente, nunca mais de um subagent para o mesmo `work_item.target_path`. Se houver uma unica nota, use um unico subagent; nao crie paralelismo artificial. Passe:
-   - caminho absoluto da nota existente;
-   - conteúdo atual da nota;
-   - `rewrite_prompt` vindo do `work_item`;
-   - `work_id`, `temp_dir` e `temp_output` vindos do `work_item`;
-   - instrução de preservar fatos existentes, aliases, links fortes, `Chat Original` e `[[_Índice_Medicina]]`;
-   - instrução para escrever a reescrita em `temp_output`, não diretamente na Wiki.
-7. Para cada arquivo temporário retornado pelo subagent, rode:
-   `apply-style-rewrite --target <nota-original.md> --content <temp-rewrite.md> --dry-run --json`
-   e só prossiga se `validation.errors` estiver vazio.
-8. Se o usuario autorizou aplicar (`--apply`, `--yes`, "aplicar", etc.), rode:
-   `apply-style-rewrite --target <nota-original.md> --content <temp-rewrite.md> --backup --json`
-   Use `--backup` por padrao, a menos que o usuario tenha pedido explicitamente sem backup.
-9. Limite reescritas por LLM a 2 tentativas por nota. Uma tentativa substituta so pode comecar depois que a anterior terminou ou foi abandonada; nunca rode duas reescritas simultaneas para a mesma nota. Se continuar falhando, liste a nota, os erros remanescentes e não force escrita manual.
-10. Depois das reescritas aplicadas, rode `validate-wiki --json` novamente.
-11. Responda em portugues com arquivos alterados pelo fix deterministico, notas reescritas pelo subagent, backups criados, erros remanescentes e proximas acoes.
-
-Este comando nao deve editar YAML/status de raw chats, nao deve publicar notas e nao deve rodar linker. O fix formal usa a CLI deterministica (`med_ops.py` + `wiki_note_style.py`); quando faltar conteudo, use o subagent `med-knowledge-architect` e aplique a reescrita apenas via `apply-style-rewrite`.
-"""
+Invariantes do launcher:
+- Preview primeiro: `med_ops.py fix-wiki --json`.
+- Aplique apenas com pedido explícito (`--apply`, `--yes`, "aplicar", "corrigir de verdade").
+- Ao aplicar, use `--backup` por padrão salvo pedido contrário.
+- Reescritas LLM só quando o JSON trouxer `requires_llm_rewrite: true`; planeje com
+  `plan-subagents --phase style-rewrite --max-concurrency 3`.
+- `fix-wiki` não publica chats e não move taxonomia. Se `taxonomy_action_required`
+  vier verdadeiro, aponte `taxonomy-migrate`.
+- Use `/mednotes:link` para linkagem pura.
+'''

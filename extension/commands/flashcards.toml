@@ -1,134 +1,18 @@
-description = "Cria flashcards no Anki a partir de arquivos, pastas, tags Obsidian ou instrucoes."
+description = "Cria flashcards no Anki a partir de notas, pastas, tags Obsidian ou texto."
 prompt = '''
-Crie flashcards medicos no Anki a partir do escopo indicado pelo usuario.
+Crie flashcards médicos no Anki a partir do escopo indicado.
 
-Argumentos do usuario: {{args}}
+Argumentos do usuário: {{args}}
 
-Este comando aceita:
-- um ou mais caminhos de arquivos Markdown;
-- diretorios, globs ou pastas do Obsidian;
-- filtro por tag Obsidian;
-- filtros em linguagem natural, como "notas com tag #cardio", "notas em
-  Cardiologia", "arquivos nesta pasta", ou combinacoes de pasta + tag;
-- texto colado ou briefing, quando nao houver arquivo/pasta/tag suficiente.
+Use a skill `create-medical-flashcards`. Ela é o runbook oficial; o resumo do
+workflow está em `docs/workflows/flashcards.md`.
 
-Modo padrao e modo direto:
-- Por padrao, `/flashcards` NAO grava diretamente no Anki. Ele resolve fontes,
-  gera cards candidatos, valida/filtra duplicados, mostra os cards no terminal
-  e so cria no Anki depois de confirmacao explicita do usuario.
-- Modo direto opcional: se os argumentos contiverem `--create`, `--direct`,
-  `--yes`, `--no-preview`, "criar diretamente", "crie direto", "sem preview",
-  "sem previa" ou "sem confirmacao", pule a confirmacao de preview dos cards e
-  grave depois das validacoes deterministicas. Mesmo em modo direto, pare se o
-  modelo Anki estiver bloqueado ou se o Anki MCP falhar.
-
-Referencia obrigatoria ao prompt:
-- `/twenty_rules` sem namespace e o prompt MCP `twenty_rules` exposto pelo
-  servidor existente `anki-mcp` de `@ankimcp/anki-mcp-server`.
-- Referencia de origem do prompt no pacote MCP:
-  `@ankimcp/anki-mcp-server/dist/mcp/primitives/essential/prompts/twenty-rules.prompt/content.md`.
-  Use esse path como proveniencia upstream.
-- A metodologia operacional esta importada em
-  `${extensionPath}/knowledge/anki-mcp-twenty-rules.md` para que `/flashcards`
-  seja autonomo. Leia esse arquivo e passe essa metodologia ao subagent.
-- O prompt MCP e slash command, nao ferramenta. As ferramentas Anki autorizadas
-  no subagent aparecem como `mcp_anki-mcp_*`.
-- A extensao nao declara nem instala outro Anki MCP; ela usa o MCP global ja
-  configurado pelo usuario em `~/.gemini/settings.json`.
-- Nao peça ao usuario para executar `/twenty_rules` antes. Esse comando MCP pode
-  existir para uso manual, mas o fluxo `/flashcards` deve usar a copia local.
-
-Resolucao do escopo:
-1. Antes de ler notas ou chamar o subagent, gere um manifest deterministico com:
-   `python ${extensionPath}/scripts/mednotes/flashcard_sources.py resolve --scope "{{args}}" --dry-run --skip-tag anki`.
-   O `--skip-tag anki` evita recriar cards de notas que ja foram marcadas como
-   processadas. Omita esse filtro somente se o usuario pedir explicitamente
-   refazer, regenerar ou incluir notas ja marcadas com `anki`.
-   Esse script expande arquivos, diretorios, globs, nomes de pasta e filtro por
-   tag Obsidian; ignora arquivos nao Markdown, cache, `dist/`, `.git/`, anexos e
-   imagens; e calcula `deck`, `deeplink`, `vault_relative_path`, tags
-   encontradas e hash de conteudo para cada nota.
-2. Se o manifest falhar por escopo ambiguo, peça a pasta raiz/vault root e rode
-   novamente com `--vault-root <pasta>` ou `--wiki-dir <pasta>`. Nao vasculhe
-   diretorios amplos sem manifest.
-3. Use `manifest.notes` como a lista final de arquivos Markdown. Para cada item,
-   leia `path` com `read_file`; use `deeplink` para o campo Anki `Obsidian`; use
-   `deck` como deck destino; e mantenha `tags` apenas como metadado de selecao,
-   nunca como tag Anki.
-   Se `manifest.skipped_notes` tiver entradas, mencione na previa quais notas
-   foram puladas por ja terem a tag Obsidian `anki`.
-4. Se `manifest.notes` vier vazio e houver texto/briefing util nos argumentos,
-   trate a entrada como texto colado e use `Medicina::Inbox`, a menos que o
-   usuario indique outro deck.
-5. Antes de formular cards, mostre uma previa das fontes e peça confirmacao
-   quando `manifest.summary.requires_confirmation` for verdadeiro (por exemplo,
-   mais de 10 arquivos).
-   Para gerar uma previa textual consistente a partir do mesmo escopo, use:
-   `python ${extensionPath}/scripts/mednotes/flashcard_sources.py preview --scope "{{args}}" --dry-run --skip-tag anki`.
-
-Criacao:
-1. Use exclusivamente o conteudo lido dos arquivos selecionados, ou o texto
-   colado pelo usuario, como base factual ("O QUE"). Nao acrescente fatos
-   externos.
-2. Leia e aplique `${extensionPath}/knowledge/anki-mcp-twenty-rules.md` como
-   metodologia de formulacao ("COMO").
-3. Leia e siga `${extensionPath}/knowledge/flashcard-ingestion.md`.
-4. Chame o subagent `med-flashcard-maker` primeiro em modo de candidatos, sem
-   gravar no Anki, e peça um JSON com `preferred_model`, `models` e
-   `candidate_cards`. Nessa fase o subagent deve usar
-   `mcp_anki-mcp_modelNames`/`mcp_anki-mcp_modelFieldNames` para capturar os
-   campos disponiveis no perfil Anki. Cada card candidato deve conter
-   `source_path`, `source_content_sha256`, `deck`, `note_model` e `fields` com
-   `Frente`, `Verso`, `Verso Extra` quando existir, e `Obsidian`.
-5. Antes de gravar, prepare o plano de escrita com:
-   `python ${extensionPath}/scripts/mednotes/flashcard_pipeline.py prepare --input -`.
-   Esse passo valida o modelo/campos capturados do Anki MCP, compara hashes de
-   notas para detectar reprocessamento, filtra duplicados no
-   `FLASHCARDS_INDEX.json`, gera queries de `findNotes` e devolve `anki_notes`
-   prontos para `mcp_anki-mcp_addNotes`. Se `blocked` for verdadeiro, pare e
-   reporte os campos disponiveis. Se `requires_reprocess_confirmation` for
-   verdadeiro, peça confirmacao antes de criar novos cards para notas alteradas.
-6. Mostre os cards que seriam criados no terminal antes de gravar:
-   `python ${extensionPath}/scripts/mednotes/flashcard_report.py preview-cards --input -`.
-   Use o JSON retornado por `flashcard_pipeline.py prepare` como entrada. No
-   modo padrao, pergunte ao usuario se quer criar esses cards no Anki. Se ele
-   nao confirmar, finalize sem chamar ferramentas Anki de escrita, sem registrar
-   no indice e sem marcar notas com tag `anki`. Em modo direto, nao faça essa
-   pergunta e continue para a escrita. Se houver mais de 40 cards candidatos,
-   essa confirmacao e obrigatoria no modo padrao.
-7. Chame o subagent `med-flashcard-maker` em modo de gravacao com:
-   - manifest JSON retornado por `flashcard_sources.py`;
-   - lista final de arquivos resolvidos e seu conteudo/fonte;
-   - metodologia local carregada de `anki-mcp-twenty-rules.md`;
-   - mapa de `arquivo -> obsidian://open?vault=...&file=...` vindo do manifest;
-   - apenas os `new_cards` aprovados por `flashcard_pipeline.py prepare`;
-   - `anki_find_queries` do plano; antes de `addNotes`, rode
-     `mcp_anki-mcp_findNotes` e pule cards que ja existirem no Anki;
-   - instrucao de processar cada arquivo separadamente;
-   - instrucao de derivar o deck por arquivo conforme o caminho Obsidian;
-   - instrucao de preencher o campo Anki `Obsidian` em todo card vindo de
-     arquivo Markdown;
-   - confirmacao de que as ferramentas Anki autorizadas sao `mcp_anki-mcp_*`.
-8. Para texto colado ou briefing sem arquivo, use `Medicina::Inbox`, a menos que
-   o usuario indique outro deck.
-9. Depois que o subagent confirmar criacao no Anki, registre os cards aceitos e
-   gere o relatorio estruturado com:
-   `python ${extensionPath}/scripts/mednotes/flashcard_pipeline.py apply --input -`.
-10. Depois que o subagent confirmar criacao no Anki, marque somente os arquivos
-   com pelo menos um card criado usando:
-   `python ${extensionPath}/scripts/mednotes/obsidian_note_utils.py add-tag --tag anki <arquivos...>`.
-   Nao marque arquivos que falharam ou que nao geraram cards. Para desfazer
-   uma marcacao manualmente, o script tambem oferece `remove-tag --tag anki`.
-
-Ao final, responda em portugues com:
-- arquivos/notas processados;
-- decks destino;
-- quantidade criada;
-- modelo/campos usados;
-- campo `Obsidian` e marcacao `anki` das notas-fonte;
-- conceitos omitidos, duplicados ou aguardando confirmacao;
-- falhas do Anki MCP, se houver.
-Quando tiver os dados estruturados da execucao, use:
-`python ${extensionPath}/scripts/mednotes/flashcard_report.py final --input -`
-para gerar um resumo final consistente.
+Invariantes do launcher:
+- `/flashcards` é o único comando público de cards.
+- Use o MCP global `anki-mcp`; não crie `/twenty_rules` local nem peça ao usuário para executá-lo.
+- Resolva fontes com `flashcard_sources.py` antes de ler notas.
+- O modo padrão é preview-first; só grave direto se o usuário pedir `--create`,
+  `--direct`, `--yes`, `--no-preview`, "criar diretamente" ou equivalente.
+- Não use conteúdo fora das fontes resolvidas como base factual.
+- Não adicione tags Anki.
 '''

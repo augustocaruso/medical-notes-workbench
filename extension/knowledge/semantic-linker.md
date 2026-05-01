@@ -34,7 +34,9 @@ Para linkar uma nota recém-criada:
 O script empacotado em `scripts/mednotes/med_linker.py` deve usar
 `CATALOGO_WIKI.json` como fonte primária de vocabulário. Nomes de arquivo e
 aliases YAML são apenas fallback quando o catálogo não existe ou está
-incompleto.
+incompleto. A auditoria objetiva do grafo vive em
+`scripts/mednotes/wiki_graph.py` e verifica links quebrados, self-links,
+aliases conflitantes, targets ausentes e notas órfãs.
 
 Antes de aplicar links em lote, rode dry-run auditável:
 
@@ -42,4 +44,6 @@ Antes de aplicar links em lote, rode dry-run auditável:
 python scripts/mednotes/med_linker.py --wiki-dir "<Wiki_Medicina>" --catalog "<CATALOGO_WIKI.json>" --dry-run --json
 ```
 
-Depois aplique sem `--dry-run` se o plano estiver coerente.
+Depois aplique sem `--dry-run` se o plano estiver coerente e sem blockers. Para
+auditoria pura, use `med_ops.py graph-audit --json` ou
+`med_linker.py --audit --json`.

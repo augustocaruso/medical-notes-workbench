@@ -1,4 +1,4 @@
-"""Testes do orquestrador `scripts/run_agent.py`.
+"""Testes do orquestrador `scripts/enrich_notes.py`.
 
 Estratégia: mockar dois seams — (1) ``_invoke_gemini`` que retorna stdout do
 gemini CLI, e (2) ``httpx.Client`` que serve bytes/JSON canned. Sem rede.
@@ -74,20 +74,113 @@ def _mock_httpx(monkeypatch, *, json_responses: dict[str, dict] | None = None,
     monkeypatch.setattr(httpx, "Client", factory)
 
 
-def _write_config(tmp_path: Path, *, vault: Path, cache_db: Path) -> Path:
+def _write_config(
+    tmp_path: Path,
+    *,
+    vault: Path,
+    cache_db: Path,
+    sources: list[str] | None = None,
+) -> Path:
+    sources = sources or ["wikimedia"]
     cfg = tmp_path / "config.toml"
     cfg.write_text(
         f'[vault]\npath = "{vault}"\nattachments_subdir = ""\n'
         f'[enrichment]\nmax_anchors_per_note = 5\n'
         f'max_image_dimension = 1600\nwebp_min_savings_pct = 30\n'
         f'preferred_language = "any"\n'
-        f'[sources]\nenabled = ["wikimedia"]\ntop_k_per_source = 4\n'
+        f'[sources]\nenabled = {json.dumps(sources)}\ntop_k_per_source = 4\n'
         f'[gemini]\nbinary = "gemini"\nmodel_anchors = "x"\nmodel_rerank = "y"\n'
         f'max_candidates_per_anchor = 8\ntimeout_seconds = 42\n'
         f'[cache]\npath = "{cache_db}"\ncandidates_ttl_days = 30\n',
         encoding="utf-8",
     )
     return cfg
+
+
+def _anchors_json(*, concept: str = "recaptação de serotonina pelo SERT") -> str:
+    return json.dumps([{
+        "section_path": [
+            "ISRS (inibidores seletivos da recaptação de serotonina)",
+            "Mecanismo de ação",
+        ],
+        "concept": concept,
+        "visual_type": "diagram",
+        "search_queries": ["serotonin reuptake transporter"],
+        "anchor_id": "a1",
+    }])
+
+
+def _wiki_image_response() -> dict:
+    return {
+        "query": {
+            "pages": [{
+                "pageid": 1,
+                "title": "File:SERT.svg",
+                "imageinfo": [{
+                    "url": "https://upload.wikimedia.org/sert.png",
+                    "thumburl": "https://upload.wikimedia.org/thumbs/sert_1600.png",
+                    "thumbwidth": 1600,
+                    "thumbheight": 1200,
+                    "width": 2000,
+                    "height": 1500,
+                    "mime": "image/png",
+                    "descriptionurl": "https://commons.wikimedia.org/wiki/File:SERT.svg",
+                    "extmetadata": {
+                        "LicenseShortName": {"value": "CC BY-SA 4.0"},
+                        "ImageDescription": {"value": "Recaptação de serotonina."},
+                    },
+                }]
+            }]
+        }
+    }
+
+
+# --- resolução de inputs -------------------------------------------
+
+
+def test_resolve_note_inputs_expande_diretorio_recursivo_e_ignora_anexos(tmp_path):
+    root = tmp_path / "Wiki"
+    (root / "Cardiologia").mkdir(parents=True)
+    (root / "Cardiologia" / "A.md").write_text("# A\n", encoding="utf-8")
+    (root / "Cardiologia" / "Sub").mkdir()
+    (root / "Cardiologia" / "Sub" / "B.md").write_text("# B\n", encoding="utf-8")
+    (root / "attachments").mkdir()
+    (root / "attachments" / "C.md").write_text("# C\n", encoding="utf-8")
+    (root / ".obsidian").mkdir()
+    (root / ".obsidian" / "D.md").write_text("# D\n", encoding="utf-8")
+
+    notes, errors = run_agent._resolve_note_inputs([root])
+
+    assert errors == []
+    assert [path.name for path in notes] == ["A.md", "B.md"]
+
+
+def test_resolve_note_inputs_expande_glob_e_deduplica(tmp_path):
+    root = tmp_path / "Wiki"
+    root.mkdir()
+    a = root / "A.md"
+    b = root / "B.md"
+    a.write_text("# A\n", encoding="utf-8")
+    b.write_text("# B\n", encoding="utf-8")
+    (root / "C.txt").write_text("x\n", encoding="utf-8")
+
+    notes, errors = run_agent._resolve_note_inputs([root / "*.md", a])
+
+    assert errors == []
+    assert [path.name for path in notes] == ["A.md", "B.md"]
+
+
+def test_resolve_note_inputs_reporta_glob_ou_diretorio_sem_notas(tmp_path):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+
+    notes, errors = run_agent._resolve_note_inputs([tmp_path / "*.md", empty])
+
+    assert notes == []
+    assert len(errors) == 2
+    assert errors[0].code == 2
+    assert "glob sem correspondências" in errors[0].message
+    assert "diretório sem notas" in errors[1].message
 
 
 # --- parsing helpers (puros) ----------------------------------------
@@ -286,6 +379,111 @@ def test_orquestrador_e2e_anchors_e_rerank(monkeypatch, tmp_path, capsys):
     assert "*Figura: recaptação de serotonina pelo SERT.*" in body
     # Frontmatter aditivo
     assert "images_enriched: true" in body
+    out = capsys.readouterr().out
+    assert "Resumo final" in out
+    assert "Enriquecidas: 1" in out
+
+
+def test_orquestrador_batch_duas_notas_enriquece_em_ordem(monkeypatch, tmp_path, capsys):
+    vault = tmp_path / "vault"
+    cache_db = tmp_path / "c.db"
+    cfg = _write_config(tmp_path, vault=vault, cache_db=cache_db)
+    note1 = tmp_path / "n1.md"
+    note2 = tmp_path / "n2.md"
+    fixture = (FIXTURES / "note_didatic.md").read_text(encoding="utf-8")
+    note1.write_text(fixture, encoding="utf-8")
+    note2.write_text(fixture, encoding="utf-8")
+
+    rerank_json = json.dumps({"chosen_index": 0, "reason": "diagrama claro"})
+    queue = GeminiQueue([
+        _anchors_json(concept="recaptação de serotonina pelo SERT"),
+        rerank_json,
+        _anchors_json(concept="bloqueio do SERT por ISRS"),
+        rerank_json,
+    ])
+    monkeypatch.setattr(run_agent, "_invoke_gemini", queue)
+    _mock_httpx(
+        monkeypatch,
+        json_responses={"commons.wikimedia.org": _wiki_image_response()},
+        bytes_response=_png_bytes(),
+    )
+
+    rc = run_agent.main([str(note1), str(note2), "--config", str(cfg)])
+
+    assert rc == 0
+    assert len(queue.calls) == 4
+    assert "![[" in note1.read_text(encoding="utf-8")
+    assert "![[" in note2.read_text(encoding="utf-8")
+    out = capsys.readouterr().out
+    assert "[nota 1/2]" in out
+    assert "[nota 2/2]" in out
+    assert "Resumo final" in out
+    assert "Enriquecidas: 2" in out
+    assert "Falhas: 0" in out
+
+
+def test_orquestrador_batch_continua_apos_falha(monkeypatch, tmp_path, capsys):
+    vault = tmp_path / "vault"
+    cache_db = tmp_path / "c.db"
+    cfg = _write_config(tmp_path, vault=vault, cache_db=cache_db)
+    bad = tmp_path / "sem_headings.md"
+    good = tmp_path / "ok.md"
+    bad.write_text("texto sem heading\n", encoding="utf-8")
+    good.write_text("# T\n\n## S\n\nbody.\n", encoding="utf-8")
+
+    queue = GeminiQueue([json.dumps([])])
+    monkeypatch.setattr(run_agent, "_invoke_gemini", queue)
+
+    rc = run_agent.main([str(bad), str(good), "--config", str(cfg)])
+
+    assert rc == 6
+    assert len(queue.calls) == 1
+    captured = capsys.readouterr()
+    assert "nota sem headings" in captured.err
+    assert "[nota 2/2]" in captured.out
+    assert "Sem inserção: 1" in captured.out
+    assert "Falhas: 1" in captured.out
+
+
+def test_orquestrador_cota_serpapi_interrompe_lote(monkeypatch, tmp_path, capsys):
+    vault = tmp_path / "vault"
+    cache_db = tmp_path / "c.db"
+    cfg = _write_config(tmp_path, vault=vault, cache_db=cache_db, sources=["web_search"])
+    note1 = tmp_path / "n1.md"
+    note2 = tmp_path / "n2.md"
+    note1.write_text("# T\n\n## S\n\nbody.\n", encoding="utf-8")
+    note2.write_text("# T\n\n## S\n\nbody.\n", encoding="utf-8")
+
+    anchors_json = json.dumps([{
+        "section_path": ["T", "S"],
+        "concept": "x",
+        "visual_type": "diagram",
+        "search_queries": ["q"],
+        "anchor_id": "a1",
+    }])
+    queue = GeminiQueue([anchors_json])
+    monkeypatch.setattr(run_agent, "_invoke_gemini", queue)
+    search_calls = 0
+
+    def quota_search(*_args, **_kwargs):
+        nonlocal search_calls
+        search_calls += 1
+        raise run_agent.SourceQuotaExceeded(
+            "web_search",
+            "SerpAPI bloqueou a busca por cota/limite: quota exceeded",
+        )
+
+    monkeypatch.setattr(run_agent.web_search, "search", quota_search)
+
+    rc = run_agent.main([str(note1), str(note2), "--config", str(cfg)])
+
+    assert rc == 9
+    assert search_calls == 1
+    assert len(queue.calls) == 1
+    captured = capsys.readouterr()
+    assert "Interrompendo o lote" in captured.err
+    assert "[nota 2/2]" not in captured.out
+    assert "Falhas: 1" in captured.out
 
 
 def test_orquestrador_idempotente_se_ja_enriquecida(monkeypatch, tmp_path, capsys):

@@ -117,5 +117,44 @@ def test_linker_skips_existing_links_and_code_blocks(tmp_path):
     assert len(plan.insertions) == 1
 
 
+def test_linker_skips_related_section_and_escapes_table_alias_pipe(tmp_path):
+    wiki = tmp_path / "wiki"
+    target = wiki / "Cardiologia" / "Infarto.md"
+    target.parent.mkdir(parents=True)
+    target.write_text("---\naliases: [IAM]\n---\n# Infarto\n", encoding="utf-8")
+    source = wiki / "Emergencia" / "Dor.md"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "| Tema | Conduta |\n| --- | --- |\n| IAM | ECG |\n\n## 🔗 Notas Relacionadas\n- IAM\n",
+        encoding="utf-8",
+    )
+
+    vocab = med_linker.build_vocabulary(wiki)
+    plan = med_linker.link_file(source, vocab)
+
+    text = source.read_text(encoding="utf-8")
+    assert "[[Infarto\\|IAM]]" in text
+    assert "## 🔗 Notas Relacionadas\n- IAM\n" in text
+    assert len(plan.insertions) == 1
+
+
+def test_linker_blocks_apply_when_graph_has_existing_dangling_link(tmp_path, capsys):
+    wiki = tmp_path / "wiki"
+    target = wiki / "Cardiologia" / "Infarto.md"
+    target.parent.mkdir(parents=True)
+    target.write_text("---\naliases: [IAM]\n---\n# Infarto\n", encoding="utf-8")
+    source = wiki / "Emergencia" / "Dor.md"
+    source.parent.mkdir(parents=True)
+    source.write_text("IAM deve ser lembrado. Link quebrado: [[Fantasma]].\n", encoding="utf-8")
+
+    rc = med_linker.run(wiki, dry_run=False, json_output=True, verify=False)
+    out = json.loads(capsys.readouterr().out)
+
+    assert rc == 3
+    assert out["blocked"] is True
+    assert out["blocker_count"] == 1
+    assert "[[Infarto|IAM]]" not in source.read_text(encoding="utf-8")
+
+
 def test_linker_run_missing_wiki_returns_4(tmp_path):
     assert med_linker.run(tmp_path / "missing", verify=False) == 4

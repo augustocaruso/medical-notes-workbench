@@ -19,6 +19,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+import wiki_graph  # noqa: E402
+
 
 DEFAULT_WIKI_DIR = r"C:\Users\leona\iCloudDrive\iCloud~md~obsidian\Wiki_Medicina"
 DEFAULT_CATALOG_PATH = "~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json"
@@ -307,7 +313,18 @@ def _protected_spans(text: str) -> list[tuple[int, int]]:
         r"\[\[.*?\]\]",
     ):
         spans.extend((m.start(), m.end()) for m in re.finditer(pattern, text, re.DOTALL))
+    spans.extend(_section_spans(text, "Notas Relacionadas"))
     return sorted(spans)
+
+
+def _section_spans(text: str, heading_text: str) -> list[tuple[int, int]]:
+    spans: list[tuple[int, int]] = []
+    pattern = re.compile(rf"(?m)^##\s+(?:🔗\s+)?{re.escape(heading_text)}\s*$")
+    next_h2 = re.compile(r"(?m)^##\s+")
+    for match in pattern.finditer(text):
+        next_match = next_h2.search(text, match.end())
+        spans.append((match.start(), next_match.start() if next_match else len(text)))
+    return spans
 
 
 def _inside_spans(start: int, end: int, spans: list[tuple[int, int]]) -> bool:
@@ -323,10 +340,31 @@ def _is_heading_match(text: str, start: int) -> bool:
     return _line_prefix(text, start).lstrip().startswith("#")
 
 
+def _line_bounds(text: str, start: int) -> tuple[int, int]:
+    line_start = text.rfind("\n", 0, start) + 1
+    line_end = text.find("\n", start)
+    if line_end == -1:
+        line_end = len(text)
+    return line_start, line_end
+
+
+def _is_table_match(text: str, start: int) -> bool:
+    line_start, line_end = _line_bounds(text, start)
+    line = text[line_start:line_end]
+    return "|" in line and not line.lstrip().startswith(">")
+
+
 def _term_pattern(term: str) -> re.Pattern[str]:
     left = r"(?<![\wÀ-ÖØ-öø-ÿ])"
     right = r"(?![\wÀ-ÖØ-öø-ÿ])"
     return re.compile(left + f"({re.escape(term)})" + right, re.IGNORECASE)
+
+
+def _replacement(target: str, matched_text: str, *, in_table: bool) -> str:
+    if normalize_key(matched_text) == normalize_key(target):
+        return f"[[{target}]]"
+    separator = r"\|" if in_table else "|"
+    return f"[[{target}{separator}{matched_text}]]"
 
 
 def plan_file(filepath: Path, vocabulary: list[LinkTerm], max_links: int = 20) -> tuple[str, LinkPlan]:
@@ -364,7 +402,7 @@ def plan_file(filepath: Path, vocabulary: list[LinkTerm], max_links: int = 20) -
                 continue
 
             matched_text = match.group(1)
-            replacement = f"[[{target}|{matched_text}]]" if normalize_key(matched_text) != normalize_key(target) else f"[[{target}]]"
+            replacement = _replacement(target, matched_text, in_table=_is_table_match(body, start))
             plan.insertions.append(
                 Insertion(
                     term=term.term,
@@ -404,6 +442,7 @@ def run(
     catalog_path: Path | None = None,
     verify: bool = True,
     dry_run: bool = False,
+    audit: bool = False,
     json_output: bool = False,
     max_links: int = 20,
 ) -> int:
@@ -416,6 +455,14 @@ def run(
         else:
             print(message, file=sys.stderr)
         return 4
+
+    before_audit = wiki_graph.audit_wiki_graph(wiki_dir, catalog_path=catalog_path)
+    if audit:
+        if json_output:
+            print(json.dumps(before_audit, ensure_ascii=False, indent=2))
+        else:
+            print(json.dumps(before_audit, ensure_ascii=False, indent=2))
+        return 0 if before_audit.get("ok") else 3
 
     vocabulary = build_vocabulary(wiki_dir, catalog_path=catalog_path)
     source_counts = {
@@ -432,10 +479,16 @@ def run(
     else:
         files = sorted(path for path in wiki_dir.rglob("*.md") if path.is_file())
 
-    plans = [link_file(path, vocabulary, max_links=max_links, dry_run=dry_run) for path in files]
+    blockers = list(before_audit.get("errors", []))
+    blocked = bool(blockers) and not dry_run
+    plan_only = dry_run or blocked
+    plans = [link_file(path, vocabulary, max_links=max_links, dry_run=plan_only) for path in files]
     changed = [plan for plan in plans if plan.changed]
+    if blocked:
+        changed = []
     summary = {
-        "ok": True,
+        "ok": not blockers,
+        "blocked": blocked,
         "dry_run": dry_run,
         "wiki_dir": str(wiki_dir),
         "catalog_path": str(catalog_path) if catalog_path else None,
@@ -445,8 +498,16 @@ def run(
         "files_scanned": len(files),
         "files_changed": len(changed),
         "links_planned": sum(len(plan.insertions) for plan in plans),
+        "blocker_count": len(blockers),
+        "blockers": blockers,
+        "graph_audit_before": before_audit,
         "plans": [plan.as_dict() for plan in plans if plan.changed or plan.skipped],
     }
+
+    if blocked:
+        summary["links_planned"] = sum(len(plan.insertions) for plan in plans)
+    elif not dry_run:
+        summary["graph_audit_after"] = wiki_graph.audit_wiki_graph(wiki_dir, catalog_path=catalog_path)
 
     if json_output:
         print(json.dumps(summary, ensure_ascii=False, indent=2))
@@ -457,7 +518,7 @@ def run(
 
     if verify and not dry_run:
         _run_optional_verify()
-    return 0
+    return 3 if blocked else 0
 
 
 def _run_optional_verify() -> None:
@@ -480,6 +541,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--wiki-dir", default=os.getenv("MED_WIKI_DIR", DEFAULT_WIKI_DIR))
     parser.add_argument("--catalog", "--catalog-path", default=os.getenv("MED_CATALOG_PATH", DEFAULT_CATALOG_PATH))
     parser.add_argument("--dry-run", action="store_true", help="Plan links without writing files.")
+    parser.add_argument("--audit", action="store_true", help="Audit graph health without planning or writing links.")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON report.")
     parser.add_argument("--max-links", type=int, default=20, help="Maximum inserted links per note.")
     parser.add_argument("--no-verify", action="store_true", help="Skip optional dangling-link verification.")
@@ -496,6 +558,7 @@ def main(argv: list[str] | None = None) -> int:
         catalog_path=catalog_path,
         verify=not args.no_verify,
         dry_run=args.dry_run,
+        audit=args.audit,
         json_output=args.json,
         max_links=args.max_links,
     )

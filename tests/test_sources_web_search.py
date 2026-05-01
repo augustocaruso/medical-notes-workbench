@@ -4,17 +4,22 @@ from pathlib import Path
 import httpx
 import pytest
 
-from enricher.sources import ImageCandidate, web_search
+from enricher.sources import ImageCandidate, SourceQuotaExceeded, web_search
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-def _client_with(response_json: dict, *, on_request=None) -> httpx.Client:
+def _client_with(
+    response_json: dict,
+    *,
+    on_request=None,
+    status_code: int = 200,
+) -> httpx.Client:
     def handler(request: httpx.Request) -> httpx.Response:
         if on_request is not None:
             on_request(request)
-        return httpx.Response(200, json=response_json)
+        return httpx.Response(status_code, json=response_json)
 
     return httpx.Client(transport=httpx.MockTransport(handler))
 
@@ -174,3 +179,20 @@ def test_search_resposta_sem_images_results_devolve_vazio():
     with _client_with({"search_metadata": {"status": "Success"}}) as client:
         out = web_search.search("nada", "diagram", top_k=4, client=client, api_key="fake")
     assert out == []
+
+
+def test_search_cota_esgotada_http_429_vira_erro_fatal():
+    with _client_with(
+        {"error": "Your account has run out of searches."},
+        status_code=429,
+    ) as client:
+        with pytest.raises(SourceQuotaExceeded, match="cota/limite"):
+            web_search.search("q", "diagram", top_k=4, client=client, api_key="fake")
+
+
+def test_search_cota_esgotada_em_payload_200_vira_erro_fatal():
+    with _client_with(
+        {"error": "Monthly search quota exceeded."},
+    ) as client:
+        with pytest.raises(SourceQuotaExceeded, match="Monthly search quota exceeded"):
+            web_search.search("q", "diagram", top_k=4, client=client, api_key="fake")

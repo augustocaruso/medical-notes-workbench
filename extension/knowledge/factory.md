@@ -41,6 +41,9 @@ existente mostra quais pastas ja existem. Para organizar o vault antes de
 publicar, trate `audit` como dry-run, nao como permissao para mover arquivos
 automaticamente. Os subcomandos `taxonomy-canonical`, `taxonomy-tree` e
 `taxonomy-audit` do `med_ops.py` ficam como equivalentes separados.
+Se uma area ou especialidade canonica estiver ausente como pasta fisica, a CLI
+pode materializar esse prefixo canonico durante staging/publicacao; isso nao
+autoriza inventar sexta area, nova especialidade canonica ou grafia alternativa.
 Para corrigir pastas legadas de forma reversivel, use `taxonomy-migrate`:
 primeiro `--dry-run --plan-output <plano.json>`, depois, com confirmacao
 explicita, `--apply --plan <plano.json> --receipt <recibo.json>`. O recibo
@@ -70,10 +73,11 @@ Escreva as notas processadas em arquivos temporários.
 ### 6. Staging e Publicação Segura (O Músculo)
 Registre cada nota gerada em um manifest de lote usando `stage-note`.
 `run_shell_command("python C:\Users\leona\.gemini\skills\med-chat-processor\med_ops.py stage-note --manifest \"<batch_manifest.json>\" --raw-file \"<path_original>\" --taxonomy \"<Categoria/Subcategoria>\" --title \"<Titulo_Exato>\" --content \"C:\Users\leona\.gemini\tmp\leona\temp_gold_note.md\"")`
-O `stage-note` canoniza grafia de pastas existentes e bloqueia taxonomia que
-repete o titulo como pasta final ou inventa pastas fora da arvore. Se precisar
-de nova categoria-folha, pare e peça aprovacao antes de usar
-`--allow-new-taxonomy-leaf`.
+O `stage-note` canoniza grafia de pastas existentes, pode materializar prefixo
+canonico ausente e pode criar por default uma nova categoria-folha sob pai
+coerente. Ele bloqueia taxonomia que repete o titulo como pasta final ou inventa
+raiz, grande area, especialidade canonica, grafia alternativa ou pasta
+intermediaria fora do esquema canonico/da arvore.
 
 Depois que todas as notas do lote estiverem no manifest, rode primeiro a simulação:
 `run_shell_command("python C:\Users\leona\.gemini\skills\med-chat-processor\med_ops.py publish-batch --manifest \"<batch_manifest.json>\" --dry-run")`

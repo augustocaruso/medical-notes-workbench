@@ -1,19 +1,15 @@
-description = "Roda o med-auto-linker para interconectar notas da Wiki_Medicina."
-prompt = """
-Rode a linkagem semantica da Wiki_Medicina.
+description = "Roda o linker semântico da Wiki_Medicina."
+prompt = '''
+Rode a linkagem semântica da Wiki_Medicina.
 
-Argumentos do usuario: {{args}}
+Argumentos do usuário: {{args}}
 
-Use o script empacotado desta extensao. A raiz padrao instalada e `~/.gemini/extensions/medical-notes-workbench`; se `${extensionPath}` estiver disponivel, prefira esse valor.
+Use a skill `link-medical-wiki`. Ela é o runbook oficial; o resumo do workflow
+está em `docs/workflows/link.md`.
 
-Fluxo:
-1. Localize `${extensionPath}/scripts/mednotes/med_linker.py`.
-2. Se `{{args}}` contiver uma nota especifica, use esse caminho como argumento posicional.
-3. Use `--catalog`/`MED_CATALOG_PATH` sempre que `CATALOGO_WIKI.json` existir; o catalogo e a fonte primaria de vocabulario.
-4. Primeiro rode `--dry-run --json` e revise quantos links seriam inseridos, quais termos vieram do catalogo e quais vieram do fallback dinamico.
-5. Se o dry-run estiver bom, rode sem `--dry-run` para aplicar.
-6. Se for necessario apontar outro wiki dir, use `MED_WIKI_DIR` ou `--wiki-dir`.
-7. Resuma arquivos alterados, links inseridos, uso do catalogo e avisos de validacao.
-
-Nao use regex manual para linkar notas; delegue para o script da skill.
-"""
+Invariantes do launcher:
+- Dry-run primeiro com `med_linker.py --dry-run --json`.
+- Aplique sem `--dry-run` somente se o plano estiver coerente e sem blockers.
+- Não corrija estilo, YAML/status, publicação ou taxonomia neste workflow.
+- Não faça regex manual para linkar notas.
+'''

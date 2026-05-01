@@ -1,0 +1,63 @@
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+GRAPH_PATH = ROOT / "extension" / "scripts" / "mednotes" / "wiki_graph.py"
+
+
+spec = importlib.util.spec_from_file_location("wiki_graph", GRAPH_PATH)
+wiki_graph = importlib.util.module_from_spec(spec)
+assert spec.loader is not None
+sys.modules["wiki_graph"] = wiki_graph
+spec.loader.exec_module(wiki_graph)
+
+
+def _write(path: Path, text: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_graph_audit_reports_dangling_self_alias_conflict_and_missing_catalog_target(tmp_path):
+    wiki = tmp_path / "Wiki_Medicina"
+    _write(
+        wiki / "ISRS.md",
+        "# ISRS\n\nTexto com [[Transtorno Depressivo Maior]].\n\n## 🔗 Notas Relacionadas\n- [[Fantasma]]\n- [[ISRS]]\n",
+    )
+    _write(wiki / "Transtorno Depressivo Maior.md", "# TDM\n\n## 🔗 Notas Relacionadas\n- [[ISRS]]\n")
+    catalog = tmp_path / "CATALOGO_WIKI.json"
+    catalog.write_text(
+        json.dumps(
+            {
+                "entities": [
+                    {"arquivo": "ISRS.md", "aliases": ["TDM"]},
+                    {"arquivo": "Transtorno Depressivo Maior.md", "aliases": ["TDM"]},
+                    {"arquivo": "Nota Inexistente.md", "aliases": ["NIX"]},
+                ]
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    report = wiki_graph.audit_wiki_graph(wiki, catalog_path=catalog)
+    codes = {item["code"] for item in report["errors"]}
+
+    assert report["ok"] is False
+    assert {"dangling_link", "self_link", "alias_conflict", "catalog_target_missing"} <= codes
+
+
+def test_graph_audit_accepts_no_strong_related_links_marker(tmp_path):
+    wiki = tmp_path / "Wiki_Medicina"
+    _write(
+        wiki / "Tema Raro.md",
+        "# Tema Raro\n\n## 🔗 Notas Relacionadas\n- Sem conexões fortes no catálogo atual.\n",
+    )
+
+    report = wiki_graph.audit_wiki_graph(wiki)
+    warning_codes = {item["code"] for item in report["warnings"]}
+
+    assert "few_related_links" not in warning_codes

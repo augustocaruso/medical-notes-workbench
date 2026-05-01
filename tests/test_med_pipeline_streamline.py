@@ -90,18 +90,97 @@ def test_command_toml_files_parse():
         tomllib.loads(path.read_text(encoding="utf-8"))
 
 
+def test_public_workflows_are_preserved_and_documented():
+    commands = {
+        "/flashcards": EXTENSION / "commands" / "flashcards.toml",
+        "/mednotes:create": EXTENSION / "commands" / "mednotes" / "create.toml",
+        "/mednotes:enrich": EXTENSION / "commands" / "mednotes" / "enrich.toml",
+        "/mednotes:process-chats": EXTENSION / "commands" / "mednotes" / "process-chats.toml",
+        "/mednotes:fix-wiki": EXTENSION / "commands" / "mednotes" / "fix-wiki.toml",
+        "/mednotes:link": EXTENSION / "commands" / "mednotes" / "link.toml",
+        "/mednotes:setup": EXTENSION / "commands" / "mednotes" / "setup.toml",
+        "/mednotes:status": EXTENSION / "commands" / "mednotes" / "status.toml",
+    }
+    for path in commands.values():
+        assert path.exists()
+
+    for doc in ("enrich", "process-chats", "fix-wiki", "link", "flashcards"):
+        assert (ROOT / "docs" / "workflows" / f"{doc}.md").exists()
+    for doc in ("cli", "json-contracts", "extension"):
+        assert (ROOT / "docs" / "reference" / f"{doc}.md").exists()
+
+
+def test_launchers_are_short_and_point_to_runbooks():
+    for path in (EXTENSION / "commands").rglob("*.toml"):
+        text = path.read_text(encoding="utf-8")
+        assert len(text.splitlines()) <= 24
+    assert "docs/workflows/enrich.md" in (EXTENSION / "commands" / "mednotes" / "enrich.toml").read_text(encoding="utf-8")
+    assert "docs/workflows/fix-wiki.md" in (EXTENSION / "commands" / "mednotes" / "fix-wiki.toml").read_text(encoding="utf-8")
+    assert "docs/workflows/process-chats.md" in (EXTENSION / "commands" / "mednotes" / "process-chats.toml").read_text(encoding="utf-8")
+    assert "docs/workflows/flashcards.md" in (EXTENSION / "commands" / "flashcards.toml").read_text(encoding="utf-8")
+
+
+def test_root_agent_docs_are_mirrors_of_canonical_instructions():
+    canonical = (ROOT / "docs" / "agent-instructions.md").read_text(encoding="utf-8")
+    assert (ROOT / "AGENTS.md").read_text(encoding="utf-8") == canonical
+    assert (ROOT / "CLAUDE.md").read_text(encoding="utf-8") == canonical
+
+
+def test_image_orchestrator_has_clear_name_and_compatibility_wrapper():
+    canonical = ROOT / "scripts" / "enrich_notes.py"
+    wrapper = ROOT / "scripts" / "run_agent.py"
+    build = (ROOT / "scripts" / "build_gemini_cli_extension.py").read_text(encoding="utf-8")
+    command = (EXTENSION / "commands" / "mednotes" / "enrich.toml").read_text(encoding="utf-8")
+
+    assert canonical.exists()
+    assert wrapper.exists()
+    assert "scripts/enrich_notes.py" in command
+    assert '"enrich_notes.py"' in build
+    assert "Compatibility launcher" in wrapper.read_text(encoding="utf-8")
+
+
+def test_domain_script_layout_is_declared():
+    assert (EXTENSION / "scripts" / "mednotes" / "wiki" / "README.md").exists()
+    assert (EXTENSION / "scripts" / "mednotes" / "flashcards" / "README.md").exists()
+    assert (EXTENSION / "scripts" / "mednotes" / "obsidian" / "README.md").exists()
+    assert (EXTENSION / "scripts" / "mednotes" / "wiki" / "ops.py").exists()
+    assert (EXTENSION / "scripts" / "mednotes" / "wiki" / "linker.py").exists()
+    assert (EXTENSION / "scripts" / "mednotes" / "flashcards" / "sources.py").exists()
+    assert (EXTENSION / "scripts" / "mednotes" / "flashcards" / "pipeline.py").exists()
+    assert (EXTENSION / "scripts" / "mednotes" / "obsidian" / "notes.py").exists()
+
+
+def test_domain_script_wrappers_expose_help():
+    for path in (
+        EXTENSION / "scripts" / "mednotes" / "wiki" / "ops.py",
+        EXTENSION / "scripts" / "mednotes" / "flashcards" / "sources.py",
+        EXTENSION / "scripts" / "mednotes" / "obsidian" / "notes.py",
+    ):
+        result = subprocess.run(
+            [os.sys.executable, str(path), "--help"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert result.returncode == 0
+        assert "usage:" in result.stdout
+
+
 def test_fix_wiki_command_is_public_and_deterministic():
     command = (EXTENSION / "commands" / "mednotes" / "fix-wiki.toml")
     text = command.read_text(encoding="utf-8")
+    workflow = (ROOT / "docs" / "workflows" / "fix-wiki.md").read_text(encoding="utf-8")
 
     assert command.exists()
     assert "fix-wiki --json" in text
-    assert "validate-wiki --json" in text
     assert "--apply" in text
     assert "--backup" in text
     assert "requires_llm_rewrite: true" in text
-    assert "med-knowledge-architect" in text
-    assert "apply-style-rewrite" in text
+    assert "apply-style-rewrite" in workflow
+    assert "taxonomy_action_required" in text
+    assert "taxonomy-migrate" in text
+    assert "grafo" in workflow
+    assert "linkagem pura" in text
 
 
 def test_subagent_parallelism_contract_is_explicit_and_sharded_by_note_owner():
@@ -113,18 +192,19 @@ def test_subagent_parallelism_contract_is_explicit_and_sharded_by_note_owner():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    process_doc = (ROOT / "docs" / "workflows" / "process-chats.md").read_text(encoding="utf-8")
+    fix_doc = (ROOT / "docs" / "workflows" / "fix-wiki.md").read_text(encoding="utf-8")
 
-    assert "plan-subagents --phase triage --max-concurrency 4" in process + gemini + readme
-    assert "plan-subagents --phase architect --max-concurrency 3" in process + gemini + readme
-    assert "plan-subagents --phase style-rewrite --max-concurrency 3" in fix_wiki + gemini + readme
-    assert "A unidade indivisivel de paralelismo e o raw chat" in process
-    assert "Nunca lance dois subagents para o mesmo `raw_file`" in process
-    assert "Se `item_count` for 0 ou 1" in process
+    assert "plan-subagents --phase triage --max-concurrency 4" in process_doc
+    assert "plan-subagents --phase architect --max-concurrency 3" in process_doc
+    assert "plan-subagents --phase style-rewrite --max-concurrency 3" in fix_doc
+    assert "um raw chat por subagent" in process
+    assert "Nunca lançar dois subagents" in process_doc
     assert "exactly one raw chat per agent invocation" in triager
     assert "Never split one raw chat" in architect
-    assert "nunca mais de um subagent para o mesmo `work_item.target_path`" in fix_wiki
-    assert "Paralelização segura dos subagents passa por `med_ops.py plan-subagents`" in claude
-    assert "Paralelização segura dos subagents passa por `med_ops.py plan-subagents`" in agents
+    assert "Cada reescrita vai para arquivo temporario" in fix_doc
+    assert "Runbooks canônicos" in claude
+    assert "Runbooks canônicos" in agents
 
 
 def test_flashcard_module_references_anki_mcp_prompt_and_ingestion_design():
@@ -163,18 +243,16 @@ def test_flashcard_module_references_anki_mcp_prompt_and_ingestion_design():
     assert not (EXTENSION / "commands" / "twenty_rules.toml").exists()
     assert not (EXTENSION / "commands" / "mednotes" / "flashcards.toml").exists()
     assert not (EXTENSION / "commands" / "mednotes" / "twenty_rules.toml").exists()
-    assert "`/twenty_rules` sem namespace e o prompt MCP" in top_flashcards
+    assert "não crie `/twenty_rules` local" in top_flashcards
     assert "twenty-rules.prompt/content.md" in agent
-    assert "twenty-rules.prompt/content.md" in top_flashcards
     assert "twenty-rules.prompt/content.md" in design
     assert "twenty-rules.prompt/content.md" in twenty_rules
     assert "anki-mcp-twenty-rules.md" in combined
-    assert "Nao peça ao usuario para executar `/twenty_rules`" in top_flashcards
+    assert "nem peça ao usuário para executá-lo" in top_flashcards
     assert "Execute `/twenty_rules` primeiro" not in combined
-    assert "Este comando aceita" in top_flashcards
-    assert "filtro por tag Obsidian" in top_flashcards
-    assert "mais de 10 arquivos" in top_flashcards
-    assert "mcp_anki-mcp_*" in top_flashcards
+    assert "notas, pastas, tags Obsidian ou texto" in top_flashcards
+    assert "preview-first" in top_flashcards
+    assert "mcp_anki-mcp_*" in agent
     assert "twenty_rules" in combined
     assert "flashcard-ingestion.md" in agent + top_flashcards
     assert "nao adicionar tags" in design
@@ -195,7 +273,7 @@ def test_flashcard_module_references_anki_mcp_prompt_and_ingestion_design():
     assert "anki_find_queries" in top_flashcards + design
     assert "preview-cards" in top_flashcards + design
     assert "--create" in top_flashcards + design
-    assert "Por padrao, `/flashcards` NAO grava diretamente no Anki" in top_flashcards
+    assert "modo padrão é preview-first" in top_flashcards
     assert "FLASHCARDS_INDEX.json" in top_flashcards + design
     assert "requires_confirmation" in top_flashcards + design
     assert "preview" in top_flashcards + design
@@ -394,6 +472,7 @@ def test_original_knowledge_text_is_preserved_and_factorized():
     architect = (EXTENSION / "knowledge" / "knowledge-architect.md").read_text(encoding="utf-8")
     linker = (EXTENSION / "knowledge" / "semantic-linker.md").read_text(encoding="utf-8")
     command = (EXTENSION / "commands" / "mednotes" / "process-chats.toml").read_text(encoding="utf-8")
+    process_doc = (ROOT / "docs" / "workflows" / "process-chats.md").read_text(encoding="utf-8")
     agent = (EXTENSION / "agents" / "med-knowledge-architect.md").read_text(encoding="utf-8")
     guard = (EXTENSION / "agents" / "med-publish-guard.md").read_text(encoding="utf-8")
 
@@ -405,11 +484,11 @@ def test_original_knowledge_text_is_preserved_and_factorized():
     assert "aliases" in factory + linker
     assert "[[_Índice_Medicina]]" in architect
     assert "taxonomy-canonical" in factory + command + agent
-    assert "taxonomy-tree --max-depth 4" in factory + command + agent
+    assert "wiki_tree.py --max-depth 4 --audit" in factory + command + agent + process_doc
     assert "taxonomy-audit" in factory + command
     assert "taxonomy-migrate" in factory + command
     assert "--rollback --receipt" in factory + command
     assert "wiki_tree.py --max-depth 4 --audit" in factory + command + agent
     assert "vira o arquivo" in architect + command
-    assert "--allow-new-taxonomy-leaf" in factory + command + guard
+    assert "new leaf under an existing parent" in guard
     assert "1. Clínica Médica" in architect + command + agent + guard

@@ -35,7 +35,7 @@ index_path = "~/Documents/medical-notes-workbench/pdf_index.db"
 provider = "serpapi"
 
 [gemini]
-# Consumido APENAS pelo orquestrador `scripts/run_agent.py`.
+# Consumido APENAS pelo orquestrador `scripts/enrich_notes.py`.
 # O toolbox (subcomandos sections/search/download/insert) não invoca LLM.
 binary = "gemini"
 model_anchors = "gemini-2.5-pro"
