@@ -165,6 +165,11 @@ def test_wiki_operations_are_extracted_into_real_modules():
             "config": importlib.import_module("wiki.config"),
             "raw_chats": importlib.import_module("wiki.raw_chats"),
             "taxonomy": importlib.import_module("wiki.taxonomy"),
+            "taxonomy_schema": importlib.import_module("wiki.taxonomy.schema"),
+            "taxonomy_normalize": importlib.import_module("wiki.taxonomy.normalize"),
+            "taxonomy_resolve": importlib.import_module("wiki.taxonomy.resolve"),
+            "taxonomy_audit": importlib.import_module("wiki.taxonomy.audit"),
+            "taxonomy_migration": importlib.import_module("wiki.taxonomy.migration"),
             "publish": importlib.import_module("wiki.publish"),
             "style": importlib.import_module("wiki.style"),
             "health": importlib.import_module("wiki.health"),
@@ -182,7 +187,20 @@ def test_wiki_operations_are_extracted_into_real_modules():
     assert hasattr(modules["cli"], "main")
     assert hasattr(modules["config"], "resolve_config")
     assert hasattr(modules["raw_chats"], "mutate_raw_frontmatter")
-    assert hasattr(modules["taxonomy"], "taxonomy_migration_plan")
+    for name in (
+        "normalize_taxonomy",
+        "resolve_taxonomy",
+        "taxonomy_audit",
+        "taxonomy_migration_plan",
+        "apply_taxonomy_migration",
+        "rollback_taxonomy_migration",
+    ):
+        assert hasattr(modules["taxonomy"], name)
+    assert hasattr(modules["taxonomy_schema"], "TaxonomyResolution")
+    assert hasattr(modules["taxonomy_normalize"], "safe_title")
+    assert hasattr(modules["taxonomy_resolve"], "resolve_target_for_note")
+    assert hasattr(modules["taxonomy_audit"], "taxonomy_tree")
+    assert hasattr(modules["taxonomy_migration"], "apply_taxonomy_migration")
     assert hasattr(modules["publish"], "publish_batch")
     assert hasattr(modules["style"], "validate_wiki_style")
     assert hasattr(modules["health"], "fix_wiki_health")
