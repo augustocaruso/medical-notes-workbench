@@ -99,8 +99,8 @@ extension/skills/             runbooks oficiais
 extension/knowledge/          contratos duráveis
 extension/agents/             subagents especializados
 extension/scripts/mednotes/   CLIs determinísticas dos workflows
-extension/scripts/mednotes/wiki/        wrappers do domínio Wiki
-extension/scripts/mednotes/flashcards/  wrappers do domínio cards
+extension/scripts/mednotes/wiki/        domínio Wiki
+extension/scripts/mednotes/flashcards/  domínio /flashcards
 extension/scripts/mednotes/obsidian/    wrappers do domínio Obsidian
 docs/workflows/               documentação operacional por workflow
 docs/reference/               referência técnica

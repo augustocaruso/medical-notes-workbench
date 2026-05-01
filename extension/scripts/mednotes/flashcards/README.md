@@ -1,8 +1,19 @@
-# Flashcard Scripts
+# Flashcards Domain
 
-Dominio dos utilitarios determinísticos de `/flashcards`.
+Dominio dos utilitarios determinísticos de `/flashcards`. A lógica real vive
+neste pacote; os scripts no diretório pai permanecem como shims públicos de
+compatibilidade.
 
-Arquivos atuais relacionados:
+Módulos reais:
+
+- `sources.py`: resolve arquivos, diretórios, globs, tags e manifests.
+- `pipeline.py`: prepara/aplica plano de escrita.
+- `index.py`: idempotência local e status de fontes.
+- `report.py`: preview e relatório final.
+- `model.py`: valida note type/campos do Anki.
+- `sync_rules.py`: compara/atualiza a cópia local das Twenty Rules.
+
+Entradas históricas preservadas:
 
 - `../flashcard_sources.py`
 - `../flashcard_pipeline.py`
@@ -11,14 +22,5 @@ Arquivos atuais relacionados:
 - `../anki_model_validator.py`
 - `../sync_anki_twenty_rules.py`
 
-Wrappers disponíveis:
-
-- `sources.py`
-- `pipeline.py`
-- `report.py`
-- `index.py`
-- `model.py`
-- `sync_rules.py`
-
-Novos utilitarios de cards devem entrar neste dominio ou substituir os arquivos
-legados por wrappers finos.
+Novos utilitarios de cards devem entrar neste dominio. Scripts novos no pai
+devem ser evitados, salvo quando forem shims de compatibilidade.

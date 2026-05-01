@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "extension" / "scripts" / "mednotes" / "flashcard_sources.py"
+SCRIPT = ROOT / "extension" / "scripts" / "mednotes" / "flashcards" / "sources.py"
 
 
 def _run(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:

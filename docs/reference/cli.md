@@ -41,6 +41,8 @@ Domain wrappers are also available for clearer script organization:
 
 ## Flashcards
 
+Entradas historicas preservadas:
+
 - `python scripts/mednotes/flashcard_sources.py resolve|preview`
 - `python scripts/mednotes/flashcard_pipeline.py prepare|apply`
 - `python scripts/mednotes/flashcard_report.py preview-cards|final`
@@ -49,7 +51,7 @@ Domain wrappers are also available for clearer script organization:
 - `python scripts/mednotes/sync_anki_twenty_rules.py check|write`
 - `python scripts/mednotes/obsidian_note_utils.py deeplink|add-tag|remove-tag`
 
-Domain wrappers:
+Entradas do pacote interno:
 
 - `python scripts/mednotes/flashcards/sources.py ...`
 - `python scripts/mednotes/flashcards/pipeline.py ...`

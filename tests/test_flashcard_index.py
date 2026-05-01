@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "extension" / "scripts" / "mednotes" / "flashcard_index.py"
+SCRIPT = ROOT / "extension" / "scripts" / "mednotes" / "flashcards" / "index.py"
 
 
 def _run(*args: str, input_json: dict | None = None) -> subprocess.CompletedProcess[str]:

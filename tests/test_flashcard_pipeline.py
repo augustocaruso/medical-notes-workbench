@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "extension" / "scripts" / "mednotes" / "flashcard_pipeline.py"
+SCRIPT = ROOT / "extension" / "scripts" / "mednotes" / "flashcards" / "pipeline.py"
 
 
 class FakeAnkiMcp:

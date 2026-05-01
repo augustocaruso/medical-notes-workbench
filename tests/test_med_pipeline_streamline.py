@@ -270,8 +270,64 @@ def test_domain_script_wrappers_expose_help():
         EXTENSION / "scripts" / "mednotes" / "wiki" / "ops.py",
         EXTENSION / "scripts" / "mednotes" / "wiki" / "linker.py",
         EXTENSION / "scripts" / "mednotes" / "flashcards" / "sources.py",
+        EXTENSION / "scripts" / "mednotes" / "flashcards" / "pipeline.py",
+        EXTENSION / "scripts" / "mednotes" / "flashcards" / "index.py",
+        EXTENSION / "scripts" / "mednotes" / "flashcards" / "report.py",
+        EXTENSION / "scripts" / "mednotes" / "flashcards" / "model.py",
+        EXTENSION / "scripts" / "mednotes" / "flashcards" / "sync_rules.py",
         EXTENSION / "scripts" / "mednotes" / "obsidian" / "notes.py",
     ):
+        result = subprocess.run(
+            [os.sys.executable, str(path), "--help"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert result.returncode == 0
+        assert "usage:" in result.stdout
+
+
+def test_flashcard_operations_are_extracted_into_real_modules():
+    script_dir = EXTENSION / "scripts" / "mednotes"
+    script_dir_str = str(script_dir)
+    added_path = script_dir_str not in sys.path
+    if added_path:
+        sys.path.insert(0, script_dir_str)
+    try:
+        modules = {
+            "sources": importlib.import_module("flashcards.sources"),
+            "pipeline": importlib.import_module("flashcards.pipeline"),
+            "index": importlib.import_module("flashcards.index"),
+            "report": importlib.import_module("flashcards.report"),
+            "model": importlib.import_module("flashcards.model"),
+            "sync_rules": importlib.import_module("flashcards.sync_rules"),
+        }
+    finally:
+        if added_path:
+            try:
+                sys.path.remove(script_dir_str)
+            except ValueError:
+                pass
+
+    assert hasattr(modules["sources"], "resolve_manifest")
+    assert hasattr(modules["pipeline"], "prepare_write_plan")
+    assert hasattr(modules["index"], "check_candidates")
+    assert hasattr(modules["report"], "build_report")
+    assert hasattr(modules["model"], "validate_models")
+    assert hasattr(modules["sync_rules"], "compare_prompts")
+
+    for legacy, package_module in (
+        ("flashcard_sources.py", "sources"),
+        ("flashcard_pipeline.py", "pipeline"),
+        ("flashcard_index.py", "index"),
+        ("flashcard_report.py", "report"),
+        ("anki_model_validator.py", "model"),
+        ("sync_anki_twenty_rules.py", "sync_rules"),
+    ):
+        path = EXTENSION / "scripts" / "mednotes" / legacy
+        text = path.read_text(encoding="utf-8")
+        assert len(text.splitlines()) <= 30
+        assert f"from flashcards import {package_module} as _impl" in text
         result = subprocess.run(
             [os.sys.executable, str(path), "--help"],
             text=True,

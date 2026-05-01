@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "extension" / "scripts" / "mednotes" / "anki_model_validator.py"
+SCRIPT = ROOT / "extension" / "scripts" / "mednotes" / "flashcards" / "model.py"
 
 
 def _run(payload: dict, *args: str) -> subprocess.CompletedProcess[str]:
