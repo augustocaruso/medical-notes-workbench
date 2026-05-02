@@ -1,6 +1,6 @@
 {
   "name": "medical-notes-workbench",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "Gemini CLI extension packaging for medical notes creation and processing.",
   "private": true,
   "scripts": {

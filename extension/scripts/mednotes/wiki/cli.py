@@ -11,6 +11,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from wiki.api import (
+    EXIT_IO,
     EXIT_LINKER,
     EXIT_OK,
     EXIT_USAGE,
@@ -348,6 +349,8 @@ def main(argv: list[str] | None = None) -> int:
                 backup_max_per_file=args.backup_max_per_file,
             )
             _json(report)
+            if report.get("write_error_count", 0):
+                return EXIT_IO
             if report["error_count"] or report.get("graph_error_count", 0) or report.get("taxonomy_action_required"):
                 return EXIT_VALIDATION
             linker_apply = report.get("linker_apply")

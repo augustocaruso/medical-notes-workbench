@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from wiki import note_style
-from wiki.common import MissingPathError, ValidationError
+from wiki.common import FileWriteError, MissingPathError, ValidationError
 from wiki.link_terms import is_index_target
 from wiki.raw_chats import atomic_write_text, create_backup, read_note_meta
 
@@ -85,6 +85,7 @@ def fix_wiki_style(wiki_dir: Path, apply: bool = False, backup: bool = False) ->
     changed_count = 0
     written_count = 0
     backup_paths: list[str] = []
+    write_errors: list[dict[str, Any]] = []
     for path in files:
         original = path.read_text(encoding="utf-8")
         title = note_style.infer_title(original, path)
@@ -94,6 +95,7 @@ def fix_wiki_style(wiki_dir: Path, apply: bool = False, backup: bool = False) ->
             report["would_write"] = False
             report["wrote"] = False
             report["backup"] = None
+            report["write_error"] = None
             reports.append(report)
             continue
         fixed, report = note_style.fix_note_style(original, title=title, path=str(path))
@@ -102,16 +104,31 @@ def fix_wiki_style(wiki_dir: Path, apply: bool = False, backup: bool = False) ->
         report["would_write"] = changed
         report["wrote"] = False
         report["backup"] = None
+        report["write_error"] = None
         if changed:
             changed_count += 1
         if apply and changed:
-            backup_path = create_backup(path) if backup else None
-            atomic_write_text(path, fixed)
-            report["wrote"] = True
-            report["backup"] = str(backup_path) if backup_path else None
-            if backup_path:
-                backup_paths.append(str(backup_path))
-            written_count += 1
+            backup_path: Path | None = None
+            try:
+                backup_path = create_backup(path) if backup else None
+                if backup_path:
+                    backup_paths.append(str(backup_path))
+                atomic_write_text(path, fixed)
+            except (FileWriteError, OSError) as exc:
+                report["backup"] = str(backup_path) if backup_path else None
+                report["write_error"] = str(exc)
+                write_errors.append(
+                    {
+                        "path": str(path),
+                        "backup": report["backup"],
+                        "operation": "fix_wiki_style",
+                        "error": str(exc),
+                    }
+                )
+            else:
+                report["wrote"] = True
+                report["backup"] = str(backup_path) if backup_path else None
+                written_count += 1
         reports.append(report)
     return {
         "schema": note_style.STYLE_FIX_SCHEMA,
@@ -124,6 +141,8 @@ def fix_wiki_style(wiki_dir: Path, apply: bool = False, backup: bool = False) ->
         "written_count": written_count,
         "error_count": sum(1 for item in reports if item["errors"]),
         "warning_count": sum(1 for item in reports if item["warnings"]),
+        "write_error_count": len(write_errors),
+        "write_errors": write_errors,
         "backup_paths": backup_paths,
         "reports": reports,
     }

@@ -15,6 +15,7 @@ if str(MEDNOTES_SCRIPT_DIR) not in sys.path:
 
 from wiki import api as wiki_api  # noqa: E402
 from wiki import cli as wiki_cli  # noqa: E402
+from wiki import raw_chats  # noqa: E402
 
 
 def _write(path: Path, text: str) -> Path:
@@ -148,6 +149,25 @@ def test_prune_backup_files_limits_backups_per_note(tmp_path):
     assert not backups[1].exists()
     assert backups[2].exists()
     assert backups[3].exists()
+
+
+def test_atomic_write_text_retries_transient_permission_error(monkeypatch, tmp_path):
+    note = _write(tmp_path / "wiki" / "A.md", "old\n")
+    original_replace = raw_chats.os.replace
+    calls: list[tuple[object, object]] = []
+
+    def flaky_replace(src: object, dst: object) -> None:
+        calls.append((src, dst))
+        if len(calls) == 1:
+            raise PermissionError(13, "Acesso negado")
+        original_replace(src, dst)
+
+    monkeypatch.setattr(raw_chats.os, "replace", flaky_replace)
+
+    raw_chats.atomic_write_text(note, "new\n", retry_delays=(0,))
+
+    assert len(calls) == 2
+    assert note.read_text(encoding="utf-8") == "new\n"
 
 
 def test_list_pending_and_triados(tmp_path):

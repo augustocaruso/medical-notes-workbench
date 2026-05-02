@@ -261,12 +261,12 @@ function Remove-PythonPathEntries {
                 if ($PSCmdlet.ShouldProcess("$target PATH", "Remove Python PATH entries")) {
                     [Environment]::SetEnvironmentVariable("Path", ($kept -join ";"), $target)
                 }
-                Write-Host "PATH $target: removido"
+                Write-Host "PATH ${target}: removido"
                 $removed | ForEach-Object { Write-Host "  $_" }
             }
         }
         catch {
-            Write-Warning "Nao consegui editar PATH $target: $($_.Exception.Message)"
+            Write-Warning "Nao consegui editar PATH ${target}: $($_.Exception.Message)"
         }
     }
 }

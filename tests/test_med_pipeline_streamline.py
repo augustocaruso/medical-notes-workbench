@@ -132,6 +132,7 @@ def test_extension_build_excludes_generated_python_caches():
     assert 'ROOT / "scripts" / "enrich_workflow"' in build
     assert 'SOURCE / "scripts"' in build
     assert '"run_python.mjs"' in build
+    assert '"full_reset_windows_python_uv.cmd"' in build
     assert "node scripts/run_python.mjs" in package["scripts"]["build:gemini-cli-extension"]
     assert "python3 scripts/" not in json.dumps(package["scripts"])
 

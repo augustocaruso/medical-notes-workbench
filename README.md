@@ -106,7 +106,14 @@ Para limpar Python global da Python Software Foundation/py launcher e deixar o
 workbench rodando só com Python gerenciado pelo `uv`, use o fluxo completo:
 
 ```powershell
+# PowerShell, a partir de ~/.gemini/extensions/medical-notes-workbench
 .\scripts\reset_windows_python_uv.ps1 -FullReset
+```
+
+Ou, se estiver no `cmd.exe`:
+
+```bat
+"%USERPROFILE%\.gemini\extensions\medical-notes-workbench\scripts\full_reset_windows_python_uv.cmd"
 ```
 
 O `-FullReset` instala/atualiza `uv` standalone se faltar, remove Python global

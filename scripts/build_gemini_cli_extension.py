@@ -100,6 +100,7 @@ def main() -> int:
         _copy_tree(extension_scripts, DIST / "scripts")
     _copy_file(ROOT / "scripts" / "run_python.mjs", DIST / "scripts" / "run_python.mjs")
     _copy_file(ROOT / "scripts" / "reset_windows_python_uv.ps1", DIST / "scripts" / "reset_windows_python_uv.ps1")
+    _copy_file(ROOT / "scripts" / "full_reset_windows_python_uv.cmd", DIST / "scripts" / "full_reset_windows_python_uv.cmd")
     _copy_tree(ROOT / "scripts" / "enrich_workflow", DIST / "scripts" / "enrich_workflow")
     _copy_file(ROOT / "scripts" / "enrich_notes.py", DIST / "scripts" / "enrich_notes.py")
 

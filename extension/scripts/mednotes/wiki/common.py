@@ -36,6 +36,12 @@ class CollisionError(MedOpsError):
     exit_code = EXIT_VALIDATION
 
 
+class FileWriteError(MedOpsError):
+    """Filesystem write failed after local retry/recovery attempts."""
+
+    exit_code = EXIT_IO
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 

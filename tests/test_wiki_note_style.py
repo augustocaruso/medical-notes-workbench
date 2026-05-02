@@ -12,7 +12,8 @@ FIXTURES = ROOT / "tests" / "fixtures"
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from wiki import note_style  # noqa: E402
+from wiki import cli as wiki_cli  # noqa: E402
+from wiki import note_style, raw_chats  # noqa: E402
 
 
 def _write(path: Path, text: str) -> Path:
@@ -503,6 +504,62 @@ def test_fix_wiki_apply_writes_batch_changes_and_can_backup(tmp_path):
     assert "## 🏁 Fechamento" in fixed
     assert "## 🔗 Notas Relacionadas" in fixed
     assert "[[Cineangiocoronariografia (Cateterismo)|CATE]]" in fixed
+
+
+def test_fix_wiki_apply_reports_write_errors_without_traceback(monkeypatch, capsys, tmp_path):
+    wiki = tmp_path / "Wiki_Medicina"
+    folder = wiki / "1. Clínica Médica" / "Cardiologia"
+    note = _write(
+        folder / "ISRS.md",
+        "# ISRS\n\n"
+        "Definição curta.\n\n"
+        "## Diagnóstico\n"
+        "Texto.\n\n"
+        "## 🏁 Fechamento\n\n"
+        "### Resumo\n"
+        "Resumo.\n\n"
+        "### Key Points\n"
+        "- Ponto.\n\n"
+        "### Frase de Prova\n"
+        "Frase.\n\n"
+        "## 🔗 Notas Relacionadas\n"
+        "- [[Depressão]]\n\n"
+        "---\n"
+        "[Chat Original](https://gemini.google.com/app/batch)\n"
+        "[[_Índice_Medicina]]\n",
+    )
+    _write(folder / "Depressão.md", _valid_note("Depressão"))
+    original = note.read_text(encoding="utf-8")
+
+    def locked_replace(_src: object, _dst: object) -> None:
+        raise PermissionError(13, "Acesso negado")
+
+    monkeypatch.setattr(raw_chats.os, "replace", locked_replace)
+
+    returncode = wiki_cli.main(
+        [
+            "--wiki-dir",
+            str(wiki),
+            "fix-wiki",
+            "--apply",
+            "--backup",
+            "--json",
+        ]
+    )
+
+    assert returncode == 5
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["write_error_count"] == 1
+    assert payload["linker_skipped_reason"] == "write_errors"
+    write_error = payload["write_errors"][0]
+    assert write_error["operation"] == "fix_wiki_style"
+    assert write_error["path"].endswith("ISRS.md")
+    assert "Acesso negado" in write_error["error"]
+    isrs_report = next(item for item in payload["reports"] if item["path"].endswith("ISRS.md"))
+    assert isrs_report["wrote"] is False
+    assert Path(isrs_report["backup"]).exists()
+    assert note.read_text(encoding="utf-8") == original
 
 
 def test_fix_wiki_apply_repairs_invalid_graph_links_before_linker(tmp_path):

@@ -30,3 +30,12 @@ quando solicitado.
 
 Novos contratos devem seguir a mesma familia e ser cobertos por teste antes de
 entrar em um workflow publico.
+
+## Campos De Escrita Bloqueada
+
+Workflows que aplicam reparos em notas podem retornar `write_error_count` e
+`write_errors` no JSON. Esses campos indicam que a auditoria terminou, mas uma
+ou mais escritas falharam mesmo após retry local, normalmente por lock de
+Obsidian, iCloud Drive, antivírus ou outro processo. Em `fix-wiki`, qualquer
+erro desse tipo pula o linker real com `linker_skipped_reason: write_errors` e
+retorna código de IO.

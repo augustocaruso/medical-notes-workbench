@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from wiki import graph as wiki_graph
+from wiki.common import FileWriteError
 from wiki.graph import NO_STRONG_LINKS_MARKER
 from wiki.link_terms import is_index_target
 from wiki.raw_chats import atomic_write_text, create_backup
@@ -41,6 +42,7 @@ def fix_wiki_graph(
     changed_count = 0
     written_count = 0
     backup_paths: list[str] = []
+    write_errors: list[dict[str, Any]] = []
     for relative_file, issues in sorted(issues_by_file.items()):
         path = wiki_dir / relative_file
         if not path.exists() or not path.is_file():
@@ -55,19 +57,34 @@ def fix_wiki_graph(
             "would_write": changed,
             "wrote": False,
             "backup": None,
+            "write_error": None,
             "fixes_applied": fixes,
             "issue_codes": sorted({str(issue.get("code", "")) for issue in issues if issue.get("code")}),
         }
         if changed:
             changed_count += 1
         if apply and changed:
-            backup_path = create_backup(path) if backup else None
-            atomic_write_text(path, fixed)
-            report["wrote"] = True
-            report["backup"] = str(backup_path) if backup_path else None
-            if backup_path:
-                backup_paths.append(str(backup_path))
-            written_count += 1
+            backup_path: Path | None = None
+            try:
+                backup_path = create_backup(path) if backup else None
+                if backup_path:
+                    backup_paths.append(str(backup_path))
+                atomic_write_text(path, fixed)
+            except (FileWriteError, OSError) as exc:
+                report["backup"] = str(backup_path) if backup_path else None
+                report["write_error"] = str(exc)
+                write_errors.append(
+                    {
+                        "path": str(path),
+                        "backup": report["backup"],
+                        "operation": "fix_wiki_graph",
+                        "error": str(exc),
+                    }
+                )
+            else:
+                report["wrote"] = True
+                report["backup"] = str(backup_path) if backup_path else None
+                written_count += 1
         reports.append(report)
 
     duplicate_report = _fix_exact_duplicate_stems(
@@ -77,6 +94,7 @@ def fix_wiki_graph(
         backup=backup,
     )
     backup_paths.extend(duplicate_report["backup_paths"])
+    write_errors.extend(duplicate_report["write_errors"])
 
     return {
         "schema": GRAPH_FIX_SCHEMA,
@@ -86,6 +104,8 @@ def fix_wiki_graph(
         "backup": backup,
         "changed_count": changed_count,
         "written_count": written_count,
+        "write_error_count": len(write_errors),
+        "write_errors": write_errors,
         "backup_paths": backup_paths,
         "reports": reports,
         "duplicates": duplicate_report,
@@ -187,6 +207,7 @@ def _fix_exact_duplicate_stems(
 ) -> dict[str, Any]:
     reports: list[dict[str, Any]] = []
     backup_paths: list[str] = []
+    write_errors: list[dict[str, Any]] = []
     removed_count = 0
     merge_required_count = 0
 
@@ -215,11 +236,23 @@ def _fix_exact_duplicate_stems(
             continue
         removed: list[str] = []
         for path in remove:
-            backup_path = create_backup(path) if backup and apply else None
-            if apply:
-                path.unlink()
-            if backup_path:
-                backup_paths.append(str(backup_path))
+            backup_path: Path | None = None
+            try:
+                backup_path = create_backup(path) if backup and apply else None
+                if backup_path:
+                    backup_paths.append(str(backup_path))
+                if apply:
+                    path.unlink()
+            except (FileWriteError, OSError) as exc:
+                write_errors.append(
+                    {
+                        "path": str(path),
+                        "backup": str(backup_path) if backup_path else None,
+                        "operation": "remove_exact_duplicate",
+                        "error": str(exc),
+                    }
+                )
+                continue
             removed.append(path.relative_to(wiki_dir).as_posix())
             removed_count += 1
         reports.append(
@@ -235,6 +268,8 @@ def _fix_exact_duplicate_stems(
         "removed_count": removed_count if apply else sum(len(item.get("removed", [])) for item in reports),
         "merge_required_count": merge_required_count,
         "backup_paths": backup_paths,
+        "write_error_count": len(write_errors),
+        "write_errors": write_errors,
         "reports": reports,
     }
 

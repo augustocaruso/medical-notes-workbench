@@ -43,8 +43,10 @@ emoji por bullet.
 - `create`: tema, destino quando salvo, se houve sobrescrita evitada,
   pontos visuais sugeridos e próximo workflow recomendado.
 - `fix-wiki`: `file_count`, `changed_count`, `written_count`, `error_count`,
-  `taxonomy_action_required`, `requires_llm_rewrite_count`, grafo/linker,
-  backups e exemplos de notas afetadas.
+  `write_error_count`, `taxonomy_action_required`,
+  `requires_llm_rewrite_count`, grafo/linker, backups e exemplos de notas
+  afetadas. Se houver `write_errors`, destaque que a escrita ficou bloqueada e
+  que o linker real foi pulado.
 - `process-chats`: pendentes/triados, work items, notas staged/publicadas,
   chats marcados como processados, dry-run/publish, linker e canonizações de
   taxonomia.

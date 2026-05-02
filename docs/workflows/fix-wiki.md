@@ -20,10 +20,14 @@ correções determinísticas de grafo, linker seguro e taxonomia via
    seguro (`dangling_link`, `self_link`, link ambíguo, marcador contraditório e
    duplicata exata), dry-run do linker e linker real quando não restarem
    blockers.
+   Se algum arquivo estiver bloqueado para escrita, o comando ainda emite JSON
+   com `write_error_count`/`write_errors`, pula o linker real e sai com erro de
+   IO em vez de despejar traceback.
 4. Repita o ciclo de reparo até estabilizar: se o JSON ainda trouxer
    `changed_count`, `graph_fix.changed_count`, `linker_applied`,
-   `requires_llm_rewrite_count` ou `taxonomy_action_required`, execute o passo
-   correspondente abaixo e rode `fix-wiki --apply --backup --json` novamente.
+   `write_error_count`, `requires_llm_rewrite_count` ou
+   `taxonomy_action_required`, execute o passo correspondente abaixo e rode
+   `fix-wiki --apply --backup --json` novamente.
 5. Se `requires_llm_rewrite` vier verdadeiro, planejar:
    `uv run python scripts/mednotes/med_ops.py plan-subagents --phase style-rewrite --max-concurrency 3 --temp-root <tmp-rewrites>`
 6. Cada reescrita vai para arquivo temporario e entra pelo gate:

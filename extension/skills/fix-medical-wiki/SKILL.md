@@ -47,13 +47,18 @@ canônico de notas Wiki, reescritas necessárias e grafo.
    esse destino.
 3. Resuma `file_count`, `changed_count`, `written_count`, `error_count`,
    `taxonomy_action_required`, `taxonomy_issue_count`, `graph_error_count`,
-   `requires_llm_rewrite_count`, `linker_dry_run.links_planned`,
+   `write_error_count`, `requires_llm_rewrite_count`,
+   `linker_dry_run.links_planned`,
    `backup_policy` e `backup_cleanup`. Quando uma mudança vier só de YAML,
    trate como fix determinístico: `aliases`, `tags` e `images_*`, ou nenhum
    YAML quando todos estiverem vazios. Quando vier de grafo, destaque
    `graph_fix`: links quebrados/self/ambíguos são convertidos para texto
    visível, marcador contraditório é removido e duplicatas exatas podem ser
    removidas com backup.
+   Se `write_error_count` for maior que zero, trate como bloqueio de IO:
+   mostre poucos exemplos de `write_errors`, explique que o linker real foi
+   pulado com `linker_skipped_reason: write_errors` e peça liberar iCloud,
+   Obsidian, antivírus ou outro processo antes de retentar.
 4. Depois do fix determinístico aplicado, leia `taxonomy_audit`, `style_audit`,
    `graph_fix`, `graph_audit`, `linker_dry_run`, `linker_apply` e
    `graph_audit_final` no JSON retornado. Se `graph_fix.duplicates` trouxer

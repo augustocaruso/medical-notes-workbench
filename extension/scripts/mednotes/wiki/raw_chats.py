@@ -1,6 +1,7 @@
 """Raw chat frontmatter and filesystem helpers."""
 from __future__ import annotations
 
+import errno
 import json
 import os
 import re
@@ -10,12 +11,14 @@ import time
 from pathlib import Path
 from typing import Any
 
-from wiki.common import MissingPathError, ValidationError
+from wiki.common import FileWriteError, MissingPathError, ValidationError
 
 _FRONTMATTER_DELIM = "---"
 _KEY_RE = re.compile(r"^([A-Za-z0-9_-]+)\s*:\s*(.*)$")
 BACKUP_CLEANUP_SCHEMA = "medical-notes-workbench.backup-cleanup.v1"
 _NOTE_BACKUP_RE = re.compile(r"^(?P<original>.+\.md)\.bak(?:\.\d+)?$")
+_ATOMIC_WRITE_RETRY_DELAYS = (0.05, 0.1, 0.2, 0.4, 0.8)
+_WINDOWS_LOCK_WINERRORS = {5, 32, 33}
 
 
 def split_frontmatter(text: str) -> tuple[list[str] | None, str]:
@@ -153,17 +156,48 @@ def prune_backup_files(root: Path, *, max_per_file: int = 3, retention_days: int
     }
 
 
-def atomic_write_text(path: Path, text: str) -> None:
+def _is_retryable_replace_error(exc: OSError) -> bool:
+    if isinstance(exc, PermissionError):
+        return True
+    if getattr(exc, "winerror", None) in _WINDOWS_LOCK_WINERRORS:
+        return True
+    return getattr(exc, "errno", None) in {errno.EACCES, errno.EPERM, errno.EBUSY}
+
+
+def _replace_with_retries(path: Path, tmp: Path, retry_delays: tuple[float, ...]) -> None:
+    attempts = len(retry_delays) + 1
+    last_error: OSError | None = None
+    for attempt_idx in range(attempts):
+        try:
+            os.replace(tmp, path)
+            return
+        except OSError as exc:
+            last_error = exc
+            if attempt_idx >= len(retry_delays) or not _is_retryable_replace_error(exc):
+                break
+            time.sleep(retry_delays[attempt_idx])
+
+    raise FileWriteError(
+        f"Could not atomically replace {path} after {attempts} attempts. "
+        f"The file may be locked by Obsidian, iCloud Drive, antivirus, or another process. "
+        f"Original error: {last_error}"
+    ) from last_error
+
+
+def atomic_write_text(path: Path, text: str, *, retry_delays: tuple[float, ...] | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
     tmp = Path(tmp_name)
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
             fh.write(text)
-        os.replace(tmp, path)
+        _replace_with_retries(path, tmp, _ATOMIC_WRITE_RETRY_DELAYS if retry_delays is None else retry_delays)
     finally:
         if tmp.exists():
-            tmp.unlink()
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
 
 
 def mutate_raw_frontmatter(raw_file: Path, updates: dict[str, str], dry_run: bool = False, backup: bool = False) -> dict[str, Any]:

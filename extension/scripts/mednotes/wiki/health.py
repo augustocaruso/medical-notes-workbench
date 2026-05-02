@@ -59,6 +59,8 @@ def fix_wiki_health(
     taxonomy_issue_count = _taxonomy_action_issue_count(taxonomy_report)
     style_fix = fix_wiki_style(config.wiki_dir, apply=apply, backup=backup)
     graph_fix = fix_wiki_graph(config.wiki_dir, catalog_path=config.catalog_path, apply=apply, backup=backup)
+    write_errors = [*style_fix.get("write_errors", []), *graph_fix.get("write_errors", [])]
+    write_error_count = len(write_errors)
     style_audit = validate_wiki_style(config.wiki_dir)
     rewrite_plan = _style_rewrite_plan_if_needed(config, style_audit)
     graph_before = graph_audit(config)
@@ -68,7 +70,9 @@ def fix_wiki_health(
     linker_backup_paths: list[str] = []
 
     if apply:
-        if rewrite_plan and rewrite_plan.get("item_count", 0):
+        if write_error_count:
+            linker_skipped_reason = "write_errors"
+        elif rewrite_plan and rewrite_plan.get("item_count", 0):
             linker_skipped_reason = "requires_llm_rewrite"
         elif linker_dry_run.get("blocker_count", 0):
             linker_skipped_reason = "graph_blockers"
@@ -99,6 +103,8 @@ def fix_wiki_health(
         "taxonomy_root_note_count": len(taxonomy_report.get("root_notes", [])),
         "requires_llm_rewrite_count": sum(1 for item in style_audit.get("reports", []) if item.get("requires_llm_rewrite")),
         "style_rewrite_plan": rewrite_plan,
+        "write_error_count": write_error_count,
+        "write_errors": write_errors,
         "graph_audit": graph_before,
         "graph_error_count": graph_before.get("error_count", 0),
         "graph_warning_count": graph_before.get("warning_count", 0),
