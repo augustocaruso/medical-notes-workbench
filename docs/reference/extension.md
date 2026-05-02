@@ -21,11 +21,11 @@ workflow precisar de Python.
 Em instalações Gemini CLI, rode Python com `uv run python` a partir da raiz da
 extensão. Antes de comandos manuais, aponte `UV_PROJECT_ENVIRONMENT` para
 `~/.gemini/medical-notes-workbench/.venv` para evitar criar `.venv` dentro do
-bundle auto-updatable. No Windows, `scripts/reset_windows_python_uv.ps1`
-reconstrói esse ambiente com Python gerenciado pelo `uv`. Quando a máquina tiver
-Python global conflitando, rode com `-FullReset` para instalar/atualizar `uv`
-standalone, remover instalações da Python Software Foundation e o Python
-Launcher, limpar PATH e sincronizar o projeto.
+bundle auto-updatable. No Windows, `scripts/bootstrap_windows_python_uv.ps1`
+atualiza o reset script e reconstrói esse ambiente com Python gerenciado pelo
+`uv`. Quando a máquina tiver Python global conflitando, o bootstrap instala/usa
+`uv` pelo melhor caminho disponível, remove instalações da Python Software
+Foundation e o Python Launcher, limpa PATH e sincroniza o projeto.
 
 Hooks usam uma entrada publica unica, `scripts/hooks/mednotes_hook.mjs`. A logica
 interna fica em `scripts/hooks/mednotes_hook/` para manter guardas, recibos,
