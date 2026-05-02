@@ -17,6 +17,7 @@ from wiki.note_style.models import (
 )
 from wiki.note_style.prompts import rewrite_prompt
 from wiki.note_style.tables import check_tables
+from wiki.link_terms import is_index_target
 
 
 _CHAT_ORIGINAL_RE = re.compile(r"^\[Chat Original\]\(https://gemini\.google\.com/app/[^)\s]+\)$")
@@ -68,6 +69,9 @@ def validate_wiki_dir(wiki_dir: Path) -> dict[str, Any]:
     for path in files:
         content = path.read_text(encoding="utf-8")
         title = infer_title(content, path)
+        if is_index_target(path.stem):
+            reports.append(index_style_report(content, title=title, path=str(path)))
+            continue
         reports.append(validate_note_style(content, title=title, path=str(path)))
     return {
         "schema": STYLE_AUDIT_SCHEMA,
@@ -77,6 +81,30 @@ def validate_wiki_dir(wiki_dir: Path) -> dict[str, Any]:
         "error_count": sum(1 for item in reports if item["errors"]),
         "warning_count": sum(1 for item in reports if item["warnings"]),
         "reports": reports,
+    }
+
+
+def index_style_report(
+    content: str,
+    *,
+    title: str,
+    path: str | None = None,
+    fixes_applied: list[str] | None = None,
+) -> dict[str, Any]:
+    frontmatter, _body = split_frontmatter(content)
+    return {
+        "schema": STYLE_REPORT_SCHEMA,
+        "path": path,
+        "title": title,
+        "ok": True,
+        "errors": [],
+        "warnings": [],
+        "fixes_applied": fixes_applied or [],
+        "requires_llm_rewrite": False,
+        "rewrite_prompt": None,
+        "frontmatter_present": frontmatter is not None,
+        "skipped": True,
+        "skip_reason": "wiki_index",
     }
 
 

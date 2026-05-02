@@ -57,3 +57,20 @@ def test_graph_audit_accepts_no_strong_related_links_marker(tmp_path):
     warning_codes = {item["code"] for item in report["warnings"]}
 
     assert "few_related_links" not in warning_codes
+
+
+def test_graph_audit_ignores_index_note_and_links_to_index(tmp_path):
+    wiki = tmp_path / "Wiki_Medicina"
+    _write(wiki / "_indice_medicina.md", "# Índice\n\n- [[ISRS]]\n")
+    _write(
+        wiki / "ISRS.md",
+        "# ISRS\n\nTexto com [[_indice_medicina]].\n\n## 🔗 Notas Relacionadas\n- Sem conexões fortes no catálogo atual.\n",
+    )
+
+    report = wiki_graph.audit_wiki_graph(wiki)
+    warnings = {(item["code"], item.get("file"), item.get("target")) for item in report["warnings"]}
+    errors = {(item["code"], item.get("file"), item.get("target")) for item in report["errors"]}
+
+    assert ("missing_related_section", "_indice_medicina.md", None) not in warnings
+    assert ("orphan_note", "_indice_medicina.md", None) not in warnings
+    assert ("dangling_link", "ISRS.md", "_indice_medicina") not in errors

@@ -28,6 +28,7 @@ from wiki.link_terms import (  # noqa: E402
     catalog_entries as _catalog_entries,
     expand_path,
     extract_aliases,
+    is_index_target,
     normalize_key,
     target_from_entry as _target_from_entry,
     terms_from_entry as _terms_from_entry,
@@ -36,6 +37,10 @@ from wiki.link_terms import (  # noqa: E402
 
 DEFAULT_WIKI_DIR = r"C:\Users\leona\iCloudDrive\iCloud~md~obsidian\Wiki_Medicina"
 DEFAULT_CATALOG_PATH = "~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json"
+DEFAULT_INDEX_FILENAME = "_Índice_Medicina.md"
+INDEX_START_MARKER = "<!-- mednotes:index:start -->"
+INDEX_END_MARKER = "<!-- mednotes:index:end -->"
+INDEX_HEADING = "# Índice Medicina"
 
 STOPWORDS = {
     "diagnóstico",
@@ -116,10 +121,12 @@ class LinkPlan:
     file: str
     insertions: list[Insertion] = field(default_factory=list)
     skipped: list[dict[str, str]] = field(default_factory=list)
+    index_updated: bool = False
+    index_entries: int = 0
 
     @property
     def changed(self) -> bool:
-        return bool(self.insertions)
+        return bool(self.insertions) or self.index_updated
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -127,6 +134,8 @@ class LinkPlan:
             "changed": self.changed,
             "insertions": [item.__dict__ for item in self.insertions],
             "skipped": self.skipped,
+            "index_updated": self.index_updated,
+            "index_entries": self.index_entries,
         }
 
 
@@ -206,6 +215,69 @@ def _split_frontmatter(content: str) -> tuple[str, str]:
     return "", content
 
 
+def _find_index_file(wiki_dir: Path) -> Path | None:
+    for path in sorted(wiki_dir.rglob("*.md")):
+        if path.is_file() and is_index_target(path.stem):
+            return path
+    return None
+
+
+def _files_to_link(wiki_dir: Path) -> list[Path]:
+    files = sorted(path for path in wiki_dir.rglob("*.md") if path.is_file())
+    index_path = _find_index_file(wiki_dir) or (wiki_dir / DEFAULT_INDEX_FILENAME)
+    if not any(path == index_path for path in files):
+        files.append(index_path)
+    return sorted(files, key=lambda path: path.as_posix())
+
+
+def _index_note_paths(wiki_dir: Path, index_path: Path) -> list[Path]:
+    paths: list[Path] = []
+    for path in wiki_dir.rglob("*.md"):
+        if not path.is_file() or path.name.startswith("."):
+            continue
+        if path == index_path or is_index_target(path.stem):
+            continue
+        paths.append(path)
+    return sorted(paths, key=lambda path: tuple(normalize_key(part) for part in path.relative_to(wiki_dir).parts))
+
+
+def _render_index_block(wiki_dir: Path, index_path: Path) -> tuple[str, int]:
+    note_paths = _index_note_paths(wiki_dir, index_path)
+    lines = [
+        INDEX_START_MARKER,
+        "## 🔗 Notas Indexadas",
+        "",
+        f"Total: {len(note_paths)} notas.",
+        "",
+    ]
+    current_dirs: tuple[str, ...] = ()
+    for path in note_paths:
+        rel = path.relative_to(wiki_dir)
+        dirs = rel.parent.parts
+        common = 0
+        for left, right in zip(current_dirs, dirs):
+            if left != right:
+                break
+            common += 1
+        for depth, dirname in enumerate(dirs[common:], start=common):
+            lines.append(f"{'  ' * depth}- {dirname}")
+        lines.append(f"{'  ' * len(dirs)}- [[{path.stem}]]")
+        current_dirs = dirs
+    if not note_paths:
+        lines.append("- Nenhuma nota médica encontrada.")
+    lines.extend(["", INDEX_END_MARKER, ""])
+    return "\n".join(lines), len(note_paths)
+
+
+def plan_index_file(filepath: Path, wiki_dir: Path) -> tuple[str, LinkPlan]:
+    content = filepath.read_text(encoding="utf-8") if filepath.exists() else ""
+    yaml_part, _body = _split_frontmatter(content)
+    block, entry_count = _render_index_block(wiki_dir, filepath)
+    new_content = f"{yaml_part}{INDEX_HEADING}\n\nMapa automático das notas publicadas em `Wiki_Medicina`.\n\n{block}"
+    plan = LinkPlan(file=str(filepath), index_entries=entry_count, index_updated=new_content != content)
+    return new_content, plan
+
+
 def _protected_spans(text: str) -> list[tuple[int, int]]:
     spans: list[tuple[int, int]] = []
     for pattern in (
@@ -271,17 +343,21 @@ def _replacement(target: str, matched_text: str, *, in_table: bool) -> str:
     return f"[[{target}{separator}{matched_text}]]"
 
 
-def plan_file(filepath: Path, vocabulary: list[LinkTerm], max_links: int = 20) -> tuple[str, LinkPlan]:
+def plan_file(
+    filepath: Path,
+    vocabulary: list[LinkTerm],
+    max_links: int = 20,
+    wiki_dir: Path | None = None,
+) -> tuple[str, LinkPlan]:
+    if is_index_target(filepath.stem):
+        return plan_index_file(filepath, wiki_dir or filepath.parent)
+
     content = filepath.read_text(encoding="utf-8")
     yaml_part, body = _split_frontmatter(content)
     plan = LinkPlan(file=str(filepath))
     protected = _protected_spans(body)
     used_targets: set[str] = set()
     used_ranges: list[tuple[int, int]] = []
-
-    if "_Índice_Medicina" in str(filepath):
-        plan.skipped.append({"reason": "index_file", "term": filepath.name})
-        return content, plan
 
     for term in vocabulary:
         if len(plan.insertions) >= max_links:
@@ -333,9 +409,16 @@ def apply_insertions(body: str, insertions: list[Insertion]) -> str:
     return updated
 
 
-def link_file(filepath: Path, vocabulary: list[LinkTerm], max_links: int = 20, dry_run: bool = False) -> LinkPlan:
-    new_content, plan = plan_file(filepath, vocabulary, max_links=max_links)
+def link_file(
+    filepath: Path,
+    vocabulary: list[LinkTerm],
+    max_links: int = 20,
+    dry_run: bool = False,
+    wiki_dir: Path | None = None,
+) -> LinkPlan:
+    new_content, plan = plan_file(filepath, vocabulary, max_links=max_links, wiki_dir=wiki_dir)
     if plan.changed and not dry_run:
+        filepath.parent.mkdir(parents=True, exist_ok=True)
         filepath.write_text(new_content, encoding="utf-8")
     return plan
 
@@ -380,13 +463,15 @@ def run(
 
     if target and target.is_file():
         files = [target]
+    elif target and is_index_target(target.stem):
+        files = [target]
     else:
-        files = sorted(path for path in wiki_dir.rglob("*.md") if path.is_file())
+        files = _files_to_link(wiki_dir)
 
     blockers = list(before_audit.get("errors", []))
     blocked = bool(blockers) and not dry_run
     plan_only = dry_run or blocked
-    plans = [link_file(path, vocabulary, max_links=max_links, dry_run=plan_only) for path in files]
+    plans = [link_file(path, vocabulary, max_links=max_links, dry_run=plan_only, wiki_dir=wiki_dir) for path in files]
     changed = [plan for plan in plans if plan.changed]
     if blocked:
         changed = []
@@ -402,6 +487,8 @@ def run(
         "files_scanned": len(files),
         "files_changed": len(changed),
         "links_planned": sum(len(plan.insertions) for plan in plans),
+        "index_files_changed": sum(1 for plan in changed if plan.index_updated),
+        "index_entries_planned": sum(plan.index_entries for plan in plans),
         "blocker_count": len(blockers),
         "blockers": blockers,
         "graph_audit_before": before_audit,

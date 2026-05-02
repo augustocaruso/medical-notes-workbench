@@ -25,6 +25,8 @@ from wiki.link_terms import (  # noqa: E402
     catalog_entries as _catalog_entries,
     expand_path,
     extract_aliases,
+    INDEX_TARGET_KEYS,
+    is_index_target,
     normalize_key,
     target_from_entry as _entry_target,
 )
@@ -35,7 +37,7 @@ DEFAULT_WIKI_DIR = r"C:\Users\leona\iCloudDrive\iCloud~md~obsidian\Wiki_Medicina
 DEFAULT_CATALOG_PATH = "~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json"
 RELATED_HEADING = "## 🔗 Notas Relacionadas"
 NO_STRONG_LINKS_MARKER = "Sem conexões fortes no catálogo atual."
-INDEX_TARGETS = {"_indice_medicina", "_índice_medicina"}
+INDEX_TARGETS = INDEX_TARGET_KEYS
 
 GENERIC_ALIASES = {
     "diagnóstico",
@@ -214,17 +216,18 @@ def audit_wiki_graph(wiki_dir: Path, catalog_path: Path | None = None) -> dict[s
         (errors if item["severity"] == "error" else warnings).append(item)
 
     for note in notes:
+        is_index_note = is_index_target(note.stem)
         content = note.path.read_text(encoding="utf-8")
         related_span = _related_section_span(content)
         related_links: list[dict[str, Any]] = []
         has_no_strong_marker = bool(related_span and NO_STRONG_LINKS_MARKER in content[related_span[0] : related_span[1]])
-        if related_span is None:
+        if related_span is None and not is_index_note:
             warnings.append(_issue("missing_related_section", "missing ## 🔗 Notas Relacionadas section", "warning", file=note.relative_path))
 
         for link in _wikilinks(content):
             target = link["target"]
             target_key = normalize_key(target)
-            if target_key in INDEX_TARGETS:
+            if is_index_target(target):
                 continue
             matches = notes_by_stem.get(target_key, [])
             issue_payload = {"file": note.relative_path, "line": link["line"], "target": target, "raw": link["raw"]}
@@ -243,7 +246,7 @@ def audit_wiki_graph(wiki_dir: Path, catalog_path: Path | None = None) -> dict[s
             if link["in_related"]:
                 related_links.append(link)
 
-        if related_span is not None and len(related_links) < 2 and not has_no_strong_marker:
+        if related_span is not None and not is_index_note and len(related_links) < 2 and not has_no_strong_marker:
             warnings.append(
                 _issue(
                     "few_related_links",
@@ -253,7 +256,7 @@ def audit_wiki_graph(wiki_dir: Path, catalog_path: Path | None = None) -> dict[s
                     valid_related_links=len(related_links),
                 )
             )
-        if related_span is not None and has_no_strong_marker and related_links:
+        if related_span is not None and not is_index_note and has_no_strong_marker and related_links:
             warnings.append(
                 _issue(
                     "related_marker_with_links",
@@ -266,7 +269,7 @@ def audit_wiki_graph(wiki_dir: Path, catalog_path: Path | None = None) -> dict[s
     orphan_notes = [
         note.relative_path
         for note in notes
-        if inbound[note.relative_path] == 0 and normalize_key(note.stem) not in INDEX_TARGETS
+        if inbound[note.relative_path] == 0 and not is_index_target(note.stem)
     ]
     for rel_path in orphan_notes:
         warnings.append(_issue("orphan_note", "note has no inbound wiki links", "warning", file=rel_path))

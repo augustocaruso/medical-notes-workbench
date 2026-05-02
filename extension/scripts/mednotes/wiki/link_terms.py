@@ -13,12 +13,17 @@ CATALOG_CONTAINER_KEYS = ("entities", "entidades", "notes", "notas", "items", "c
 TARGET_KEYS = ("target", "target_file", "arquivo", "file", "filename", "nota", "note", "path", "caminho")
 ALIAS_KEYS = ("aliases", "alias", "sinonimos", "sinônimos", "synonyms", "siglas", "acronyms", "termos", "terms")
 TITLE_KEYS = ("titulo", "title", "nome", "name")
+INDEX_TARGET_KEYS = {"_indice_medicina"}
 
 
 def normalize_key(value: str) -> str:
     value = unicodedata.normalize("NFKD", value)
     value = "".join(char for char in value if not unicodedata.combining(char))
     return re.sub(r"\s+", " ", value).strip().casefold()
+
+
+def is_index_target(value: str) -> bool:
+    return normalize_key(Path(value).stem) in INDEX_TARGET_KEYS
 
 
 def expand_path(value: str | os.PathLike[str]) -> Path:

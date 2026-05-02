@@ -21,7 +21,7 @@ from wiki.note_style.models import (
 )
 from wiki.note_style.prompts import rewrite_prompt
 from wiki.note_style.tables import check_tables, escape_wikilink_alias_pipes_in_tables, normalize_markdown_tables
-from wiki.note_style.validate import validate_note_style, validate_wiki_dir
+from wiki.note_style.validate import index_style_report, validate_note_style, validate_wiki_dir
 
 
 __all__ = [
@@ -38,6 +38,7 @@ __all__ = [
     "escape_wikilink_alias_pipes_in_tables",
     "fix_note_style",
     "infer_title",
+    "index_style_report",
     "normalize_markdown_tables",
     "parse_frontmatter",
     "raw_meta_from_file",

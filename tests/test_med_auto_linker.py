@@ -11,6 +11,12 @@ if str(SCRIPT_DIR) not in sys.path:
 from wiki import linker as med_linker  # noqa: E402
 
 
+def _write(path: Path, text: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
 def test_extract_aliases_inline_and_multiline():
     inline = "---\naliases: [IAM, Infarto Agudo do Miocárdio]\n---\n# Nota\n"
     multiline = "---\naliases:\n  - SDR\n  - Síndrome do Desconforto Respiratório\n---\n# Nota\n"
@@ -93,6 +99,34 @@ def test_linker_dry_run_json_does_not_write(tmp_path, capsys):
     assert out["dry_run"] is True
     assert out["links_planned"] == 1
     assert "[[" not in source.read_text(encoding="utf-8")
+
+
+def test_linker_run_creates_or_updates_index_note(tmp_path, capsys):
+    wiki = tmp_path / "wiki"
+    _write(
+        wiki / "1. Clínica Médica" / "Cardiologia" / "Infarto.md",
+        "# Infarto\n\n## 🔗 Notas Relacionadas\n- Sem conexões fortes no catálogo atual.\n",
+    )
+    _write(
+        wiki / "1. Clínica Médica" / "Psiquiatria" / "ISRS.md",
+        "# ISRS\n\n## 🔗 Notas Relacionadas\n- Sem conexões fortes no catálogo atual.\n",
+    )
+
+    rc = med_linker.run(wiki, dry_run=False, json_output=True, verify=False)
+    out = json.loads(capsys.readouterr().out)
+    index = wiki / med_linker.DEFAULT_INDEX_FILENAME
+
+    assert rc == 0
+    assert out["index_files_changed"] == 1
+    assert out["index_entries_planned"] == 2
+    text = index.read_text(encoding="utf-8")
+    assert med_linker.INDEX_START_MARKER in text
+    assert "Total: 2 notas." in text
+    assert "- 1. Clínica Médica" in text
+    assert "  - Cardiologia" in text
+    assert "    - [[Infarto]]" in text
+    assert "  - Psiquiatria" in text
+    assert "    - [[ISRS]]" in text
 
 
 def test_linker_skips_existing_links_and_code_blocks(tmp_path):

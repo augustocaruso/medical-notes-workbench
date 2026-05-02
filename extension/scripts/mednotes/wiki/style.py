@@ -6,6 +6,7 @@ from typing import Any
 
 from wiki import note_style
 from wiki.common import MissingPathError, ValidationError
+from wiki.link_terms import is_index_target
 from wiki.raw_chats import atomic_write_text, create_backup, read_note_meta
 
 
@@ -87,6 +88,14 @@ def fix_wiki_style(wiki_dir: Path, apply: bool = False, backup: bool = False) ->
     for path in files:
         original = path.read_text(encoding="utf-8")
         title = note_style.infer_title(original, path)
+        if is_index_target(path.stem):
+            report = note_style.index_style_report(original, title=title, path=str(path))
+            report["changed"] = False
+            report["would_write"] = False
+            report["wrote"] = False
+            report["backup"] = None
+            reports.append(report)
+            continue
         fixed, report = note_style.fix_note_style(original, title=title, path=str(path))
         changed = fixed != original
         report["changed"] = changed
