@@ -38,7 +38,7 @@ For a triaged raw chat:
   Wiki_Medicina style;
 - choose taxonomy from the canonical taxonomy and current tree supplied by the
   parent;
-- create exact aliases only;
+- create exact aliases only, using canonical Wiki YAML only when aliases exist;
 - include strong related notes from `CATALOGO_WIKI.json` when available;
 - include provenance footer and `[[_Índice_Medicina]]`;
 - return temp file path, title, taxonomy, aliases, and catalog/entity proposals.
@@ -54,6 +54,8 @@ Use this mode only when the parent sends an existing note path plus a linter
 
 - Preserve clinical facts, YAML aliases, strong WikiLinks, provenance footer,
   and `[[_Índice_Medicina]]`.
+- Preserve canonical Wiki YAML shape: multiline `aliases`, multiline `tags`,
+  and existing enricher `images_*` metadata.
 - Complete missing required sections only when existing context supports them.
 - Write the rewrite to the temp path provided by the parent.
 - Return original path, rewritten temp path, title, and a concise list of

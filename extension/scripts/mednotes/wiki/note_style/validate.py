@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from wiki.note_style.frontmatter import chat_original_url, infer_title, split_frontmatter
+from wiki.note_style.frontmatter import chat_original_url, infer_title, normalize_wiki_frontmatter, split_frontmatter
 from wiki.note_style.models import (
     PREFERRED_H2_EMOJIS,
     REQUIRED_SECTION_LINES,
@@ -39,6 +39,7 @@ def validate_note_style(
     errors: list[StyleIssue] = []
     warnings: list[StyleIssue] = []
 
+    _check_frontmatter(content, title, errors)
     _check_title_and_definition(body, title, errors, warnings)
     _check_headings(body, errors, warnings)
     _check_required_sections(body, errors)
@@ -204,6 +205,21 @@ def _check_footer(body: str, raw_meta: dict[str, str], errors: list[StyleIssue])
             StyleIssue(
                 "invalid_chat_original",
                 "include '[Chat Original](https://gemini.google.com/app/<fonte_id>)' before the index link",
+                "error",
+            )
+        )
+
+
+def _check_frontmatter(content: str, title: str, errors: list[StyleIssue]) -> None:
+    frontmatter, _body = split_frontmatter(content)
+    if frontmatter is None:
+        return
+    normalized, _fixes = normalize_wiki_frontmatter(content, title=title)
+    if normalized != content:
+        errors.append(
+            StyleIssue(
+                "frontmatter_not_canonical",
+                "use canonical Wiki YAML: omit it when empty; otherwise keep only multiline aliases, tags, and workflow metadata",
                 "error",
             )
         )

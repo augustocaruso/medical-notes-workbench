@@ -6,8 +6,8 @@ Workflow de saude geral da `Wiki_Medicina`.
 
 Auditar e corrigir problemas formais das notas existentes sem publicar chats e
 sem mover pastas. O comando cobre estilo Markdown/Obsidian, contrato visual da
-Wiki, reescritas LLM controladas quando a validacao pedir, auditoria de grafo e
-linker seguro.
+Wiki, YAML canônico de notas Wiki, reescritas LLM controladas quando a
+validacao pedir, auditoria de grafo e linker seguro.
 
 ## Fluxo
 
@@ -26,8 +26,9 @@ linker seguro.
 
 - Nao publica notas novas.
 - Nao edita YAML/status de `Chats_Raw`.
+- Pode normalizar YAML das notas Wiki para o contrato canônico: `aliases`,
+  `tags` e `images_*`, ou nenhum YAML quando todos estiverem vazios.
 - Nao move pastas de taxonomia.
 - Se `taxonomy_action_required` for verdadeiro, use o workflow separado
   `taxonomy-migrate`.
 - Para linkagem pura, use `/mednotes:link`.
-

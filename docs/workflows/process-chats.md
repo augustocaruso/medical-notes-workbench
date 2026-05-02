@@ -18,7 +18,9 @@ e escrita clinica por unidade isolada.
 4. Aplicar `triage` ou `discard` em serie pelo agente principal.
 5. Planejar arquitetura com
    `med_ops.py plan-subagents --phase architect --max-concurrency 3 --temp-root <tmp-agents>`.
-6. Validar/fixar notas temporarias com `validate-note` e `fix-note`.
+6. Validar/fixar notas temporarias com `validate-note` e `fix-note`, incluindo
+   YAML canônico da Wiki (`aliases`, `tags`, `images_*`, ou nenhum YAML quando
+   todos estiverem vazios).
 7. Montar manifest somente com `stage-note`.
 8. Rodar `publish-batch --dry-run`, acionar `med-publish-guard` e publicar
    apenas se aprovado.

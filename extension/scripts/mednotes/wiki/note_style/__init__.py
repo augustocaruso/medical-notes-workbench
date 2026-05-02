@@ -5,9 +5,11 @@ from wiki.note_style.fixes import fix_note_style
 from wiki.note_style.frontmatter import (
     chat_original_url,
     infer_title,
+    normalize_wiki_frontmatter,
     parse_frontmatter,
     raw_meta_from_file,
     split_frontmatter,
+    wiki_frontmatter_aliases,
 )
 from wiki.note_style.models import (
     PREFERRED_H2_EMOJIS,
@@ -40,10 +42,12 @@ __all__ = [
     "infer_title",
     "index_style_report",
     "normalize_markdown_tables",
+    "normalize_wiki_frontmatter",
     "parse_frontmatter",
     "raw_meta_from_file",
     "rewrite_prompt",
     "split_frontmatter",
     "validate_note_style",
     "validate_wiki_dir",
+    "wiki_frontmatter_aliases",
 ]

@@ -28,7 +28,6 @@ def _raw_chat(status: str = "triado", fonte_id: str = "chat123") -> str:
 
 def _wiki_note(title: str = "ISRS", fonte_id: str = "chat123") -> str:
     return (
-        f"---\naliases: [{title}]\n---\n"
         f"# {title}\n\n"
         "## 🧬 Visão Geral\n"
         "Conteúdo didático.\n\n"

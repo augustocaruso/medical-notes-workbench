@@ -84,9 +84,11 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
    ```
 
    Se houver erro formal corrigível, rode `fix-note`, valide de novo e só então
-   prossiga. Se `requires_llm_rewrite` aparecer, retorne ao mesmo architect ou
-   faça uma tentativa substituta após a anterior terminar; limite a 2 tentativas
-   por nota.
+   prossiga. Isso inclui YAML variável gerado pelo agente: o fix deve reduzir o
+   frontmatter da Wiki a `aliases`, `tags` e `images_*`, ou removê-lo quando
+   todos estiverem vazios. Se `requires_llm_rewrite` aparecer, retorne ao mesmo
+   architect ou faça uma tentativa substituta após a anterior terminar; limite a
+   2 tentativas por nota.
 9. Monte o manifest apenas com `stage-note`. Se taxonomia/estilo bloquear,
    corrija a nota ou a escolha de taxonomia; não edite o manifest manualmente.
 10. Rode `med-catalog-curator` em série para atualizar/validar

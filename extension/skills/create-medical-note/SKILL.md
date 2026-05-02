@@ -61,6 +61,11 @@ prefira o Padrão Ouro definido em `knowledge/knowledge-architect.md`: título m
 preciso, epidemiologia, etiologia/fisiopatologia, apresentação clínica,
 diferenciais, diagnóstico, manejo/tratamento, fechamento com resumo e Key
 Points, notas relacionadas e `[[_Índice_Medicina]]`.
+Nesse modo, o YAML é mínimo: use apenas `aliases:` e `tags:` em listas
+multiline; omita o bloco quando ambos estiverem vazios; não inclua `title`,
+status, fonte, datas ou taxonomia no frontmatter. Não invente tags ao criar
+notas, mas preserve tags existentes porque `/flashcards` usa a tag Obsidian
+`anki` como estado operacional.
 Nesse modo, cada heading `##` deve começar com emoji, o fechamento deve ser
 `## 🏁 Fechamento`, com `### Resumo`, `### Key Points` e
 `### Frase de Prova`; a seção final deve ser `## 🔗 Notas Relacionadas`; e o

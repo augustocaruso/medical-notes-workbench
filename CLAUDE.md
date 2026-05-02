@@ -52,6 +52,8 @@ Referências:
   índices e catálogos) deve viver em `~/.gemini/medical-notes-workbench`, nunca
   como única cópia dentro de `~/.gemini/extensions/medical-notes-workbench`.
 - Nunca reescreva frontmatter existente do enricher; ele é additive-only.
+- YAML de notas Wiki é canônico: preserve `aliases`, `tags` e metadados
+  `images_*`; omita o bloco somente quando todos estiverem vazios.
 - Nunca edite YAML/status de raw chats manualmente; use `med_ops.py`.
 - Sempre rode `publish-batch --dry-run` antes de publish real.
 - `fix-wiki` pode reportar problemas de taxonomia, mas migração de pastas é

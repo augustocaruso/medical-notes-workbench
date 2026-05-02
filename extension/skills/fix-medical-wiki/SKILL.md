@@ -11,8 +11,8 @@ Resposta ao usuário: `knowledge/workflow-output-contract.md`.
 ## Quando usar
 
 Use quando o usuário pedir auditoria, preview ou correção em lote da
-`Wiki_Medicina`. Este workflow cobre hierarquia/taxonomia, estilo, reescritas
-necessárias e grafo.
+`Wiki_Medicina`. Este workflow cobre hierarquia/taxonomia, estilo, YAML
+canônico de notas Wiki, reescritas necessárias e grafo.
 
 ## Fontes de verdade
 
@@ -41,7 +41,9 @@ necessárias e grafo.
 3. Resuma `file_count`, `changed_count`, `error_count`,
    `taxonomy_action_required`, `taxonomy_issue_count`, `graph_error_count`,
    `requires_llm_rewrite_count`, `linker_dry_run.links_planned` e alguns
-   exemplos de arquivos que mudariam.
+   exemplos de arquivos que mudariam. Quando uma mudança vier só de YAML, trate
+   como fix determinístico: `aliases`, `tags` e `images_*`, ou nenhum YAML
+   quando todos estiverem vazios.
 4. Só aplique quando o usuário pedir explicitamente `--apply`, `--yes`,
    "aplicar", "corrigir de verdade" ou equivalente. Ao aplicar, inclua
    `--backup` por padrão, salvo pedido explícito de não criar backup.

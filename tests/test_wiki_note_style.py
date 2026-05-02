@@ -65,6 +65,89 @@ def test_golden_wiki_style_fixtures_pass():
         assert report["errors"] == []
 
 
+def test_style_requires_canonical_wiki_frontmatter():
+    content = (
+        "---\n"
+        "title: ISRS\n"
+        "tags: [medicina, psiquiatria]\n"
+        "alias: [ISRS, Inibidores seletivos da recaptação de serotonina, ISRS]\n"
+        "---\n\n"
+        + _valid_note("ISRS", related="Depressão")
+    )
+
+    report = note_style.validate_note_style(content, title="ISRS")
+
+    assert report["ok"] is False
+    assert {item["code"] for item in report["errors"]} == {"frontmatter_not_canonical"}
+    assert report["requires_llm_rewrite"] is False
+
+
+def test_fix_note_normalizes_wiki_frontmatter_without_llm():
+    content = (
+        "---\n"
+        "title: ISRS\n"
+        "tags: [medicina, psiquiatria]\n"
+        "sinonimos:\n"
+        "  - ISRS\n"
+        "  - Inibidores seletivos da recaptação de serotonina\n"
+        "---\n\n"
+        + _valid_note("ISRS", related="Depressão")
+    )
+
+    fixed, report = note_style.fix_note_style(content, title="ISRS")
+
+    assert report["errors"] == []
+    assert {"normalize_frontmatter_aliases", "normalize_frontmatter_tags", "remove_noncanonical_frontmatter_keys"} <= set(
+        report["fixes_applied"]
+    )
+    assert fixed.startswith(
+        "---\n"
+        "aliases:\n"
+        '  - "Inibidores seletivos da recaptação de serotonina"\n'
+        "tags:\n"
+        "  - medicina\n"
+        "  - psiquiatria\n"
+        "---\n"
+        "# ISRS\n"
+    )
+    assert "title:" not in fixed
+    assert "sinonimos:" not in fixed
+
+
+def test_fix_note_preserves_flashcard_tags_and_enricher_frontmatter_blocks():
+    content = (
+        "---\n"
+        "aliases: [PAC]\n"
+        "tags: [revisar, #anki]\n"
+        "images_enriched: true\n"
+        "image_count: 2\n"
+        "image_sources:\n"
+        "  - source: wikimedia\n"
+        "    count: 2\n"
+        "---\n\n"
+        + _valid_note("Pneumonia Adquirida na Comunidade", related="Sepse")
+    )
+
+    fixed, report = note_style.fix_note_style(content, title="Pneumonia Adquirida na Comunidade")
+
+    assert report["errors"] == []
+    assert fixed.startswith(
+        "---\n"
+        "aliases:\n"
+        '  - "PAC"\n'
+        "tags:\n"
+        "  - revisar\n"
+        "  - anki\n"
+        "images_enriched: true\n"
+        "image_count: 2\n"
+        "image_sources:\n"
+        "  - source: wikimedia\n"
+        "    count: 2\n"
+        "---\n"
+        "# Pneumonia Adquirida na Comunidade\n"
+    )
+
+
 def test_style_blocks_structural_errors_and_requests_llm_rewrite(tmp_path):
     raw = _raw_chat(tmp_path)
     content = (

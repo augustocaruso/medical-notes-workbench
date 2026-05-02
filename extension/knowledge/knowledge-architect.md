@@ -31,6 +31,25 @@ imitar uma apostila premium de residência: limpo, denso, escaneável e
 previsível.
 
 - Use `# Título Médico Preciso` como primeiro heading depois do YAML.
+- O YAML da Wiki é mínimo e canônico. Use somente `aliases` e `tags`, nesta
+  ordem, antes do `# Título`. Se ambos estiverem vazios, omita o YAML:
+
+```markdown
+---
+aliases:
+  - "Sigla"
+  - "Nome alternativo exato"
+tags:
+  - anki
+---
+# Título Médico Preciso
+```
+
+  Não inclua `title`, `tipo`, `status`, `fonte`, datas, taxonomia, categoria ou
+  outros metadados variáveis no YAML da nota Wiki. Não invente tags ao criar
+  notas; preserve tags existentes, especialmente `anki`, porque o workflow de
+  flashcards usa tags Obsidian como estado operacional. O enricher pode
+  acrescentar `images_*` depois; não antecipe esses campos.
 - Logo após o título, escreva uma definição curta em 2-4 linhas dizendo o que é
   o tema e por que ele importa em prova.
 - Adapte as seções ao tipo de tema, mas toda nota deve responder de algum modo:

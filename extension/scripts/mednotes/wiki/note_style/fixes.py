@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from wiki.note_style.frontmatter import chat_original_url, split_frontmatter
+from wiki.note_style.frontmatter import chat_original_url, normalize_wiki_frontmatter, split_frontmatter
 from wiki.note_style.models import WIKI_INDEX_LINK
 from wiki.note_style.tables import escape_wikilink_alias_pipes_in_tables, normalize_markdown_tables
 from wiki.note_style.validate import validate_note_style
@@ -43,6 +43,11 @@ def fix_note_style(
     if stripped != fixed:
         fixed = stripped
         fixes.append("trim_trailing_whitespace")
+
+    frontmatter_fixed, frontmatter_fixes = normalize_wiki_frontmatter(fixed, title=title)
+    if frontmatter_fixed != fixed:
+        fixed = frontmatter_fixed
+        fixes.extend(frontmatter_fixes or ["normalize_frontmatter"])
 
     heading_fixed = _fix_heading_emojis(fixed)
     if heading_fixed != fixed:
