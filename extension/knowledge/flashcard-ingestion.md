@@ -43,7 +43,7 @@ as decisoes de design da extensao Medical Notes Workbench.
    Gere o deeplink portavel com o script deterministico:
 
    ```bash
-   python ${extensionPath}/scripts/mednotes/obsidian_note_utils.py deeplink <nota.md>
+   uv run python ${extensionPath}/scripts/mednotes/obsidian_note_utils.py deeplink <nota.md>
    ```
 
    O formato canonico e
@@ -66,13 +66,13 @@ as decisoes de design da extensao Medical Notes Workbench.
    frontmatter usando:
 
    ```bash
-   python ${extensionPath}/scripts/mednotes/obsidian_note_utils.py add-tag --tag anki <nota.md>
+   uv run python ${extensionPath}/scripts/mednotes/obsidian_note_utils.py add-tag --tag anki <nota.md>
    ```
 
    Para desfazer a marcacao, use:
 
    ```bash
-   python ${extensionPath}/scripts/mednotes/obsidian_note_utils.py remove-tag --tag anki <nota.md>
+   uv run python ${extensionPath}/scripts/mednotes/obsidian_note_utils.py remove-tag --tag anki <nota.md>
    ```
 
    Nao marque notas sem cards criados. Em sucesso parcial, marque somente os
@@ -119,7 +119,7 @@ conteudo que ja esta presente no arquivo.
 1. Use o resolver deterministico antes de ler notas ou chamar o subagent:
 
    ```bash
-   python ${extensionPath}/scripts/mednotes/flashcard_sources.py resolve --scope "<argumentos>" --dry-run --skip-tag anki
+   uv run python ${extensionPath}/scripts/mednotes/flashcard_sources.py resolve --scope "<argumentos>" --dry-run --skip-tag anki
    ```
 
    Ele devolve JSON parseavel na stdout com `schema`, `summary`, `scope`,
@@ -151,7 +151,7 @@ conteudo que ja esta presente no arquivo.
    Para uma previa textual padronizada, use o subcomando irmao:
 
    ```bash
-   python ${extensionPath}/scripts/mednotes/flashcard_sources.py preview --scope "<argumentos>" --dry-run --skip-tag anki
+   uv run python ${extensionPath}/scripts/mednotes/flashcard_sources.py preview --scope "<argumentos>" --dry-run --skip-tag anki
    ```
 
    `preview` usa a mesma resolucao de `resolve`, mas emite texto humano em vez
@@ -189,14 +189,14 @@ formular cards candidatos antes de chamar o Anki MCP. O formato minimo e:
 Antes de gravar no Anki, filtre duplicados locais:
 
 ```bash
-python ${extensionPath}/scripts/mednotes/flashcard_index.py check --candidates <candidate_cards.json>
+uv run python ${extensionPath}/scripts/mednotes/flashcard_index.py check --candidates <candidate_cards.json>
 ```
 
 Grave somente `new_cards`. Depois que o Anki MCP aceitar os cards, registre
 somente os cards aceitos:
 
 ```bash
-python ${extensionPath}/scripts/mednotes/flashcard_index.py record --accepted <accepted_cards.json>
+uv run python ${extensionPath}/scripts/mednotes/flashcard_index.py record --accepted <accepted_cards.json>
 ```
 
 O indice padrao fica em
@@ -207,8 +207,8 @@ marcador visual/filtro simples, mas a idempotencia real passa pelo indice local.
 Para o fluxo completo, prefira o orquestrador deterministico:
 
 ```bash
-python ${extensionPath}/scripts/mednotes/flashcard_pipeline.py prepare --input <run.json>
-python ${extensionPath}/scripts/mednotes/flashcard_pipeline.py apply --input <accepted-run.json>
+uv run python ${extensionPath}/scripts/mednotes/flashcard_pipeline.py prepare --input <run.json>
+uv run python ${extensionPath}/scripts/mednotes/flashcard_pipeline.py apply --input <accepted-run.json>
 ```
 
 `prepare` combina validacao de modelo, status de fontes alteradas, checagem de
@@ -233,7 +233,7 @@ chamar `mcp_anki-mcp_addNotes`/`mcp_anki-mcp_addNote`.
 Use o plano retornado por `prepare` como entrada:
 
 ```bash
-python ${extensionPath}/scripts/mednotes/flashcard_report.py preview-cards --input <write-plan.json>
+uv run python ${extensionPath}/scripts/mednotes/flashcard_report.py preview-cards --input <write-plan.json>
 ```
 
 Se o usuario nao confirmar, finalize sem escrever no Anki, sem registrar no
@@ -254,7 +254,7 @@ Antes de chamar `mcp_anki-mcp_addNotes`/`mcp_anki-mcp_addNote`, valide que o
 modelo escolhido tem os campos necessarios:
 
 ```bash
-python ${extensionPath}/scripts/mednotes/anki_model_validator.py validate --models-json <models.json>
+uv run python ${extensionPath}/scripts/mednotes/anki_model_validator.py validate --models-json <models.json>
 ```
 
 O JSON de entrada deve representar o resultado de `modelNames` +
@@ -274,7 +274,7 @@ de gravar e mostre os campos disponiveis ao usuario.
 Para auditar a copia local da metodologia contra o pacote Anki MCP instalado:
 
 ```bash
-python ${extensionPath}/scripts/mednotes/sync_anki_twenty_rules.py check
+uv run python ${extensionPath}/scripts/mednotes/sync_anki_twenty_rules.py check
 ```
 
 Use `--source <content.md>` para apontar explicitamente para o prompt upstream.
@@ -286,7 +286,7 @@ Quando o fluxo tiver dados estruturados de fontes, duplicados, cards aceitos,
 validacao de modelo e erros do Anki MCP, gere uma resposta final consistente com:
 
 ```bash
-python ${extensionPath}/scripts/mednotes/flashcard_report.py final --input <run-result.json>
+uv run python ${extensionPath}/scripts/mednotes/flashcard_report.py final --input <run-result.json>
 ```
 
 O relatorio deve separar notas processadas, cards criados, cards pulados por

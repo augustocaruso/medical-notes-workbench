@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -127,6 +128,28 @@ def test_triage_can_create_backup_when_requested(tmp_path):
     assert Path(result["backup"]).exists()
 
 
+def test_prune_backup_files_limits_backups_per_note(tmp_path):
+    wiki = tmp_path / "wiki"
+    note = _write(wiki / "A.md", "# A\n")
+    backups = [
+        _write(wiki / "A.md.bak", "b0\n"),
+        _write(wiki / "A.md.bak.1", "b1\n"),
+        _write(wiki / "A.md.bak.2", "b2\n"),
+        _write(wiki / "A.md.bak.3", "b3\n"),
+    ]
+    for idx, backup in enumerate(backups, start=1):
+        os.utime(backup, (idx, idx))
+
+    result = wiki_api.prune_backup_files(wiki, max_per_file=2, retention_days=-1)
+
+    assert result["deleted_count"] == 2
+    assert note.exists()
+    assert not backups[0].exists()
+    assert not backups[1].exists()
+    assert backups[2].exists()
+    assert backups[3].exists()
+
+
 def test_list_pending_and_triados(tmp_path):
     raw_dir = tmp_path / "raw"
     _write(raw_dir / "a.md", "Sem yaml\n")
@@ -158,6 +181,40 @@ def test_plan_subagents_chunks_pending_chats_without_duplicate_owners(tmp_path):
     assert [len(batch["items"]) for batch in plan["batches"]] == [2, 2, 1]
     assert len({item["owner_key"] for item in plan["work_items"]}) == 5
     assert "Never spawn multiple subagents for the same raw chat or generated note." in plan["rules"]
+
+
+def test_plan_subagents_limit_caps_next_batch_and_reports_available_count(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    for idx in range(5):
+        _write(raw_dir / f"chat-{idx}.md", "Sem yaml\n")
+
+    plan = wiki_api.plan_subagents(_config(raw_dir, wiki_dir), "triage", max_concurrency=2, limit=3)
+
+    assert plan["item_count"] == 3
+    assert plan["total_available_count"] == 5
+    assert plan["limit"] == 3
+    assert plan["truncated"] is True
+    assert [len(batch["items"]) for batch in plan["batches"]] == [2, 1]
+    assert [Path(item["raw_file"]).name for item in plan["work_items"]] == [
+        "chat-0.md",
+        "chat-1.md",
+        "chat-2.md",
+    ]
+    assert "When limit is set, spawn only the returned work_items" in plan["rules"]
+
+
+def test_plan_subagents_can_parallelize_entire_limited_batch(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    for idx in range(5):
+        _write(raw_dir / f"chat-{idx}.md", "Sem yaml\n")
+
+    plan = wiki_api.plan_subagents(_config(raw_dir, wiki_dir), "triage", max_concurrency=5, limit=5)
+
+    assert plan["item_count"] == 5
+    assert plan["max_concurrency"] == 5
+    assert [len(batch["items"]) for batch in plan["batches"]] == [5]
 
 
 def test_plan_subagents_architect_assigns_isolated_temp_dirs(tmp_path):
@@ -852,9 +909,10 @@ def test_public_med_ops_commands_still_work_after_cli_split(tmp_path):
     ]
     commands = [
         [*base, "fix-wiki", "--json"],
+        [*base, "fix-wiki", "--dry-run", "--json"],
         [*base, "publish-batch", "--manifest", str(manifest), "--dry-run"],
         [*base, "taxonomy-migrate", "--dry-run"],
-        [*base, "plan-subagents", "--phase", "triage", "--max-concurrency", "4"],
+        [*base, "plan-subagents", "--phase", "triage", "--max-concurrency", "4", "--limit", "1"],
         [*base, "run-linker", "--dry-run", "--json"],
     ]
 

@@ -37,16 +37,16 @@ Estado editável do usuário deve ficar fora desse bundle auto-updatable:
 ```
 
 Esse diretório persistente guarda `config.toml`, `.env`, cache/índices locais e
-a `.venv` do workflow quando necessário. Não grave a única cópia de segredo ou
-config em `${extensionPath}`.
+a `.venv` do workflow gerenciada pelo `uv` quando necessário. Não grave a única
+cópia de segredo ou config em `${extensionPath}`.
 
 ## Pré-condições
 
 1. Cada nota alvo é um arquivo `.md` legível.
 2. `~/.gemini/medical-notes-workbench/config.toml` existe e tem `[vault].path`
    preenchido.
-3. `~/.gemini/medical-notes-workbench/.venv` existe com o pacote instalado em
-   modo editável a partir de `${extensionPath}`.
+3. `uv` está instalado e `~/.gemini/medical-notes-workbench/.venv` existe como
+   ambiente do projeto a partir de `${extensionPath}`.
 4. O `gemini` CLI está autenticado, pois `scripts/enrich_notes.py` chama o Gemini
    para âncoras e rerank visual.
 
@@ -54,16 +54,14 @@ Se faltar ambiente Python:
 
 ```powershell
 # Windows PowerShell, rodando a partir de ${extensionPath}
-New-Item -ItemType Directory -Force "$HOME\.gemini\medical-notes-workbench"
-py -3 -m venv "$HOME\.gemini\medical-notes-workbench\.venv"
-& "$HOME\.gemini\medical-notes-workbench\.venv\Scripts\python.exe" -m pip install -e .
+.\scripts\reset_windows_python_uv.ps1
 ```
 
 ```bash
 # macOS/Linux, rodando a partir de ${extensionPath}
 mkdir -p ~/.gemini/medical-notes-workbench
-python3 -m venv ~/.gemini/medical-notes-workbench/.venv
-~/.gemini/medical-notes-workbench/.venv/bin/python -m pip install -e .
+export UV_PROJECT_ENVIRONMENT="$HOME/.gemini/medical-notes-workbench/.venv"
+uv sync
 ```
 
 Se faltar configuração:
@@ -91,13 +89,15 @@ para `~/.gemini/medical-notes-workbench` antes de editar.
 ```powershell
 cd "${extensionPath}"
 # Windows
-& "$HOME\.gemini\medical-notes-workbench\.venv\Scripts\python.exe" scripts\enrich_notes.py "<caminho-da-nota.md>" --config "$HOME\.gemini\medical-notes-workbench\config.toml"
+$env:UV_PROJECT_ENVIRONMENT = "$HOME\.gemini\medical-notes-workbench\.venv"
+uv run python scripts\enrich_notes.py "<caminho-da-nota.md>" --config "$HOME\.gemini\medical-notes-workbench\config.toml"
 ```
 
 ```bash
 cd "${extensionPath}"
 # macOS/Linux
-~/.gemini/medical-notes-workbench/.venv/bin/python scripts/enrich_notes.py "<caminho-da-nota.md>" --config ~/.gemini/medical-notes-workbench/config.toml
+export UV_PROJECT_ENVIRONMENT="$HOME/.gemini/medical-notes-workbench/.venv"
+uv run python scripts/enrich_notes.py "<caminho-da-nota.md>" --config ~/.gemini/medical-notes-workbench/config.toml
 ```
 
 Para enriquecer várias notas na mesma invocação:
@@ -105,13 +105,15 @@ Para enriquecer várias notas na mesma invocação:
 ```powershell
 cd "${extensionPath}"
 # Windows
-& "$HOME\.gemini\medical-notes-workbench\.venv\Scripts\python.exe" scripts\enrich_notes.py "<nota1.md>" "<nota2.md>" --config "$HOME\.gemini\medical-notes-workbench\config.toml"
+$env:UV_PROJECT_ENVIRONMENT = "$HOME\.gemini\medical-notes-workbench\.venv"
+uv run python scripts\enrich_notes.py "<nota1.md>" "<nota2.md>" --config "$HOME\.gemini\medical-notes-workbench\config.toml"
 ```
 
 ```bash
 cd "${extensionPath}"
 # macOS/Linux
-~/.gemini/medical-notes-workbench/.venv/bin/python scripts/enrich_notes.py "<nota1.md>" "<nota2.md>" --config ~/.gemini/medical-notes-workbench/config.toml
+export UV_PROJECT_ENVIRONMENT="$HOME/.gemini/medical-notes-workbench/.venv"
+uv run python scripts/enrich_notes.py "<nota1.md>" "<nota2.md>" --config ~/.gemini/medical-notes-workbench/config.toml
 ```
 
 Também é possível passar diretórios e globs; diretórios são expandidos
@@ -120,13 +122,15 @@ recursivamente para `.md`, com dedupe e ignorando anexos/cache:
 ```powershell
 cd "${extensionPath}"
 # Windows
-& "$HOME\.gemini\medical-notes-workbench\.venv\Scripts\python.exe" scripts\enrich_notes.py "<pasta-de-notas>" "**\*.md" --config "$HOME\.gemini\medical-notes-workbench\config.toml"
+$env:UV_PROJECT_ENVIRONMENT = "$HOME\.gemini\medical-notes-workbench\.venv"
+uv run python scripts\enrich_notes.py "<pasta-de-notas>" "**\*.md" --config "$HOME\.gemini\medical-notes-workbench\config.toml"
 ```
 
 ```bash
 cd "${extensionPath}"
 # macOS/Linux
-~/.gemini/medical-notes-workbench/.venv/bin/python scripts/enrich_notes.py "<pasta-de-notas>" "**/*.md" --config ~/.gemini/medical-notes-workbench/config.toml
+export UV_PROJECT_ENVIRONMENT="$HOME/.gemini/medical-notes-workbench/.venv"
+uv run python scripts/enrich_notes.py "<pasta-de-notas>" "**/*.md" --config ~/.gemini/medical-notes-workbench/config.toml
 ```
 
 Para refazer notas já enriquecidas, aplique `--force` ao lote:
@@ -134,13 +138,15 @@ Para refazer notas já enriquecidas, aplique `--force` ao lote:
 ```powershell
 cd "${extensionPath}"
 # Windows
-& "$HOME\.gemini\medical-notes-workbench\.venv\Scripts\python.exe" scripts\enrich_notes.py "<nota1.md>" "<nota2.md>" --config "$HOME\.gemini\medical-notes-workbench\config.toml" --force
+$env:UV_PROJECT_ENVIRONMENT = "$HOME\.gemini\medical-notes-workbench\.venv"
+uv run python scripts\enrich_notes.py "<nota1.md>" "<nota2.md>" --config "$HOME\.gemini\medical-notes-workbench\config.toml" --force
 ```
 
 ```bash
 cd "${extensionPath}"
 # macOS/Linux
-~/.gemini/medical-notes-workbench/.venv/bin/python scripts/enrich_notes.py "<nota1.md>" "<nota2.md>" --config ~/.gemini/medical-notes-workbench/config.toml --force
+export UV_PROJECT_ENVIRONMENT="$HOME/.gemini/medical-notes-workbench/.venv"
+uv run python scripts/enrich_notes.py "<nota1.md>" "<nota2.md>" --config ~/.gemini/medical-notes-workbench/config.toml --force
 ```
 
 ## Como interpretar

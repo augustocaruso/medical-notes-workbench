@@ -15,7 +15,17 @@
 Estado editavel do usuario nao deve ser salvo dentro da pasta instalada em
 `~/.gemini/extensions/medical-notes-workbench`, pois updates podem recriar esse
 bundle. Use `~/.gemini/medical-notes-workbench` para `config.toml`, `.env`,
-cache/indices locais e venv persistente quando o workflow precisar de Python.
+cache/indices locais e a venv persistente gerenciada pelo `uv` quando o
+workflow precisar de Python.
+
+Em instalações Gemini CLI, rode Python com `uv run python` a partir da raiz da
+extensão. Antes de comandos manuais, aponte `UV_PROJECT_ENVIRONMENT` para
+`~/.gemini/medical-notes-workbench/.venv` para evitar criar `.venv` dentro do
+bundle auto-updatable. No Windows, `scripts/reset_windows_python_uv.ps1`
+reconstrói esse ambiente com Python gerenciado pelo `uv`. Quando a máquina tiver
+Python global conflitando, rode com `-FullReset` para instalar/atualizar `uv`
+standalone, remover instalações da Python Software Foundation e o Python
+Launcher, limpar PATH e sincronizar o projeto.
 
 Hooks usam uma entrada publica unica, `scripts/hooks/mednotes_hook.mjs`. A logica
 interna fica em `scripts/hooks/mednotes_hook/` para manter guardas, recibos,

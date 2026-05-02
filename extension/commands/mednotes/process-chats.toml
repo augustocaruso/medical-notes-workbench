@@ -4,19 +4,20 @@ Processe chats médicos brutos de `Chats_Raw` para `Wiki_Medicina`.
 
 Argumentos do usuário: {{args}}
 
-Use a skill `process-medical-chats`. Ela é o runbook oficial; o resumo do
-workflow está em `docs/workflows/process-chats.md`.
-Use também `knowledge/workflow-output-contract.md` para responder com resumo
-legível, status com emoji e próxima ação.
+Use a skill `process-medical-chats`; o runbook oficial está em
+`docs/workflows/process-chats.md`. Responda pelo contrato
+`knowledge/workflow-output-contract.md`.
 
 Invariantes do launcher:
-- Rode `med_ops.py validate` e `wiki_tree.py --max-depth 4 --audit --format text` antes de fan-out.
-- Paralelize apenas work items de `plan-subagents`: `triage` com até 4,
-  `architect` com até 3, um raw chat por subagent.
+- Rode `med_ops.py validate` e `wiki_tree.py --max-depth 4 --audit --format text`.
+- Se o usuário responder a uma "Próxima Ação", execute só essa fase.
+- Para lote explícito, use `plan-subagents --limit <N>`; para máximo paralelismo,
+  defina também `--max-concurrency <N>`. Processe só os `work_items` retornados.
+- Paralelize apenas work items de `plan-subagents`; um raw chat por subagent.
 - Aplique `triage`, `discard`, `stage-note`, catálogo, dry-run, publish e linker em série.
+- Não substitua `med-chat-triager`; cada raw chat planejado pertence a um subagent.
 - Sempre rode `publish-batch --dry-run` antes do publish real.
 - Publique só após `med-publish-guard approve`.
 - Rode `run-linker` uma única vez ao final.
-- Não despeje manifests ou JSON bruto por padrão; resuma triagem, notas
-  staged/publicadas, dry-run, publish, linker, blockers e decisões pendentes.
+- Não despeje manifests/JSON bruto; resuma triagem, notas, publish, linker e blockers.
 '''

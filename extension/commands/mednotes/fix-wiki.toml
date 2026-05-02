@@ -10,13 +10,14 @@ Use também `knowledge/workflow-output-contract.md` para transformar o JSON em
 resumo legível, status com emoji e próxima ação.
 
 Invariantes do launcher:
-- Preview primeiro: `med_ops.py fix-wiki --json`.
-- Aplique apenas com pedido explícito (`--apply`, `--yes`, "aplicar", "corrigir de verdade").
-- Ao aplicar, use `--backup` por padrão salvo pedido contrário.
-- Reescritas LLM só quando o JSON trouxer `requires_llm_rewrite: true`; planeje com
-  `plan-subagents --phase style-rewrite --max-concurrency 3`.
-- `fix-wiki` não publica chats e não move taxonomia. Se `taxonomy_action_required`
-  vier verdadeiro, aponte `taxonomy-migrate`.
+- Modo padrão é reparar: rode `uv run python scripts/mednotes/med_ops.py fix-wiki --apply --backup --json`.
+- Se o usuário passar `--dry-run`, rode `uv run python scripts/mednotes/med_ops.py fix-wiki --dry-run --json`.
+- O apply faz style/YAML fix, `graph_fix` seguro e linker em série.
+- Se houver `requires_llm_rewrite: true`, planeje e aplique reescritas via
+  `plan-subagents --phase style-rewrite --max-concurrency 3` e `apply-style-rewrite`.
+- Se houver `taxonomy_action_required`, resolva no mesmo workflow com
+  `taxonomy-migrate` plano/recibo/rollback; não mova pasta manualmente.
+- Backup tem ciclo de vida: manter 3 por nota e apagar os com mais de 14 dias.
 - Use `/mednotes:link` para linkagem pura.
 - Não mostre JSON bruto por padrão; resuma arquivos que mudariam/mudaram,
   blockers, backups, grafo/linker e reescritas necessárias.

@@ -35,10 +35,15 @@ operational JSON is for agents, hooks, and tests unless the user asks for it.
   `~/.gemini/extensions/medical-notes-workbench`.
 - Treat `${extensionPath}` as read-only bundle content during normal workflows.
   Mutable user state belongs in `~/.gemini/medical-notes-workbench`
-  (`config.toml`, `.env`, cache/catalog files, and the workflow `.venv`).
-- Use the persistent workflow venv when present:
-  Windows `$HOME\.gemini\medical-notes-workbench\.venv\Scripts\python.exe`,
-  macOS/Linux `~/.gemini/medical-notes-workbench/.venv/bin/python`.
+  (`config.toml`, `.env`, cache/catalog files, and the uv-managed workflow
+  `.venv`).
+- Use `uv` for all Python execution. In extension installs, set the project
+  environment to the persistent state dir before `uv run`/`uv sync`:
+  Windows `$env:UV_PROJECT_ENVIRONMENT = "$HOME\.gemini\medical-notes-workbench\.venv"`;
+  macOS/Linux `export UV_PROJECT_ENVIRONMENT="$HOME/.gemini/medical-notes-workbench/.venv"`.
+  If Windows Python is broken or the venv is missing, run
+  `scripts/reset_windows_python_uv.ps1` from `${extensionPath}` instead of
+  searching for random Python installations.
 - The enricher is additive-only for note content/frontmatter: insert image
   embeds/captions and append its own keys; never rewrite existing frontmatter.
 - Raw-chat processing must go through `scripts/mednotes/med_ops.py`; never edit
@@ -47,8 +52,9 @@ operational JSON is for agents, hooks, and tests unless the user asks for it.
 - Wiki_Medicina taxonomy is category folders only; `title` becomes the `.md`
   filename. Use the fixed 5 big areas from `knowledge/knowledge-architect.md`
   and the current tree from `scripts/mednotes/wiki_tree.py --max-depth 4 --audit --format text`.
-- `/mednotes:fix-wiki` reports taxonomy health, but folder migrations stay in
-  `taxonomy-migrate` with plan, receipt, and rollback.
+- `/mednotes:fix-wiki` repairs deterministic Wiki health issues; taxonomy
+  folder migrations, when needed, must go through `taxonomy-migrate` with plan,
+  receipt, and rollback.
 - Wiki_Medicina note style, taxonomy, related-note, and footer requirements live
   in `knowledge/knowledge-architect.md`; do not duplicate them from memory.
 - Flashcards use `/flashcards`, the global existing `anki-mcp` server, and
@@ -66,7 +72,7 @@ operational JSON is for agents, hooks, and tests unless the user asks for it.
 - `/mednotes:create <topic-or-brief>`
 - `/mednotes:enrich <note.md|folder|glob> [more targets ...]`
 - `/mednotes:process-chats [args]`
-- `/mednotes:fix-wiki [--apply] [--backup]`
+- `/mednotes:fix-wiki [--dry-run]`
 - `/mednotes:link [path-or-empty]`
 - `/flashcards [paths-or-scope]`
 - `/mednotes:status`

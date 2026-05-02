@@ -34,6 +34,7 @@ from wiki.config import (
     resolve_config,
     validate_config,
 )
+from wiki.graph_fixes import GRAPH_FIX_SCHEMA, fix_wiki_graph
 from wiki.health import fix_wiki_health
 from wiki.linking import graph_audit, run_linker
 from wiki.publish import (
@@ -44,12 +45,14 @@ from wiki.publish import (
     write_new_note,
 )
 from wiki.raw_chats import (
+    BACKUP_CLEANUP_SCHEMA,
     atomic_write_text,
     create_backup,
     list_by_status,
     list_raw_files,
     mutate_raw_frontmatter,
     parse_frontmatter,
+    prune_backup_files,
     raw_summary,
     read_note_meta,
     split_frontmatter,
@@ -100,6 +103,8 @@ __all__ = [
     "MIGRATION_RECEIPT_SCHEMA",
     "SUBAGENT_PLAN_SCHEMA",
     "WIKI_HEALTH_FIX_SCHEMA",
+    "GRAPH_FIX_SCHEMA",
+    "BACKUP_CLEANUP_SCHEMA",
     "CollisionError",
     "MedConfig",
     "MedOpsError",
@@ -117,6 +122,7 @@ __all__ = [
     "create_backup",
     "fix_note_style_file",
     "fix_wiki_health",
+    "fix_wiki_graph",
     "fix_wiki_style",
     "graph_audit",
     "list_by_status",
@@ -127,6 +133,7 @@ __all__ = [
     "plan_publish_batch",
     "plan_subagents",
     "publish_batch",
+    "prune_backup_files",
     "raw_summary",
     "read_note_meta",
     "resolve_collision",

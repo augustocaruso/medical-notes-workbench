@@ -42,7 +42,7 @@ antes de `/flashcards`.
 1. Resolva o escopo antes de ler notas:
 
    ```bash
-   python "${extensionPath}/scripts/mednotes/flashcard_sources.py" resolve --scope "<args>" --dry-run --skip-tag anki
+   uv run python "${extensionPath}/scripts/mednotes/flashcard_sources.py" resolve --scope "<args>" --dry-run --skip-tag anki
    ```
 
    Omita `--skip-tag anki` somente se o usuário pedir refazer/regenerar/incluir
@@ -51,7 +51,7 @@ antes de `/flashcards`.
    prévia consistente com:
 
    ```bash
-   python "${extensionPath}/scripts/mednotes/flashcard_sources.py" preview --scope "<args>" --dry-run --skip-tag anki
+   uv run python "${extensionPath}/scripts/mednotes/flashcard_sources.py" preview --scope "<args>" --dry-run --skip-tag anki
    ```
 
 3. Use `manifest.notes` como a lista final. Para cada nota, leia `path`, use
@@ -67,7 +67,7 @@ antes de `/flashcards`.
 7. Prepare o plano:
 
    ```bash
-   python "${extensionPath}/scripts/mednotes/flashcard_pipeline.py" prepare --input -
+   uv run python "${extensionPath}/scripts/mednotes/flashcard_pipeline.py" prepare --input -
    ```
 
    Pare se `blocked` for verdadeiro. Se houver confirmação de reprocessamento,
@@ -75,7 +75,7 @@ antes de `/flashcards`.
 8. Mostre o preview de cards:
 
    ```bash
-   python "${extensionPath}/scripts/mednotes/flashcard_report.py" preview-cards --input -
+   uv run python "${extensionPath}/scripts/mednotes/flashcard_report.py" preview-cards --input -
    ```
 
    No modo padrão, não chame Anki antes da confirmação. Confirmação também é
@@ -86,19 +86,19 @@ antes de `/flashcards`.
 10. Depois de sucesso no Anki, aplique resultados:
 
     ```bash
-    python "${extensionPath}/scripts/mednotes/flashcard_pipeline.py" apply --input -
+    uv run python "${extensionPath}/scripts/mednotes/flashcard_pipeline.py" apply --input -
     ```
 
 11. Marque somente notas com pelo menos um card aceito:
 
     ```bash
-    python "${extensionPath}/scripts/mednotes/obsidian_note_utils.py" add-tag --tag anki <arquivos...>
+    uv run python "${extensionPath}/scripts/mednotes/obsidian_note_utils.py" add-tag --tag anki <arquivos...>
     ```
 
 12. Quando houver dados estruturados, gere o resumo final:
 
     ```bash
-    python "${extensionPath}/scripts/mednotes/flashcard_report.py" final --input -
+    uv run python "${extensionPath}/scripts/mednotes/flashcard_report.py" final --input -
     ```
 
     Use o contrato de saída para terminar com status emoji, fontes, candidatos,

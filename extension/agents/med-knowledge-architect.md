@@ -47,6 +47,17 @@ If the parent did not provide both canonical taxonomy and the current taxonomy
 tree, return a blocking note asking it to run
 `scripts/mednotes/wiki_tree.py --max-depth 4 --audit --format text`.
 
+Before returning a temporary note, self-check the generated Markdown:
+
+- it has exactly one `# <title>` heading followed by a short 2-4 line definition;
+- every level-2 heading uses the preferred semantic emoji set only:
+  `🎯`, `🧠`, `🔎`, `🩺`, `⚖️`, `⚠️`, `🏁`, `🔗`, `🧬`;
+- it includes `## 🏁 Fechamento` with `### Resumo`, `### Key Points`, and
+  `### Frase de Prova`;
+- it includes `## 🔗 Notas Relacionadas`;
+- it ends with exactly `---`, `[Chat Original](https://gemini.google.com/app/<fonte_id>)`,
+  and `[[_Índice_Medicina]]`.
+
 ## Style-Rewrite Job
 
 Use this mode only when the parent sends an existing note path plus a linter

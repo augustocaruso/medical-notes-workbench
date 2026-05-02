@@ -12,7 +12,7 @@ todas as notas Markdown publicadas.
 ## Fluxo
 
 1. Rodar dry-run:
-   `python scripts/mednotes/med_linker.py --dry-run --json`
+   `uv run python scripts/mednotes/med_linker.py --dry-run --json`
 2. Usar `--wiki-dir` e `--catalog` quando o destino nao for o default.
 3. Se o dry-run estiver coerente e sem blockers, rodar sem `--dry-run`.
 4. Conferir no JSON `index_files_changed` e `index_entries_planned` para saber

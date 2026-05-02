@@ -24,6 +24,8 @@ Módulos internos:
   fixes determinísticos, tabelas e prompt de reescrita controlada.
 - `health.py`: orquestração do `fix-wiki`.
 - `graph.py`: auditoria de grafo, WikiLinks, catálogo e aliases.
+- `graph_fixes.py`: correções determinísticas de grafo antes do linker
+  (`dangling_link`, `self_link`, links ambíguos e duplicatas exatas).
 - `linker.py`: vocabulário, planejamento, aplicação e CLI do linker.
 - `link_terms.py`: helpers compartilhados de aliases, catálogo e normalização.
 - `linking.py`: chamada direta do linker e auditoria do grafo para `med_ops`.

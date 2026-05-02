@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,8 @@ from wiki.common import MissingPathError, ValidationError
 
 _FRONTMATTER_DELIM = "---"
 _KEY_RE = re.compile(r"^([A-Za-z0-9_-]+)\s*:\s*(.*)$")
+BACKUP_CLEANUP_SCHEMA = "medical-notes-workbench.backup-cleanup.v1"
+_NOTE_BACKUP_RE = re.compile(r"^(?P<original>.+\.md)\.bak(?:\.\d+)?$")
 
 
 def split_frontmatter(text: str) -> tuple[list[str] | None, str]:
@@ -98,6 +101,56 @@ def create_backup(path: Path) -> Path:
     backup = _backup_path(path)
     shutil.copy2(path, backup)
     return backup
+
+
+def prune_backup_files(root: Path, *, max_per_file: int = 3, retention_days: int = 14) -> dict[str, Any]:
+    """Prune adjacent Markdown backup files created by med_ops.
+
+    Backups are grouped by original note name, e.g. ``A.md.bak`` and
+    ``A.md.bak.1``. The newest ``max_per_file`` backups are retained unless they
+    are older than ``retention_days``. Pass a negative retention to disable
+    age-based pruning.
+    """
+
+    if not root.exists():
+        raise MissingPathError(f"Backup cleanup root not found: {root}")
+    if max_per_file < 0:
+        raise ValidationError("max_per_file must be >= 0")
+
+    groups: dict[Path, list[Path]] = {}
+    for path in root.rglob("*.bak*"):
+        if not path.is_file():
+            continue
+        match = _NOTE_BACKUP_RE.match(path.name)
+        if not match:
+            continue
+        groups.setdefault(path.with_name(match.group("original")), []).append(path)
+
+    cutoff = time.time() - (retention_days * 86400) if retention_days >= 0 else None
+    deleted: list[str] = []
+    kept: list[str] = []
+    for _original, backups in sorted(groups.items(), key=lambda item: item[0].as_posix()):
+        ordered = sorted(backups, key=lambda item: item.stat().st_mtime, reverse=True)
+        for idx, backup in enumerate(ordered):
+            mtime = backup.stat().st_mtime
+            too_many = idx >= max_per_file
+            too_old = cutoff is not None and mtime < cutoff
+            if too_many or too_old:
+                backup.unlink()
+                deleted.append(str(backup))
+            else:
+                kept.append(str(backup))
+
+    return {
+        "schema": BACKUP_CLEANUP_SCHEMA,
+        "root": str(root),
+        "max_per_file": max_per_file,
+        "retention_days": retention_days,
+        "group_count": len(groups),
+        "kept_count": len(kept),
+        "deleted_count": len(deleted),
+        "deleted": deleted,
+    }
 
 
 def atomic_write_text(path: Path, text: str) -> None:

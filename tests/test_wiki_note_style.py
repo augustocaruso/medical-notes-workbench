@@ -493,6 +493,8 @@ def test_fix_wiki_apply_writes_batch_changes_and_can_backup(tmp_path):
     assert payload["changed_count"] == 1
     assert payload["written_count"] == 1
     assert payload["taxonomy_action_required"] is False
+    assert payload["backup_policy"] == {"enabled": True, "retention_days": 14, "max_per_file": 3}
+    assert payload["backup_cleanup"]["deleted_count"] == 0
     isrs_report = next(item for item in payload["reports"] if item["path"].endswith("ISRS.md"))
     assert isrs_report["wrote"] is True
     assert Path(isrs_report["backup"]).exists()
@@ -501,6 +503,61 @@ def test_fix_wiki_apply_writes_batch_changes_and_can_backup(tmp_path):
     assert "## 🏁 Fechamento" in fixed
     assert "## 🔗 Notas Relacionadas" in fixed
     assert "[[Cineangiocoronariografia (Cateterismo)|CATE]]" in fixed
+
+
+def test_fix_wiki_apply_repairs_invalid_graph_links_before_linker(tmp_path):
+    wiki = tmp_path / "Wiki_Medicina"
+    folder = wiki / "1. Clínica Médica" / "Psiquiatria"
+    note = _write(
+        folder / "ISRS.md",
+        "# ISRS\n\n"
+        "Definição curta para manter o contrato visual.\n\n"
+        "## 🧬 Visão Geral\n"
+        "Texto com [[Fantasma|termo fantasma]] e [[ISRS]] no corpo.\n\n"
+        "## 🏁 Fechamento\n\n"
+        "### Resumo\n"
+        "Resumo.\n\n"
+        "### Key Points\n"
+        "- Ponto.\n\n"
+        "### Frase de Prova\n"
+        "Frase.\n\n"
+        "## 🔗 Notas Relacionadas\n"
+        "- [[Depressão]]\n"
+        "- [[Fantasma]]\n"
+        "- [[ISRS]]\n\n"
+        "---\n"
+        "[Chat Original](https://gemini.google.com/app/batch)\n"
+        "[[_Índice_Medicina]]\n",
+    )
+    _write(folder / "Depressão.md", _valid_note("Depressão", related="ISRS"))
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(MED_OPS_PATH),
+            "--wiki-dir",
+            str(wiki),
+            "fix-wiki",
+            "--apply",
+            "--backup",
+            "--json",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["graph_fix"]["changed_count"] == 1
+    assert payload["graph_fix"]["written_count"] == 1
+    assert payload["linker_applied"] is True
+    fixed = note.read_text(encoding="utf-8")
+    assert "[[Fantasma" not in fixed
+    assert "[[ISRS]] no corpo" not in fixed
+    assert "- [[Fantasma]]" not in fixed
+    assert "- [[ISRS]]" not in fixed
+    assert "termo fantasma" in fixed
 
 
 def test_fix_wiki_reports_taxonomy_issues_without_migrating(tmp_path):

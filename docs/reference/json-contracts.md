@@ -20,7 +20,9 @@ quando solicitado.
 - `medical-notes-workbench.taxonomy-migration-plan.v1`
 - `medical-notes-workbench.taxonomy-migration-receipt.v1`
 - `medical-notes-workbench.wiki-health-fix.v1`
+- `medical-notes-workbench.wiki-graph-fix.v1`
 - `medical-notes-workbench.wiki-graph-audit.v1`
+- `medical-notes-workbench.backup-cleanup.v1`
 - `medical-notes-workbench.flashcard-sources.v1`
 - `medical-notes-workbench.flashcard-write-plan.v1`
 - `medical-notes-workbench.flashcard-report.v1`

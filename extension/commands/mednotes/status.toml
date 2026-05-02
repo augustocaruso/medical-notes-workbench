@@ -8,10 +8,10 @@ Cheque:
 1. Se a extensao esta instalada/listada pelo Gemini CLI (`gemini extensions list`).
 2. Se `~/.gemini/medical-notes-workbench/config.toml` existe; se houver `config.toml` apenas dentro da extensao, marque como volatil e recomende migrar.
 3. Se `[vault].path` esta preenchido no config persistente.
-4. Se a venv persistente existe e o Python dela funciona: Windows `& "$HOME\.gemini\medical-notes-workbench\.venv\Scripts\python.exe" -m enricher --help`; macOS/Linux `~/.gemini/medical-notes-workbench/.venv/bin/python -m enricher --help`.
+4. Se `uv` existe e a venv persistente funciona: configure `UV_PROJECT_ENVIRONMENT` para `~/.gemini/medical-notes-workbench/.venv` (Windows: `$HOME\.gemini\medical-notes-workbench\.venv`) e rode `uv run python -m enricher --help`.
 5. Se o Gemini CLI do enricher inicia: leia `[gemini].binary` do config persistente, resolva `gemini` para `gemini.cmd` no Windows quando aplicavel, e rode `<binary> --version` sem imprimir segredos.
-6. Se `scripts/mednotes/med_ops.py validate --config ~/.gemini/medical-notes-workbench/config.toml` funciona.
-7. Se `scripts/mednotes/med_linker.py --help` funciona.
+6. Se `uv run python scripts/mednotes/med_ops.py validate --config ~/.gemini/medical-notes-workbench/config.toml` funciona.
+7. Se `uv run python scripts/mednotes/med_linker.py --help` funciona.
 8. Se `SERPAPI_KEY` ou `SERPAPI_API_KEY` esta configurada por setting da extensao, ambiente ou `~/.gemini/medical-notes-workbench/.env`, sem imprimir a chave. Se faltar, instrua: crie uma conta em https://serpapi.com/, copie a API key no dashboard e rode `gemini extensions config medical-notes-workbench SERPAPI_KEY`; fallback manual persistente: adicionar a chave ao `.env` persistente.
 
 Responda em portugues com pronto / pendente e proximas acoes concretas.

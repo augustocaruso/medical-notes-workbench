@@ -11,8 +11,9 @@ Preserve estes nomes. Eles são a interface do usuário:
 - `/mednotes:create`: cria nota médica didática.
 - `/mednotes:enrich`: adiciona imagens/captions/frontmatter do enricher.
 - `/mednotes:process-chats`: processa `Chats_Raw` para `Wiki_Medicina`.
-- `/mednotes:fix-wiki`: audita/corrige saúde geral da Wiki; não publica chats e
-  não move taxonomia.
+- `/mednotes:fix-wiki`: audita/corrige saúde geral da Wiki; não publica chats;
+  taxonomia, quando necessária, é via `taxonomy-migrate` com plano, recibo e
+  rollback.
 - `/mednotes:link`: roda apenas grafo/linker.
 - `/flashcards`: cria cards no Anki, preview-first por padrão.
 - `/mednotes:setup` e `/mednotes:status`: ambiente local.
@@ -48,16 +49,17 @@ Referências:
 
 ## Regras Operacionais
 
-- Estado mutável do usuário/extensão (`config.toml`, `.env`, `.venv`, cache,
-  índices e catálogos) deve viver em `~/.gemini/medical-notes-workbench`, nunca
-  como única cópia dentro de `~/.gemini/extensions/medical-notes-workbench`.
+- Estado mutável do usuário/extensão (`config.toml`, `.env`, `.venv` gerenciada
+  pelo `uv`, cache, índices e catálogos) deve viver em
+  `~/.gemini/medical-notes-workbench`, nunca como única cópia dentro de
+  `~/.gemini/extensions/medical-notes-workbench`.
 - Nunca reescreva frontmatter existente do enricher; ele é additive-only.
 - YAML de notas Wiki é canônico: preserve `aliases`, `tags` e metadados
   `images_*`; omita o bloco somente quando todos estiverem vazios.
 - Nunca edite YAML/status de raw chats manualmente; use `med_ops.py`.
 - Sempre rode `publish-batch --dry-run` antes de publish real.
-- `fix-wiki` pode reportar problemas de taxonomia, mas migração de pastas é
-  sempre `taxonomy-migrate` com plano, recibo e rollback.
+- `fix-wiki` deve resolver problemas determinísticos da Wiki; migração de
+  pastas é sempre `taxonomy-migrate` com plano, recibo e rollback.
 - `link` não corrige estilo, YAML ou publicação.
 - `process-chats` publica notas novas e roda linker uma vez ao final.
 - `/flashcards` usa o MCP global `anki-mcp`, não cria comando local
@@ -78,7 +80,7 @@ Referências:
   padrão.
 - Mudança observável deve atualizar README, docs canônicos e os espelhos
   `AGENTS.md`/`CLAUDE.md` quando necessário.
-- Antes de fechar tarefa: `.venv/bin/python -m pytest`.
+- Antes de fechar tarefa: `uv run python -m pytest`.
 
 ## Build Da Extensão
 

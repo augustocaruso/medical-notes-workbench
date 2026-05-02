@@ -30,30 +30,44 @@ canônico de notas Wiki, reescritas necessárias e grafo.
 
 1. Localize `${extensionPath}` e o script
    `${extensionPath}/scripts/mednotes/med_ops.py`.
-2. Rode preview primeiro, sem aplicar:
+2. Modo padrão do slash command: repare de verdade, com backup:
 
    ```bash
-   python "<med_ops.py>" fix-wiki --json
+   uv run python "<med_ops.py>" fix-wiki --apply --backup --json
+   ```
+
+   Se o usuário passar `/mednotes:fix-wiki --dry-run` ou pedir explicitamente
+   auditoria/preview sem escrita, rode:
+
+   ```bash
+   uv run python "<med_ops.py>" fix-wiki --dry-run --json
    ```
 
    Se o usuário passar `--wiki-dir`, `MED_WIKI_DIR` ou um caminho de Wiki, use
    esse destino.
-3. Resuma `file_count`, `changed_count`, `error_count`,
+3. Resuma `file_count`, `changed_count`, `written_count`, `error_count`,
    `taxonomy_action_required`, `taxonomy_issue_count`, `graph_error_count`,
-   `requires_llm_rewrite_count`, `linker_dry_run.links_planned` e alguns
-   exemplos de arquivos que mudariam. Quando uma mudança vier só de YAML, trate
-   como fix determinístico: `aliases`, `tags` e `images_*`, ou nenhum YAML
-   quando todos estiverem vazios.
-4. Só aplique quando o usuário pedir explicitamente `--apply`, `--yes`,
-   "aplicar", "corrigir de verdade" ou equivalente. Ao aplicar, inclua
-   `--backup` por padrão, salvo pedido explícito de não criar backup.
-5. Depois do fix determinístico aplicado, leia `taxonomy_audit`,
-   `style_audit`, `graph_audit`, `linker_dry_run`, `linker_apply` e
-   `graph_audit_final` no JSON retornado.
-6. Se qualquer relatório exigir reescrita LLM, planeje:
+   `requires_llm_rewrite_count`, `linker_dry_run.links_planned`,
+   `backup_policy` e `backup_cleanup`. Quando uma mudança vier só de YAML,
+   trate como fix determinístico: `aliases`, `tags` e `images_*`, ou nenhum
+   YAML quando todos estiverem vazios. Quando vier de grafo, destaque
+   `graph_fix`: links quebrados/self/ambíguos são convertidos para texto
+   visível, marcador contraditório é removido e duplicatas exatas podem ser
+   removidas com backup.
+4. Depois do fix determinístico aplicado, leia `taxonomy_audit`, `style_audit`,
+   `graph_fix`, `graph_audit`, `linker_dry_run`, `linker_apply` e
+   `graph_audit_final` no JSON retornado. Se `graph_fix.duplicates` trouxer
+   `manual_merge_required`, trate como decisão clínica/humana; não peça a
+   outro agente para apagar uma das notas sem revisar conteúdo.
+5. Repita o ciclo até estabilizar: se uma rodada aplicar mudanças, reescritas,
+   taxonomia ou linker, rode `fix-wiki --apply --backup --json` novamente após
+   o subpasso correspondente. Encerre só quando não houver mudanças
+   determinísticas pendentes e os bloqueios restantes forem decisões clínicas
+   explicitamente listadas.
+6. Se qualquer relatório exigir reescrita LLM, planeje automaticamente:
 
    ```bash
-   python "<med_ops.py>" plan-subagents --phase style-rewrite --max-concurrency 3 --temp-root <tmp-rewrites>
+   uv run python "<med_ops.py>" plan-subagents --phase style-rewrite --max-concurrency 3 --temp-root <tmp-rewrites>
    ```
 
    Para cada `work_item.target_path`, lance no máximo um
@@ -65,14 +79,14 @@ canônico de notas Wiki, reescritas necessárias e grafo.
    primeiro em dry-run:
 
    ```bash
-   python "<med_ops.py>" apply-style-rewrite --target <nota.md> --content <temp.md> --dry-run --json
+   uv run python "<med_ops.py>" apply-style-rewrite --target <nota.md> --content <temp.md> --dry-run --json
    ```
 
    Só aplique se `validation.errors` estiver vazio e o usuário autorizou escrita.
 8. A aplicação real usa:
 
    ```bash
-   python "<med_ops.py>" apply-style-rewrite --target <nota.md> --content <temp.md> --backup --json
+   uv run python "<med_ops.py>" apply-style-rewrite --target <nota.md> --content <temp.md> --backup --json
    ```
 
    Use `--backup` por padrão.
@@ -81,21 +95,26 @@ canônico de notas Wiki, reescritas necessárias e grafo.
 10. Depois de aplicar reescritas LLM aceitas, rode novamente:
 
     ```bash
-    python "<med_ops.py>" fix-wiki --apply --backup --json
+    uv run python "<med_ops.py>" fix-wiki --apply --backup --json
     ```
 
     Isso revalida estilo e roda o workflow de grafo/linker em cima do conteúdo
     reescrito.
-11. Se `taxonomy_action_required` for true, não mova pastas dentro do
-    `fix-wiki`. Oriente o fluxo separado:
+11. Se `taxonomy_action_required` for true, resolva dentro deste mesmo workflow
+    usando `taxonomy-migrate`, nunca movimentos manuais:
 
     ```bash
-    python "<med_ops.py>" taxonomy-migrate --dry-run --plan-output <plano.json>
+    uv run python "<med_ops.py>" taxonomy-migrate --dry-run --plan-output <plano.json>
     ```
 
-    Depois, se o usuário autorizar, aplique com `taxonomy-migrate --apply
-    --plan <plano.json> --receipt <recibo.json>`. Rollback deve usar o recibo.
-12. Responda usando o contrato de saída: status emoji, contagens, arquivos
+    Se o plano não tiver blockers, aplique com `taxonomy-migrate --apply --plan
+    <plano.json> --receipt <recibo.json>`, depois rode `fix-wiki --apply
+    --backup --json` novamente. Rollback deve usar o recibo.
+12. Política de backup: o `fix-wiki` mantém por padrão no máximo 3 backups por
+    nota e remove backups com mais de 14 dias. Use `--backup-max-per-file` e
+    `--backup-retention-days` apenas se o usuário pedir outra retenção. Sempre
+    resuma `backup_cleanup.deleted_count`.
+13. Responda usando o contrato de saída: status emoji, contagens, arquivos
     alterados, notas reescritas, links inseridos, backups criados, blockers de
     grafo, problemas de hierarquia e próximas ações.
 
@@ -107,5 +126,5 @@ canônico de notas Wiki, reescritas necessárias e grafo.
   `/mednotes:link`.
 - Não escreva manualmente sobre a Wiki; use `fix-wiki` ou
   `apply-style-rewrite`.
-- Não migre pastas automaticamente dentro do `fix-wiki`; migração de hierarquia
-  é sempre `taxonomy-migrate` com plano, recibo e rollback.
+- Não mova pastas manualmente; migração de hierarquia é sempre
+  `taxonomy-migrate` com plano, recibo e rollback.

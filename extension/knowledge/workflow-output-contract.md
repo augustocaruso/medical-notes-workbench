@@ -27,6 +27,12 @@ Ao terminar um workflow, responda com:
 5. **Próxima ação**: confirmação necessária, comando seguro seguinte ou decisão
    que o usuário precisa tomar.
 
+Quando a próxima ação for um lote parcial, deixe a fase explícita e limitada
+(`triagem`, `arquitetura`, `publish dry-run`, etc.). Se o usuário confirmar uma
+próxima ação limitada, o turno seguinte deve executar somente essa fase e parar
+com novo resumo; confirmação de triagem não autoriza avançar para arquitetura ou
+publicação.
+
 Use emojis para escaneabilidade, não para decorar cada frase. Evite mais de um
 emoji por bullet.
 

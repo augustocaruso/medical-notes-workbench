@@ -85,6 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan_agents.add_argument("--phase", choices=("triage", "architect", "style-rewrite"), required=True)
     plan_agents.add_argument("--max-concurrency", type=int, default=0)
     plan_agents.add_argument("--temp-root", help="Base temporary directory for isolated architect work.")
+    plan_agents.add_argument("--limit", type=int, help="Limit returned work items for the next explicit batch.")
 
     taxonomy_canonical = sub.add_parser("taxonomy-canonical", help="Print the canonical Wiki_Medicina taxonomy.")
     _add_common(taxonomy_canonical, suppress_defaults=True)
@@ -185,7 +186,10 @@ def build_parser() -> argparse.ArgumentParser:
     fix_wiki = sub.add_parser("fix-wiki", help="Audit/fix Wiki_Medicina style and graph health.")
     _add_common(fix_wiki, suppress_defaults=True)
     fix_wiki.add_argument("--apply", action="store_true", help="Write changes in-place. Without this, only reports what would change.")
+    fix_wiki.add_argument("--dry-run", action="store_true", help="Explicit preview mode; write nothing.")
     fix_wiki.add_argument("--backup", action="store_true", help="Create .bak files before mutating notes when --apply is used.")
+    fix_wiki.add_argument("--backup-retention-days", type=int, default=14, help="Delete fix-wiki backups older than this many days when --backup is used.")
+    fix_wiki.add_argument("--backup-max-per-file", type=int, default=3, help="Keep at most this many fix-wiki backups per note when --backup is used.")
     fix_wiki.add_argument("--json", action="store_true", help="Emit JSON report. Accepted for explicitness; output is always JSON.")
 
     apply_rewrite = sub.add_parser("apply-style-rewrite", help="Validate and apply an LLM-rewritten Wiki_Medicina note.")
@@ -217,6 +221,7 @@ def main(argv: list[str] | None = None) -> int:
                     args.phase,
                     max_concurrency=args.max_concurrency or None,
                     temp_root=_path(args.temp_root) if args.temp_root else None,
+                    limit=args.limit,
                 )
             )
         elif args.command == "taxonomy-canonical":
@@ -333,7 +338,15 @@ def main(argv: list[str] | None = None) -> int:
             if audit["error_count"]:
                 return EXIT_VALIDATION
         elif args.command == "fix-wiki":
-            report = fix_wiki_health(config, apply=args.apply, backup=args.backup)
+            if args.apply and args.dry_run:
+                raise ValidationError("Use either --apply or --dry-run, not both")
+            report = fix_wiki_health(
+                config,
+                apply=args.apply and not args.dry_run,
+                backup=args.backup,
+                backup_retention_days=args.backup_retention_days,
+                backup_max_per_file=args.backup_max_per_file,
+            )
             _json(report)
             if report["error_count"] or report.get("graph_error_count", 0) or report.get("taxonomy_action_required"):
                 return EXIT_VALIDATION

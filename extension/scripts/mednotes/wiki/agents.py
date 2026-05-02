@@ -29,6 +29,7 @@ def plan_subagents(
     phase: str,
     max_concurrency: int | None = None,
     temp_root: Path | None = None,
+    limit: int | None = None,
 ) -> dict[str, Any]:
     specs: dict[str, dict[str, Any]] = {
         "triage": {
@@ -73,6 +74,8 @@ def plan_subagents(
     concurrency = max_concurrency or int(spec["default_max_concurrency"])
     if concurrency < 1:
         raise ValidationError("--max-concurrency must be at least 1")
+    if limit is not None and limit < 1:
+        raise ValidationError("--limit must be at least 1")
     if phase == "architect" and temp_root is None:
         temp_root = Path(tempfile.gettempdir()) / "medical-notes-workbench" / "process-chats"
     elif phase == "style-rewrite" and temp_root is None:
@@ -87,6 +90,9 @@ def plan_subagents(
             for report in audit["reports"]
             if report.get("requires_llm_rewrite") and report.get("path")
         ]
+        total_available_count = len(rewrite_reports)
+        if limit is not None:
+            rewrite_reports = rewrite_reports[:limit]
         for index, report in enumerate(rewrite_reports, start=1):
             target_path = Path(str(report["path"]))
             owner_key = str(target_path.expanduser())
@@ -119,6 +125,9 @@ def plan_subagents(
             "unit": spec["unit"],
             "max_concurrency": concurrency,
             "item_count": len(work_items),
+            "total_available_count": total_available_count,
+            "limit": limit,
+            "truncated": len(work_items) < total_available_count,
             "parallel_safe": len(work_items) > 1,
             "work_items": work_items,
             "batches": batches,
@@ -128,6 +137,8 @@ def plan_subagents(
                 "Do not split one note rewrite across multiple med-knowledge-architect agents.",
                 "Do not launch more subagents than item_count or max_concurrency.",
                 "If item_count is 0 or 1, there is no useful fan-out for this phase.",
+                "When limit is set, spawn only the returned work_items",
+                "Rerun planning after serial consolidation before launching more.",
                 "Run serial apply-style-rewrite validation and application after each batch returns.",
             ],
             "serial_after": spec["serial_after"],
@@ -141,6 +152,9 @@ def plan_subagents(
         }
 
     rows = list_by_status(config.raw_dir, str(spec["mode"]))
+    total_available_count = len(rows)
+    if limit is not None:
+        rows = rows[:limit]
     work_items: list[dict[str, Any]] = []
     seen: set[str] = set()
     for index, row in enumerate(rows, start=1):
@@ -174,6 +188,9 @@ def plan_subagents(
         "unit": spec["unit"],
         "max_concurrency": concurrency,
         "item_count": len(work_items),
+        "total_available_count": total_available_count,
+        "limit": limit,
+        "truncated": len(work_items) < total_available_count,
         "parallel_safe": len(work_items) > 1,
         "work_items": work_items,
         "batches": batches,
@@ -183,6 +200,8 @@ def plan_subagents(
             "Do not split one raw chat across multiple med-knowledge-architect agents.",
             "Do not launch more subagents than item_count or max_concurrency.",
             "If item_count is 0 or 1, there is no useful fan-out for this phase.",
+            "When limit is set, spawn only the returned work_items",
+            "Rerun planning after serial consolidation before launching more.",
             "Run serial consolidation after each batch returns.",
         ],
         "serial_after": spec["serial_after"],

@@ -32,7 +32,7 @@ linker semântico, atualizar links internos ou linkar uma nota recém-criada.
 5. Rode dry-run auditável primeiro:
 
    ```bash
-   python "${extensionPath}/scripts/mednotes/med_linker.py" --dry-run --json
+   uv run python "${extensionPath}/scripts/mednotes/med_linker.py" --dry-run --json
    ```
 
    Inclua `--wiki-dir`, `--catalog` e/ou o caminho da nota conforme necessário.

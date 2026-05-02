@@ -28,7 +28,7 @@ de aplicar linkagem em lote.
 Rode dry-run auditável primeiro:
 
 ```bash
-python scripts/mednotes/med_linker.py --dry-run --json
+uv run python scripts/mednotes/med_linker.py --dry-run --json
 ```
 
 Depois aplique sem `--dry-run` somente se o plano estiver coerente e sem
@@ -38,7 +38,7 @@ blockers de grafo.
 Para linkar uma nota específica:
 
 ```bash
-python scripts/mednotes/med_linker.py "<caminho_da_nota>" --dry-run --json
+uv run python scripts/mednotes/med_linker.py "<caminho_da_nota>" --dry-run --json
 ```
 
 ## Regras de Ouro
@@ -62,7 +62,7 @@ expõe `index_files_changed` e `index_entries_planned` para auditoria.
 Quando precisar apontar outro vault/catálogo:
 
 ```bash
-python scripts/mednotes/med_linker.py --wiki-dir "<Wiki_Medicina>" --catalog "<CATALOGO_WIKI.json>" --dry-run --json
+uv run python scripts/mednotes/med_linker.py --wiki-dir "<Wiki_Medicina>" --catalog "<CATALOGO_WIKI.json>" --dry-run --json
 ```
 
 Para auditoria pura, use `med_ops.py graph-audit --json`,

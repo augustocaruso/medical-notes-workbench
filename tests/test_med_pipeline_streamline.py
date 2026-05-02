@@ -1,6 +1,7 @@
 import json
 import importlib
 import os
+import re
 import subprocess
 import sys
 import tomllib
@@ -133,6 +134,38 @@ def test_extension_build_excludes_generated_python_caches():
     assert '"run_python.mjs"' in build
     assert "node scripts/run_python.mjs" in package["scripts"]["build:gemini-cli-extension"]
     assert "python3 scripts/" not in json.dumps(package["scripts"])
+
+
+def test_user_facing_python_commands_use_uv():
+    paths = [
+        ROOT / "README.md",
+        ROOT / "AGENTS.md",
+        ROOT / "CLAUDE.md",
+        ROOT / "docs",
+        EXTENSION / "GEMINI.md",
+        EXTENSION / "commands",
+        EXTENSION / "skills",
+        EXTENSION / "knowledge",
+        EXTENSION / "agents",
+        ROOT / "scripts" / "reset_windows_python_uv.ps1",
+    ]
+    files: list[Path] = []
+    for path in paths:
+        if path.is_dir():
+            files.extend(item for item in path.rglob("*") if item.is_file() and item.suffix in {".md", ".toml", ".ps1"})
+        else:
+            files.append(path)
+
+    offenders: list[str] = []
+    bare_python = re.compile(r"(?<!uv run )\bpython3?\s+")
+    for path in files:
+        for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if "where python" in line or "python.exe" in line or "requires-python" in line:
+                continue
+            if bare_python.search(line):
+                offenders.append(f"{path.relative_to(ROOT)}:{line_no}:{line.strip()}")
+
+    assert offenders == []
 
 
 def test_launchers_are_short_and_point_to_runbooks():
@@ -278,6 +311,7 @@ def test_wiki_operations_are_extracted_into_real_modules():
             "health": importlib.import_module("wiki.health"),
             "linking": importlib.import_module("wiki.linking"),
             "graph": importlib.import_module("wiki.graph"),
+            "graph_fixes": importlib.import_module("wiki.graph_fixes"),
             "linker": importlib.import_module("wiki.linker"),
             "link_terms": importlib.import_module("wiki.link_terms"),
         }
@@ -320,6 +354,7 @@ def test_wiki_operations_are_extracted_into_real_modules():
     assert hasattr(modules["health"], "fix_wiki_health")
     assert hasattr(modules["linking"], "run_linker")
     assert hasattr(modules["graph"], "audit_wiki_graph")
+    assert hasattr(modules["graph_fixes"], "fix_wiki_graph")
     assert hasattr(modules["linker"], "build_vocabulary")
     assert hasattr(modules["link_terms"], "extract_aliases")
     assert "subprocess" not in (script_dir / "wiki" / "linking.py").read_text(encoding="utf-8")
@@ -444,9 +479,11 @@ def test_fix_wiki_command_is_public_and_deterministic():
     workflow = (ROOT / "docs" / "workflows" / "fix-wiki.md").read_text(encoding="utf-8")
 
     assert command.exists()
-    assert "fix-wiki --json" in text
-    assert "--apply" in text
+    assert "fix-wiki --apply --backup --json" in text
+    assert "fix-wiki --dry-run --json" in text
+    assert "--dry-run" in text
     assert "--backup" in text
+    assert "Backup tem ciclo de vida" in text
     assert "requires_llm_rewrite: true" in text
     assert "apply-style-rewrite" in workflow
     assert "taxonomy_action_required" in text
@@ -467,11 +504,16 @@ def test_subagent_parallelism_contract_is_explicit_and_sharded_by_note_owner():
     process_doc = (ROOT / "docs" / "workflows" / "process-chats.md").read_text(encoding="utf-8")
     fix_doc = (ROOT / "docs" / "workflows" / "fix-wiki.md").read_text(encoding="utf-8")
 
-    assert "plan-subagents --phase triage --max-concurrency 4" in process_doc
-    assert "plan-subagents --phase architect --max-concurrency 3" in process_doc
+    assert "plan-subagents --phase triage --max-concurrency <N> --limit <N>" in process_doc
+    assert "plan-subagents --phase architect --max-concurrency <N>" in process_doc
+    assert "máximo paralelismo" in process_doc
+    assert "plan-subagents --limit <N>" in process
+    assert "próxima ação de triagem" in process_doc
+    assert "requires_llm_rewrite: true" in process_doc
     assert "plan-subagents --phase style-rewrite --max-concurrency 3" in fix_doc
     assert "um raw chat por subagent" in process
     assert "Nunca lançar dois subagents" in process_doc
+    assert "preferred semantic emoji set only" in architect
     assert "exactly one raw chat per agent invocation" in triager
     assert "Never split one raw chat" in architect
     assert "Cada reescrita vai para arquivo temporario" in fix_doc
@@ -680,7 +722,7 @@ def test_med_ops_hook_blocks_legacy_commit():
         "med-ops-before",
         {
             "tool_name": "run_shell_command",
-            "tool_input": {"command": f'python "{MED_OPS}" commit'},
+            "tool_input": {"command": f'uv run python "{MED_OPS}" commit'},
         },
     )
 
@@ -700,7 +742,7 @@ def test_med_ops_hook_blocks_publish_without_dry_run_receipt(tmp_path):
         {
             "tool_name": "run_shell_command",
             "cwd": str(tmp_path),
-            "tool_input": {"command": f'python "{MED_OPS}" publish-batch --manifest batch.json'},
+            "tool_input": {"command": f'uv run python "{MED_OPS}" publish-batch --manifest batch.json'},
         },
         env=_hook_env(tmp_path),
     )
@@ -714,7 +756,7 @@ def test_med_ops_hook_records_dry_run_and_allows_matching_publish(tmp_path):
     manifest = tmp_path / "batch.json"
     manifest.write_text('{"raw_file": "chat.md", "notes": []}\n', encoding="utf-8")
     env = _hook_env(tmp_path)
-    command = f'python "{MED_OPS}" publish-batch --manifest batch.json --dry-run'
+    command = f'uv run python "{MED_OPS}" publish-batch --manifest batch.json --dry-run'
 
     after = _run_hook(
         "med-ops-after",
@@ -736,7 +778,7 @@ def test_med_ops_hook_records_dry_run_and_allows_matching_publish(tmp_path):
         {
             "tool_name": "run_shell_command",
             "cwd": str(tmp_path),
-            "tool_input": {"command": f'python "{MED_OPS}" publish-batch --manifest batch.json'},
+            "tool_input": {"command": f'uv run python "{MED_OPS}" publish-batch --manifest batch.json'},
         },
         env=env,
     )
@@ -755,7 +797,7 @@ def test_med_ops_hook_blocks_changed_manifest_after_dry_run(tmp_path):
             "tool_name": "run_shell_command",
             "cwd": str(tmp_path),
             "tool_input": {
-                "command": f'python "{MED_OPS}" publish-batch --manifest batch.json --dry-run'
+                "command": f'uv run python "{MED_OPS}" publish-batch --manifest batch.json --dry-run'
             },
             "tool_response": {"llmContent": '{"dry_run": true}'},
         },
@@ -768,7 +810,7 @@ def test_med_ops_hook_blocks_changed_manifest_after_dry_run(tmp_path):
         {
             "tool_name": "run_shell_command",
             "cwd": str(tmp_path),
-            "tool_input": {"command": f'python "{MED_OPS}" publish-batch --manifest batch.json'},
+            "tool_input": {"command": f'uv run python "{MED_OPS}" publish-batch --manifest batch.json'},
         },
         env=env,
     )
@@ -785,7 +827,9 @@ def test_knowledge_contracts_are_current_and_factorized():
     architect = (EXTENSION / "knowledge" / "knowledge-architect.md").read_text(encoding="utf-8")
     linker = (EXTENSION / "knowledge" / "semantic-linker.md").read_text(encoding="utf-8")
     command = (EXTENSION / "commands" / "mednotes" / "process-chats.toml").read_text(encoding="utf-8")
+    fix_command = (EXTENSION / "commands" / "mednotes" / "fix-wiki.toml").read_text(encoding="utf-8")
     skill = (EXTENSION / "skills" / "process-medical-chats" / "SKILL.md").read_text(encoding="utf-8")
+    fix_skill = (EXTENSION / "skills" / "fix-medical-wiki" / "SKILL.md").read_text(encoding="utf-8")
     process_doc = (ROOT / "docs" / "workflows" / "process-chats.md").read_text(encoding="utf-8")
     agent = (EXTENSION / "agents" / "med-knowledge-architect.md").read_text(encoding="utf-8")
     guard = (EXTENSION / "agents" / "med-publish-guard.md").read_text(encoding="utf-8")
@@ -803,6 +847,10 @@ def test_knowledge_contracts_are_current_and_factorized():
     assert "taxonomy-audit" in command + skill
     assert "taxonomy-migrate" in command + skill
     assert "--rollback --receipt" in skill
+    assert "Modo padrão é reparar" in fix_command
+    assert "--dry-run" in fix_command
+    assert "Modo padrão do slash command: repare de verdade" in fix_skill
+    assert "backup_cleanup.deleted_count" in fix_skill
     assert "vira o arquivo" in architect + command + skill
     assert "new leaf under an existing parent" in guard
     assert "1. Clínica Médica" in architect + command + agent + guard

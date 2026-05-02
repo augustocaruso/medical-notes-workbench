@@ -11,7 +11,7 @@ um orquestrador LLM externo para escolher ancoras e ranquear imagens.
 
 1. Resolver arquivos, diretorios e globs informados pelo usuario.
 2. Rodar o orquestrador canonico:
-   `python scripts/enrich_notes.py <nota|pasta|glob> [mais alvos] --config ~/.gemini/medical-notes-workbench/config.toml`
+   `uv run python scripts/enrich_notes.py <nota|pasta|glob> [mais alvos] --config ~/.gemini/medical-notes-workbench/config.toml`
 3. Usar `--force` somente quando o usuario pedir refazer notas ja marcadas com
    `images_enriched: true`.
 4. Reportar notas enriquecidas, puladas, sem insercao, falhas e fontes usadas.
@@ -21,7 +21,7 @@ um orquestrador LLM externo para escolher ancoras e ranquear imagens.
 - So adiciona blocos de imagem/caption e frontmatter proprio do enricher.
 - Nao reescreve texto clinico da nota.
 - Estado editavel do usuario vive em `~/.gemini/medical-notes-workbench`
-  (`config.toml`, `.env`, `.venv` quando aplicavel), nunca dentro do bundle
+  (`config.toml`, `.env`, `.venv` gerenciada pelo `uv` quando aplicavel), nunca dentro do bundle
   auto-updatable `~/.gemini/extensions/medical-notes-workbench`.
 - Em Windows, `[gemini].binary = "gemini"` deve funcionar quando o CLI estiver
   instalado por npm; o orquestrador resolve `gemini.cmd` via PATH ou

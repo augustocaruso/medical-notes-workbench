@@ -45,7 +45,7 @@ implementacao local.
    Implementado como:
 
    ```bash
-   python extension/scripts/mednotes/flashcard_sources.py resolve ...
+   uv run python extension/scripts/mednotes/flashcard_sources.py resolve ...
    ```
 
    O script devolve JSON com arquivos finais, tags encontradas, vault root,
@@ -57,8 +57,8 @@ implementacao local.
    Ja existem:
 
    ```bash
-   python extension/scripts/mednotes/flashcard_sources.py resolve ... --dry-run
-   python extension/scripts/mednotes/flashcard_sources.py preview ... --dry-run
+   uv run python extension/scripts/mednotes/flashcard_sources.py resolve ... --dry-run
+   uv run python extension/scripts/mednotes/flashcard_sources.py preview ... --dry-run
    ```
 
    O manifest de fontes ja existe. O contrato de `candidate_cards` tambem foi
@@ -92,8 +92,8 @@ implementacao local.
    Implementado como:
 
    ```bash
-   python extension/scripts/mednotes/flashcard_index.py check --candidates candidate_cards.json
-   python extension/scripts/mednotes/flashcard_index.py record --accepted accepted_cards.json
+   uv run python extension/scripts/mednotes/flashcard_index.py check --candidates candidate_cards.json
+   uv run python extension/scripts/mednotes/flashcard_index.py record --accepted accepted_cards.json
    ```
 
    Esse indice e preferido a poluir o frontmatter da nota. A tag Obsidian `anki`
@@ -114,7 +114,7 @@ implementacao local.
    Implementado como:
 
    ```bash
-   python extension/scripts/mednotes/anki_model_validator.py validate --models-json models.json
+   uv run python extension/scripts/mednotes/anki_model_validator.py validate --models-json models.json
    ```
 
    Se faltar campo/modelo, parar antes de gravar e mostrar mensagem clara. Um
@@ -128,7 +128,7 @@ implementacao local.
    Implementado como:
 
    ```bash
-   python extension/scripts/mednotes/sync_anki_twenty_rules.py check
+   uv run python extension/scripts/mednotes/sync_anki_twenty_rules.py check
    ```
 
    O script compara a copia local com o pacote instalado
@@ -172,7 +172,7 @@ implementacao local.
    Implementado como:
 
    ```bash
-   python extension/scripts/mednotes/flashcard_report.py final --input run-result.json
+   uv run python extension/scripts/mednotes/flashcard_report.py final --input run-result.json
    ```
 
    Depois de `/flashcards`, o resumo cobre o formato:
@@ -195,7 +195,7 @@ implementacao local.
    Implementado em `.github/workflows/ci.yml` com:
 
    ```bash
-   pytest
+   uv run python -m pytest
    npm run build:gemini-cli-extension
    gemini extensions validate dist/gemini-cli-extension
    ```

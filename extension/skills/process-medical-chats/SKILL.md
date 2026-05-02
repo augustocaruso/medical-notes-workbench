@@ -33,6 +33,13 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
 - O agente principal consolida estado compartilhado em série: `triage`,
   `discard`, `stage-note`, catálogo, dry-run, publish e linker.
 - Paralelize apenas work items planejados por `plan-subagents`.
+- Se o usuário confirmou uma próxima ação específica, execute só essa fase. Uma
+  confirmação para "triagem de mais 10 chats" não autoriza arquitetura, staging,
+  publish ou linker no mesmo turno.
+- Para lotes explícitos, use `plan-subagents --limit <N>` e processe somente os
+  `work_items` retornados, em `batches`. `--limit` é tamanho do lote, não teto
+  de paralelismo; quando o usuário pedir máximo paralelismo, use
+  `--max-concurrency <N>` igual ao lote, salvo limitação operacional explícita.
 
 ## Fluxo
 
@@ -41,14 +48,14 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
 2. Rode:
 
    ```bash
-   python "${extensionPath}/scripts/mednotes/med_ops.py" validate
+   uv run python "${extensionPath}/scripts/mednotes/med_ops.py" validate
    ```
 
    Resuma pendências de configuração antes de continuar.
 3. Rode:
 
    ```bash
-   python "${extensionPath}/scripts/mednotes/wiki_tree.py" --max-depth 4 --audit --format text
+   uv run python "${extensionPath}/scripts/mednotes/wiki_tree.py" --max-depth 4 --audit --format text
    ```
 
    Passe ao `med-knowledge-architect` a taxonomia canônica, a árvore real e a
@@ -63,32 +70,41 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
 6. Para chats pendentes, rode:
 
    ```bash
-   python "<med_ops.py>" plan-subagents --phase triage --max-concurrency 4
+   uv run python "<med_ops.py>" plan-subagents --phase triage --max-concurrency <N> --limit <N>
    ```
 
-   Para cada `work_item.raw_file`, lance no máximo um `med-chat-triager`.
-   Depois aplique `triage` ou `discard` em série via `med_ops.py`.
+   Use `--limit` quando o usuário pediu um lote finito (por exemplo, 10). Para
+   máximo paralelismo dentro do lote, use o mesmo valor em `--max-concurrency`;
+   se não houver pedido explícito, o default conservador da CLI é aceitável.
+   Para cada `work_item.raw_file` retornado, lance no máximo um
+   `med-chat-triager`, seguindo `batches`. Não leia vários raw chats no agente
+   principal para substituir o triager. Depois aplique `triage` ou `discard` em
+   série via `med_ops.py`. Se a próxima ação era apenas triagem, pare aqui com
+   resumo e nova próxima ação.
 7. Atualize `list-triados`. Para chats triados, rode:
 
    ```bash
-   python "<med_ops.py>" plan-subagents --phase architect --max-concurrency 3 --temp-root <tmp-agents>
+   uv run python "<med_ops.py>" plan-subagents --phase architect --max-concurrency <N> --temp-root <tmp-agents> --limit <N>
    ```
 
-   Para cada `work_item.raw_file`, lance no máximo um `med-knowledge-architect`.
-   Passe `work_id`, `raw_file`, `temp_dir`, taxonomia canônica, árvore real e
-   snapshot do catálogo. Cada architect escreve somente no próprio `temp_dir`.
+   Omita `--limit` somente quando o usuário pediu o workflow completo. Para cada
+   `work_item.raw_file` retornado, lance no máximo um `med-knowledge-architect`,
+   seguindo `batches`. Para máximo paralelismo, use `--max-concurrency` igual ao
+   lote. Passe `work_id`, `raw_file`, `temp_dir`, taxonomia canônica, árvore real
+   e snapshot do catálogo. Cada architect escreve somente no próprio `temp_dir`.
 8. Antes de staging, valide cada nota temporária:
 
    ```bash
-   python "<med_ops.py>" validate-note --content <temp.md> --title <title> --raw-file <raw.md> --json
+   uv run python "<med_ops.py>" validate-note --content <temp.md> --title <title> --raw-file <raw.md> --json
    ```
 
-   Se houver erro formal corrigível, rode `fix-note`, valide de novo e só então
-   prossiga. Isso inclui YAML variável gerado pelo agente: o fix deve reduzir o
-   frontmatter da Wiki a `aliases`, `tags` e `images_*`, ou removê-lo quando
-   todos estiverem vazios. Se `requires_llm_rewrite` aparecer, retorne ao mesmo
-   architect ou faça uma tentativa substituta após a anterior terminar; limite a
-   2 tentativas por nota.
+   Se `requires_llm_rewrite` aparecer, não tente resolver só com `fix-note`:
+   retorne o `rewrite_prompt` ao mesmo architect ou faça uma tentativa
+   substituta após a anterior terminar; limite a 2 tentativas por nota. Use
+   `fix-note` para erros determinísticos/remediáveis e, depois de uma reescrita
+   LLM, como normalizador final. Isso inclui YAML variável gerado pelo agente: o
+   fix deve reduzir o frontmatter da Wiki a `aliases`, `tags` e `images_*`, ou
+   removê-lo quando todos estiverem vazios.
 9. Monte o manifest apenas com `stage-note`. Se taxonomia/estilo bloquear,
    corrija a nota ou a escolha de taxonomia; não edite o manifest manualmente.
 10. Rode `med-catalog-curator` em série para atualizar/validar
@@ -97,7 +113,7 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
 11. Rode:
 
     ```bash
-    python "<med_ops.py>" publish-batch --manifest <manifest.json> --dry-run
+    uv run python "<med_ops.py>" publish-batch --manifest <manifest.json> --dry-run
     ```
 
     Revise colisões, destinos e `taxonomy_new_dirs`.
@@ -106,7 +122,7 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
 13. Rode `publish-batch` real e, ao final, rode:
 
     ```bash
-    python "<med_ops.py>" run-linker
+    uv run python "<med_ops.py>" run-linker
     ```
 
     O `run-linker` faz preflight de grafo, aplica apenas se não houver blockers
@@ -122,5 +138,7 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
 - Se um raw chat gerar várias notas, o mesmo `med-knowledge-architect` decide
   todas.
 - Se houver 0 ou 1 item, use zero ou um subagent; não crie paralelismo artificial.
+- Quando `plan-subagents` retornar `truncated: true`, termine a fase atual antes
+  de planejar o próximo lote; não misture itens fora do plano limitado.
 - Para `/mednotes:fix-wiki`, a unidade indivisível muda para uma nota Wiki
   existente e o planejamento usa `--phase style-rewrite`.

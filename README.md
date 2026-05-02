@@ -38,16 +38,16 @@ Toolbox Python de imagens. O core não chama LLM; o agente/orquestrador decide
 âncoras e rerank visual.
 
 ```bash
-python -m enricher sections nota.md
-python -m enricher search wikimedia --query "synapse" --top-k 4
-python -m enricher download https://example.com/image.png --vault ~/Obsidian/Anexos
-python -m enricher insert nota.md --section Mecanismo --image abc.webp --concept "recaptação de serotonina" --source wikimedia --source-url "https://commons.wikimedia.org/wiki/File:X"
+uv run python -m enricher sections nota.md
+uv run python -m enricher search wikimedia --query "synapse" --top-k 4
+uv run python -m enricher download https://example.com/image.png --vault ~/Obsidian/Anexos
+uv run python -m enricher insert nota.md --section Mecanismo --image abc.webp --concept "recaptação de serotonina" --source wikimedia --source-url "https://commons.wikimedia.org/wiki/File:X"
 ```
 
 Orquestrador canônico:
 
 ```bash
-python scripts/enrich_notes.py nota.md pasta/ "Wiki/**/*.md" [--config config.toml] [--force]
+uv run python scripts/enrich_notes.py nota.md pasta/ "Wiki/**/*.md" [--config config.toml] [--force]
 ```
 
 ## Gemini CLI Extension
@@ -92,13 +92,55 @@ auto-updatable e pode ser recriada a cada update. O enricher aceita
 `SERPAPI_KEY` e `SERPAPI_API_KEY`; sem chave, `web_search` retorna `[]` e
 Wikimedia continua funcionando.
 
+### Python com uv
+
+O projeto usa `uv` como interface oficial de Python. Em instalações da extensão,
+mantenha a venv fora do bundle:
+
+```powershell
+# Windows PowerShell, a partir de ~/.gemini/extensions/medical-notes-workbench
+.\scripts\reset_windows_python_uv.ps1
+```
+
+Para limpar Python global da Python Software Foundation/py launcher e deixar o
+workbench rodando só com Python gerenciado pelo `uv`, use o fluxo completo:
+
+```powershell
+.\scripts\reset_windows_python_uv.ps1 -FullReset
+```
+
+O `-FullReset` instala/atualiza `uv` standalone se faltar, remove Python global
+da PSF/py launcher, limpa entradas Python do PATH, remove o alias
+`Microsoft\WindowsApps` do PATH, recria a venv persistente e roda os checks.
+Para inventariar antes de remover:
+
+```powershell
+.\scripts\reset_windows_python_uv.ps1 -RemoveGlobalPython
+```
+
+Se `where python` ainda apontar para `Microsoft\WindowsApps`, desative os
+aliases `python.exe`/`python3.exe` nas configurações do Windows.
+
+```bash
+# macOS/Linux, a partir de ~/.gemini/extensions/medical-notes-workbench
+mkdir -p ~/.gemini/medical-notes-workbench
+export UV_PROJECT_ENVIRONMENT="$HOME/.gemini/medical-notes-workbench/.venv"
+uv sync
+uv run python -m enricher --help
+```
+
+Para comandos manuais da extensão, use `uv run python ...`. No Windows:
+
+```powershell
+$env:UV_PROJECT_ENVIRONMENT = "$HOME\.gemini\medical-notes-workbench\.venv"
+uv run python scripts\mednotes\med_ops.py fix-wiki --dry-run --json
+```
+
 ## Desenvolvimento
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .[dev,pdf]
-.venv/bin/python -m pytest
+uv sync --extra dev --extra pdf
+uv run python -m pytest
 ```
 
 Build e validação:
