@@ -31,7 +31,6 @@ $ErrorActionPreference = "Stop"
 if ($FullReset) {
     $RemoveGlobalPython = $true
     $YesReallyRemoveGlobalPython = $true
-    $RemoveWindowsAppsFromPath = $true
 }
 
 function Write-Step {
@@ -182,8 +181,31 @@ function Invoke-GlobalPythonRemoval {
     }
 
     Remove-PythonEnvironmentVariables
+    Disable-PythonWindowsAppAliases
     Remove-PythonPathEntries -KnownRoots $KnownRoots
     Remove-ResidualPythonDirectories -KnownRoots $KnownRoots
+}
+
+function Disable-PythonWindowsAppAliases {
+    $windowsApps = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps"
+    if (-not (Test-Path $windowsApps)) {
+        return
+    }
+
+    foreach ($name in @("python.exe", "python3.exe")) {
+        $aliasPath = Join-Path $windowsApps $name
+        if (Test-Path $aliasPath) {
+            try {
+                if ($PSCmdlet.ShouldProcess($aliasPath, "Remove Windows Python app execution alias")) {
+                    Remove-Item -LiteralPath $aliasPath -Force -ErrorAction Stop
+                    Write-Host "Alias WindowsApps removido: $aliasPath"
+                }
+            }
+            catch {
+                Write-Warning "Nao consegui remover alias $aliasPath. Desative em Settings > Apps > Advanced app settings > App execution aliases."
+            }
+        }
+    }
 }
 
 function Remove-PythonEnvironmentVariables {
@@ -409,7 +431,18 @@ function Install-UvFromReleaseZip {
         foreach ($exeName in @("uv.exe", "uvx.exe")) {
             $exe = Get-ChildItem -Path $tmpDir -Recurse -Filter $exeName -ErrorAction SilentlyContinue | Select-Object -First 1
             if ($exe) {
-                Copy-Item -LiteralPath $exe.FullName -Destination (Join-Path $binDir $exeName) -Force
+                $destination = Join-Path $binDir $exeName
+                try {
+                    Copy-Item -LiteralPath $exe.FullName -Destination $destination -Force
+                }
+                catch {
+                    if (Test-Path $destination) {
+                        Write-Warning "$exeName ja existe e esta em uso; mantendo executavel existente."
+                    }
+                    else {
+                        throw
+                    }
+                }
             }
         }
         Remove-Item -LiteralPath $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -456,13 +489,11 @@ function Install-UvStandalone {
 function Resolve-Uv {
     param([switch] $ForceInstall)
 
-    if (-not $ForceInstall) {
-        $uv = Find-UvExecutable
-        if ($uv) {
-            return $uv
-        }
+    $uv = Find-UvExecutable
+    if ($uv -and $uv -notmatch "(?i)\\Python\d+\\Scripts\\") {
+        return $uv
     }
-    else {
+    if ($ForceInstall) {
         Write-Step "Garantindo uv standalone antes do reset global"
     }
 

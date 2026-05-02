@@ -107,18 +107,19 @@ workbench rodando só com Python gerenciado pelo `uv`, use o fluxo completo:
 
 ```powershell
 # PowerShell, a partir de ~/.gemini/extensions/medical-notes-workbench
-.\scripts\reset_windows_python_uv.ps1 -FullReset
+.\scripts\bootstrap_windows_python_uv.ps1
 ```
 
 Ou, se estiver no `cmd.exe`:
 
 ```bat
-"%USERPROFILE%\.gemini\extensions\medical-notes-workbench\scripts\full_reset_windows_python_uv.cmd"
+"%USERPROFILE%\.gemini\extensions\medical-notes-workbench\scripts\bootstrap_windows_python_uv.cmd"
 ```
 
-O `-FullReset` instala/atualiza `uv` standalone se faltar, remove Python global
-da PSF/py launcher, limpa entradas Python do PATH, remove o alias
-`Microsoft\WindowsApps` do PATH, recria a venv persistente e roda os checks.
+O bootstrap atualiza o reset script, instala/atualiza `uv` se faltar, remove
+Python global da PSF/py launcher, limpa entradas Python do PATH, desativa aliases
+`python.exe`/`python3.exe` do WindowsApps quando possível, recria a venv
+persistente e roda os checks.
 Para inventariar antes de remover:
 
 ```powershell

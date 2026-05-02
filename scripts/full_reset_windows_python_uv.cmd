@@ -2,12 +2,12 @@
 setlocal
 
 set "SCRIPT_DIR=%~dp0"
-set "RESET_SCRIPT=%SCRIPT_DIR%reset_windows_python_uv.ps1"
+set "BOOTSTRAP_SCRIPT=%SCRIPT_DIR%bootstrap_windows_python_uv.ps1"
 
-if not exist "%RESET_SCRIPT%" (
-  echo Reset script not found: %RESET_SCRIPT% 1>&2
+if not exist "%BOOTSTRAP_SCRIPT%" (
+  echo Bootstrap script not found: %BOOTSTRAP_SCRIPT% 1>&2
   exit /b 1
 )
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%RESET_SCRIPT%" -FullReset %*
+powershell -NoProfile -ExecutionPolicy Bypass -File "%BOOTSTRAP_SCRIPT%" %*
 exit /b %ERRORLEVEL%
