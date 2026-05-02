@@ -12,19 +12,21 @@ CANONICAL_TAXONOMY: tuple[tuple[str, tuple[str, ...]], ...] = (
         "1. Clínica Médica",
         (
             "Cardiologia",
-            "Clínica Médica",
             "Dermatologia",
             "Endocrinologia",
             "Gastroenterologia",
             "Geriatria",
             "Hematologia",
+            "Imunologia",
             "Infectologia",
             "Medicina Interna",
             "Nefrologia",
             "Neurologia",
+            "Nutrologia",
             "Oncologia",
             "Pneumologia",
             "Reumatologia",
+            "Semiologia",
             "Psiquiatria",
         ),
     ),
@@ -67,9 +69,19 @@ CANONICAL_TAXONOMY: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 
+CANONICAL_AREA_ALIASES: tuple[tuple[str, str], ...] = (
+    ("Clinica Medica", "1. Clínica Médica"),
+    ("Clínica Médica", "1. Clínica Médica"),
+    ("Cirurgia", "2. Cirurgia"),
+    ("Ginecologia_Obstetricia", "3. Ginecologia e Obstetrícia"),
+    ("Ginecologia e Obstetricia", "3. Ginecologia e Obstetrícia"),
+    ("Ginecologia e Obstetrícia", "3. Ginecologia e Obstetrícia"),
+    ("Pediatria", "4. Pediatria"),
+    ("Medicina Preventiva", "5. Medicina Preventiva"),
+)
+
+
 CANONICAL_TAXONOMY_ALIASES: tuple[tuple[str, str, str], ...] = (
-    ("Clinica Medica", "1. Clínica Médica", "Clínica Médica"),
-    ("Clínica Médica", "1. Clínica Médica", "Clínica Médica"),
     ("Medicina Interna", "1. Clínica Médica", "Medicina Interna"),
     ("Cirurgia_Geral", "2. Cirurgia", "Cirurgia Geral"),
     ("Cirurgia Geral", "2. Cirurgia", "Cirurgia Geral"),
@@ -120,6 +132,13 @@ class TaxonomyResolution:
 
 def _canonical_roots_by_fold() -> dict[str, str]:
     return {_fold_taxonomy_segment(root): root for root, _specialties in CANONICAL_TAXONOMY}
+
+
+def _canonical_area_aliases_by_fold() -> dict[str, str]:
+    mapping = _canonical_roots_by_fold()
+    for alias, root in CANONICAL_AREA_ALIASES:
+        mapping[_fold_taxonomy_segment(alias)] = root
+    return mapping
 
 
 def _canonical_specialties_by_fold() -> dict[str, tuple[str, str]]:

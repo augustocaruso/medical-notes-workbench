@@ -11,9 +11,11 @@ from wiki.taxonomy.normalize import (
     safe_title,
 )
 from wiki.taxonomy.schema import (
+    CANONICAL_AREA_ALIASES,
     CANONICAL_TAXONOMY,
     CANONICAL_TAXONOMY_ALIASES,
     TaxonomyResolution,
+    _canonical_area_aliases_by_fold,
     _canonical_roots_by_fold,
     _canonical_specialties_by_fold,
     _canonical_specialties_for_root,
@@ -46,6 +48,7 @@ from wiki.taxonomy.migration import (
 
 __all__ = [
     "CANONICAL_TAXONOMY",
+    "CANONICAL_AREA_ALIASES",
     "CANONICAL_TAXONOMY_ALIASES",
     "TaxonomyResolution",
     "_DRIVE_RE",
@@ -53,6 +56,7 @@ __all__ = [
     "_UNSAFE_TAXONOMY_RE",
     "_UNSAFE_TITLE_RE",
     "_canonical_directory_paths",
+    "_canonical_area_aliases_by_fold",
     "_canonical_roots_by_fold",
     "_canonical_specialties_by_fold",
     "_canonical_specialties_for_root",

@@ -10,7 +10,7 @@ from wiki.taxonomy.normalize import _fold_taxonomy_segment, normalize_taxonomy, 
 from wiki.taxonomy.schema import (
     CANONICAL_TAXONOMY,
     TaxonomyResolution,
-    _canonical_roots_by_fold,
+    _canonical_area_aliases_by_fold,
     _canonical_specialties_by_fold,
     _canonical_specialties_for_root,
 )
@@ -18,7 +18,7 @@ from wiki.taxonomy.schema import (
 _NEAR_DUPLICATE_CUTOFF = 0.9
 
 def _canonicalize_taxonomy_parts(parts: tuple[str, ...]) -> tuple[tuple[str, ...], tuple[dict[str, str], ...]]:
-    roots = _canonical_roots_by_fold()
+    roots = _canonical_area_aliases_by_fold()
     specialties = _canonical_specialties_by_fold()
     first = parts[0]
     first_folded = _fold_taxonomy_segment(first)

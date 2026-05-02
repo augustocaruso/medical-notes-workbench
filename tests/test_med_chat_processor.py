@@ -324,6 +324,20 @@ def test_resolve_taxonomy_can_materialize_canonical_prefix_and_one_new_leaf(tmp_
     )
 
 
+def test_resolve_taxonomy_accepts_semiologia_without_duplicate_clinica_medica(tmp_path):
+    wiki_dir = tmp_path / "wiki"
+    _write(wiki_dir / "1. Clínica Médica" / "Semiologia" / "Aferição de Temperatura.md", "# Aferição\n")
+
+    resolved = wiki_api.resolve_taxonomy(
+        wiki_dir,
+        "Clínica Médica/Semiologia",
+        title="Aferição de Temperatura",
+    )
+
+    assert resolved.taxonomy == "1. Clínica Médica/Semiologia"
+    assert "1. Clínica Médica/Clínica Médica" not in resolved.taxonomy
+
+
 def test_resolve_taxonomy_blocks_new_noncanonical_intermediate_by_default(tmp_path):
     wiki_dir = tmp_path / "wiki"
     wiki_dir.mkdir()
@@ -351,8 +365,9 @@ def test_taxonomy_audit_maps_legacy_top_level_folders_to_canonical_plan(tmp_path
 
     moves = {(item["source"], item["destination"]) for item in audit["proposed_moves"]}
     assert ("Cardiologia", "1. Clínica Médica/Cardiologia") in moves
-    assert ("Clinica Medica", "1. Clínica Médica/Clínica Médica") in moves
-    assert ("Ginecologia_Obstetricia", "3. Ginecologia e Obstetrícia/Ginecologia e Obstetrícia") in moves
+    assert ("Clinica Medica", "1. Clínica Médica") in moves
+    assert ("Ginecologia_Obstetricia", "3. Ginecologia e Obstetrícia") in moves
+    assert "1. Clínica Médica/Clínica Médica" not in audit["missing_canonical_dirs"]
     assert audit["unmapped_top_level_dirs"] == ["Geral"]
     assert audit["dry_run_only"] is True
 
@@ -668,6 +683,37 @@ def test_wiki_tree_script_returns_canonical_and_current_tree(tmp_path):
         item["path"] for item in payload["current_tree"]["directories"]
     }
     assert payload["audit"]["dry_run_only"] is True
+
+
+def test_wiki_tree_script_can_print_human_readable_tree(tmp_path):
+    wiki_dir = tmp_path / "wiki"
+    _write(wiki_dir / "1. Clínica Médica" / "Semiologia" / "Aferição de Temperatura.md", "# Aferição\n")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(WIKI_TREE_PATH),
+            "--wiki-dir",
+            str(wiki_dir),
+            "--max-depth",
+            "3",
+            "--audit",
+            "--format",
+            "text",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "Taxonomia canônica:" in result.stdout
+    assert "- 1. Clínica Médica/" in result.stdout
+    assert "  - Semiologia/" in result.stdout
+    assert "Árvore atual:" in result.stdout
+    assert "- 1. Clínica Médica/" in result.stdout
+    assert "  - Semiologia/ (1 nota)" in result.stdout
+    assert "Auditoria dry-run:" in result.stdout
 
 
 def test_taxonomy_migrate_cli_writes_plan_output(tmp_path):

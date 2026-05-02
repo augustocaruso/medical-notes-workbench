@@ -10,7 +10,7 @@ Use também `knowledge/workflow-output-contract.md` para responder com resumo
 legível, status com emoji e próxima ação.
 
 Invariantes do launcher:
-- Rode `med_ops.py validate` e `wiki_tree.py --max-depth 4 --audit` antes de fan-out.
+- Rode `med_ops.py validate` e `wiki_tree.py --max-depth 4 --audit --format text` antes de fan-out.
 - Paralelize apenas work items de `plan-subagents`: `triage` com até 4,
   `architect` com até 3, um raw chat por subagent.
 - Aplique `triage`, `discard`, `stage-note`, catálogo, dry-run, publish e linker em série.

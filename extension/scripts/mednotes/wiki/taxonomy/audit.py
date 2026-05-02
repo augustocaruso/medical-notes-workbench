@@ -9,6 +9,7 @@ from wiki.taxonomy.normalize import _fold_taxonomy_segment
 from wiki.taxonomy.resolve import _visible_child_dirs
 from wiki.taxonomy.schema import (
     CANONICAL_TAXONOMY,
+    _canonical_area_aliases_by_fold,
     _canonical_roots_by_fold,
     _canonical_specialties_by_fold,
     canonical_taxonomy_tree,
@@ -57,6 +58,7 @@ def taxonomy_audit(wiki_dir: Path) -> dict[str, Any]:
         raise ValidationError(f"Wiki dir is not a directory: {wiki_dir}")
 
     roots = _canonical_roots_by_fold()
+    area_aliases = _canonical_area_aliases_by_fold()
     specialties = _canonical_specialties_by_fold()
     canonical_paths = _canonical_directory_paths()
     missing_canonical_dirs = [
@@ -76,6 +78,18 @@ def taxonomy_audit(wiki_dir: Path) -> dict[str, Any]:
         rel_source = directory.relative_to(wiki_dir).as_posix()
         if folded in roots:
             compliant_top_level_dirs.append(rel_source)
+            continue
+        if folded in area_aliases:
+            destination = area_aliases[folded]
+            destinations.setdefault(destination, []).append(rel_source)
+            proposed_moves.append(
+                {
+                    "source": rel_source,
+                    "destination": destination,
+                    "reason": "known_area_alias",
+                    "destination_exists": wiki_dir.joinpath(destination).exists(),
+                }
+            )
             continue
         if folded in specialties:
             root, specialty = specialties[folded]

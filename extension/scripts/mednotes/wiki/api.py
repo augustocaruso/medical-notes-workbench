@@ -64,6 +64,7 @@ from wiki.style import (
     validate_wiki_style,
 )
 from wiki.taxonomy import (
+    CANONICAL_AREA_ALIASES,
     CANONICAL_TAXONOMY,
     CANONICAL_TAXONOMY_ALIASES,
     TaxonomyResolution,
@@ -83,6 +84,7 @@ from wiki.taxonomy import (
 
 __all__ = [
     "CANONICAL_TAXONOMY",
+    "CANONICAL_AREA_ALIASES",
     "CANONICAL_TAXONOMY_ALIASES",
     "DEFAULT_CATALOG_PATH",
     "DEFAULT_LINKER_PATH",

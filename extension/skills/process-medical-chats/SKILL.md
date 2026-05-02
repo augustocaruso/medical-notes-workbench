@@ -48,11 +48,12 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
 3. Rode:
 
    ```bash
-   python "${extensionPath}/scripts/mednotes/wiki_tree.py" --max-depth 4 --audit
+   python "${extensionPath}/scripts/mednotes/wiki_tree.py" --max-depth 4 --audit --format text
    ```
 
    Passe ao `med-knowledge-architect` a taxonomia canônica, a árvore real e a
-   auditoria dry-run. Os equivalentes separados são `taxonomy-canonical`,
+   auditoria dry-run, preferindo a saída em árvore textual quando o contexto for
+   para leitura humana. Os equivalentes separados são `taxonomy-canonical`,
    `taxonomy-tree --max-depth 4` e `taxonomy-audit`.
 4. Se o usuário pedir organização prévia do vault, use `taxonomy-migrate`:
    primeiro `--dry-run --plan-output <plano.json>`, depois aplique somente com

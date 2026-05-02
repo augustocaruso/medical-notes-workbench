@@ -45,7 +45,7 @@ For a triaged raw chat:
 
 If the parent did not provide both canonical taxonomy and the current taxonomy
 tree, return a blocking note asking it to run
-`scripts/mednotes/wiki_tree.py --max-depth 4 --audit`.
+`scripts/mednotes/wiki_tree.py --max-depth 4 --audit --format text`.
 
 ## Style-Rewrite Job
 
