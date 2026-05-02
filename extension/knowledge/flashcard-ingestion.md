@@ -60,8 +60,9 @@ skill. Aplique sempre:
   card. Cada cloze deve esconder uma unidade atômica de informação; nunca um
   parágrafo inteiro. Mantenha contexto suficiente para que o cloze fechado
   ainda permita ler o resto da frase com sentido.
-- **Obsidian:** sempre o deeplink puro (`obsidian://open?vault=...&file=...`).
-  O template renderiza como botão "Abrir no Obsidian" no rodapé.
+- **Obsidian:** sempre o deeplink puro com o path real da nota
+  (`obsidian://open?path=<absolute-note-path>`). O template renderiza como
+  botão "Abrir no Obsidian" no rodapé.
 - **Sem markdown solto:** evite headings (`#`, `##`), negrito Markdown
   (`**...**`) e código com crase. Use HTML quando precisar de ênfase
   (`<strong>`, `<em>`, `<code>`); o Anki não converte Markdown.
@@ -98,26 +99,25 @@ skill. Aplique sempre:
 
 4. Campo de origem: todo card criado a partir de uma nota Markdown precisa
    preencher um campo Anki chamado `Obsidian` com o deeplink da nota-fonte.
-   Gere o deeplink portavel com o script deterministico:
+   Gere o deeplink do path real com o script deterministico:
 
    ```bash
    uv run python ${extensionPath}/scripts/mednotes/obsidian_note_utils.py deeplink <nota.md>
    ```
 
-   O formato canonico e
-   `obsidian://open?vault=<vault-name>&file=<vault-relative-note-path>`. Esse
-   formato usa o nome do vault e o caminho da nota relativo a raiz do vault, por
-   isso funciona em Windows e iPhone quando ambos tem o mesmo vault aberto pelo
-   mesmo nome, mesmo que o iCloud use paths locais diferentes. Nao use o ID do
-   vault para esse fluxo, porque o ID pode variar por instalacao. Nao dependa da
-   Obsidian CLI para extrair esse link; a CLI pode abrir/inspecionar notas, mas
-   o deeplink deve ser calculado do path relativo ao vault.
+   O formato canonico para cards e
+   `obsidian://open?path=<absolute-note-path>`, usando o path real resolvido da
+   nota que o agente ja acessou. Isso evita prender o card a um vault inferido
+   ou a um nome de vault especifico. Nao dependa da Obsidian CLI para extrair
+   esse link; a CLI pode abrir/inspecionar notas, mas o deeplink deve ser
+   calculado deterministicamente a partir do arquivo-fonte.
 
-   O script infere a raiz do vault por `--vault-root`, `MED_WIKI_DIR`, um
-   diretorio `.obsidian` ancestral ou a pasta `Wiki_Medicina`. Se a inferencia
-   falhar, pergunte a raiz/nome do vault antes de criar cards. Use
-   `--absolute-path` apenas como fallback local, nunca como padrao para cards
-   que precisam abrir no Windows e no iPhone.
+   O resolver ainda pode inferir a raiz do vault por `--vault-root`,
+   `MED_WIKI_DIR`, um diretorio `.obsidian` ancestral ou a pasta
+   `Wiki_Medicina` para preencher metadata (`vault_root`, `vault_relative_path`)
+   e deck, mas o link do campo `Obsidian` nao deve depender dessa inferencia.
+   Use `--vault-file` no utilitario apenas quando o usuario pedir
+   explicitamente o formato `vault=...&file=...`.
 
 5. Marcacao da nota-fonte: depois que pelo menos um card de uma nota for criado
    com sucesso no Anki, marque apenas essa nota com a tag Obsidian `anki` no
@@ -201,9 +201,10 @@ conteudo que ja esta presente no arquivo.
    resolver sem esse filtro. Notas puladas aparecem em `skipped_notes` com
    `skip_reason: "skip_tag"` e `skip_tags: ["anki"]`.
 7. Manifest por nota: cada item em `notes` traz `path`, `deck`, `deeplink`,
-   `vault_relative_path`, `tags`, `already_marked_anki`, `content_sha256`,
-   `line_count` e `heading_count`. Use esses campos como fonte operacional de
-   deck/link; leia o conteudo factual separadamente com `read_file`.
+   `vault_relative_path`, `link_mode`, `tags`, `already_marked_anki`,
+   `content_sha256`, `line_count` e `heading_count`. Use esses campos como
+   fonte operacional de deck/link; leia o conteudo factual separadamente com
+   `read_file`.
 8. Lotes grandes: se `summary.requires_confirmation` for verdadeiro, mostre a
    previa do manifest e peça confirmacao antes de formular/gravar no Anki.
    Para uma previa textual padronizada, use o subcomando irmao:
@@ -241,7 +242,7 @@ formular cards candidatos antes de chamar o Anki MCP. O formato minimo e:
         "Frente": "...",
         "Verso": "...",
         "Verso Extra": "\n\n...",
-        "Obsidian": "obsidian://open?vault=...&file=..."
+        "Obsidian": "obsidian://open?path=..."
       }
     },
     {
@@ -252,7 +253,7 @@ formular cards candidatos antes de chamar o Anki MCP. O formato minimo e:
       "fields": {
         "Texto": "A {{c1::ponte miocárdica}} envolve mais frequentemente a {{c2::DA}}.",
         "Verso Extra": "\n\nDescrita pela primeira vez em 1737.",
-        "Obsidian": "obsidian://open?vault=...&file=..."
+        "Obsidian": "obsidian://open?path=..."
       }
     }
   ]

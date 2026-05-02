@@ -68,8 +68,9 @@ antes de `/flashcards`.
    ```
 
 3. Use `manifest.notes` como a lista final. Para cada nota, leia `path`, use
-   `deck`, `deeplink`, `vault_relative_path`, tags e `content_sha256` do
-   manifest. Tags Obsidian selecionam fontes, mas nunca viram tags Anki.
+   `deck`, `deeplink`, `vault_relative_path`, `link_mode`, tags e
+   `content_sha256` do manifest. Tags Obsidian selecionam fontes, mas nunca
+   viram tags Anki.
 4. Se `manifest.notes` vier vazio e houver texto útil no pedido, trate como
    fonte colada e use `Medicina::Inbox`, salvo deck explícito.
 5. Leia `anki-mcp-twenty-rules.md` e `flashcard-ingestion.md`; o conteúdo das
@@ -138,7 +139,8 @@ antes de `/flashcards`.
   `addNotes`.
 - Anki Desktop com AnkiConnect precisa responder em `http://127.0.0.1:8765`.
 - Todo card vindo de Markdown precisa preencher o campo `Obsidian` com o
-  deeplink portátil do manifest.
+  deeplink do manifest. O deeplink deve usar o path real da nota
+  (`obsidian://open?path=...`), sem depender de inferencia de vault.
 - Os modelos `Medicina` e `Medicina Cloze` são gerenciados via MCP a partir de
   `${extensionPath}/knowledge/anki-templates/`. Não edite os templates
   manualmente no Anki Desktop — eles são sobrescritos no próximo run.

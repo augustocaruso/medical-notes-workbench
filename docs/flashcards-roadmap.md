@@ -48,9 +48,10 @@ implementacao local.
    uv run python extension/scripts/mednotes/flashcard_sources.py resolve ...
    ```
 
-   O script devolve JSON com arquivos finais, tags encontradas, vault root,
-   deck destino e deeplink portavel. Filtros extras, como exclusao de pastas ou
-   modo sem subpastas, ficam como refinamentos futuros fora do escopo original.
+   O script devolve JSON com arquivos finais, tags encontradas, vault root
+   quando inferivel, deck destino e deeplink pelo path real da nota. Filtros
+   extras, como exclusao de pastas ou modo sem subpastas, ficam como
+   refinamentos futuros fora do escopo original.
 
 2. **Dry-run/preview real antes de criar** — **feito**
 
@@ -68,7 +69,7 @@ implementacao local.
    {
      "source": "nota.md",
      "deck": "Wiki_Medicina::Cardiologia::Ponte_Miocardica",
-     "deeplink": "obsidian://open?vault=...&file=...",
+     "deeplink": "obsidian://open?path=...",
      "preferred_model": "Medicina",
      "models": {"Medicina": ["Frente", "Verso", "Verso Extra", "Obsidian"]},
      "candidate_cards": []
@@ -209,8 +210,8 @@ implementacao local.
   MCP. A extensao usa copia local vendorada para autonomia do subagent.
 - Usar `anki-mcp` global ja configurado pelo usuario, sem declarar outro MCP no
   manifest da extensao.
-- Gerar deeplinks Obsidian portaveis no formato
-  `obsidian://open?vault=...&file=...`, nao links absolutos por path.
+- Gerar deeplinks Obsidian a partir do path real da nota no formato
+  `obsidian://open?path=...`, sem depender de inferencia de vault.
 - Marcar notas processadas com a tag Obsidian `anki` somente depois de sucesso
   real no Anki.
 - Usar `--skip-tag anki` como protecao simples contra duplicacao acidental,

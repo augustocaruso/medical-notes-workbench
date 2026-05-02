@@ -16,14 +16,14 @@ assert spec.loader is not None
 spec.loader.exec_module(obsidian_note_utils)
 
 
-def test_deeplink_uses_portable_vault_and_file_uri(tmp_path: Path):
+def test_deeplink_can_emit_portable_vault_and_file_uri(tmp_path: Path):
     vault = tmp_path / "Wiki Medicina"
     (vault / ".obsidian").mkdir(parents=True)
     note = vault / "Cardiologia" / "Ponte Miocardica.md"
     note.parent.mkdir(parents=True)
     note.write_text("# Ponte\n", encoding="utf-8")
 
-    deeplink = obsidian_note_utils.obsidian_deeplink(note)
+    deeplink = obsidian_note_utils.obsidian_deeplink(note, absolute_path=False)
 
     assert deeplink == (
         "obsidian://open?"
@@ -34,11 +34,20 @@ def test_deeplink_uses_portable_vault_and_file_uri(tmp_path: Path):
     assert "%2F" in deeplink
 
 
-def test_deeplink_can_emit_absolute_path_when_requested(tmp_path: Path):
+def test_deeplink_uses_absolute_real_path_by_default(tmp_path: Path):
     note = tmp_path / "nota.md"
     note.write_text("# Nota\n", encoding="utf-8")
 
-    deeplink = obsidian_note_utils.obsidian_deeplink(note, absolute_path=True)
+    deeplink = obsidian_note_utils.obsidian_deeplink(note)
+
+    assert deeplink == f"obsidian://open?path={quote(str(note.resolve()), safe='')}"
+
+
+def test_deeplink_falls_back_to_absolute_path_without_vault(tmp_path: Path):
+    note = tmp_path / "solta.md"
+    note.write_text("# Nota\n", encoding="utf-8")
+
+    deeplink = obsidian_note_utils.obsidian_deeplink(note)
 
     assert deeplink == f"obsidian://open?path={quote(str(note.resolve()), safe='')}"
 
@@ -90,6 +99,12 @@ def test_cli_emits_json_for_deeplink_and_tag_mutation(tmp_path: Path):
         capture_output=True,
         check=True,
     )
+    link_vault_file = subprocess.run(
+        [sys.executable, str(SCRIPT), "deeplink", "--vault-file", str(note)],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
     add = subprocess.run(
         [sys.executable, str(SCRIPT), "add-tag", "--tag", "anki", str(note)],
         text=True,
@@ -103,6 +118,7 @@ def test_cli_emits_json_for_deeplink_and_tag_mutation(tmp_path: Path):
         check=True,
     )
 
-    assert json.loads(link.stdout)[0]["deeplink"].startswith("obsidian://open?vault=")
+    assert json.loads(link.stdout)[0]["deeplink"].startswith("obsidian://open?path=")
+    assert json.loads(link_vault_file.stdout)[0]["deeplink"].startswith("obsidian://open?vault=")
     assert json.loads(add.stdout)[0]["changed"] is True
     assert json.loads(remove.stdout)[0]["tags"] == []

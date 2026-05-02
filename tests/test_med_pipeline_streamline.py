@@ -573,9 +573,9 @@ def test_flashcard_module_references_anki_mcp_prompt_and_ingestion_design():
     assert "flashcard-ingestion.md" in agent + top_flashcards
     assert "nao adicionar tags" in design
     assert "Obsidian`" in agent + top_flashcards + design
-    assert "obsidian://open?vault=...&file=..." in top_flashcards + design
-    assert "vault=...&file=..." in agent + top_flashcards + design
-    assert "--absolute-path" in design
+    assert "obsidian://open?path=" in top_flashcards + design
+    assert "path real" in top_flashcards + design
+    assert "--vault-file" in design
     assert "obsidian_note_utils.py" in agent + top_flashcards + design
     assert "flashcard_sources.py" in agent + top_flashcards + design
     assert "flashcard_index.py" in agent + top_flashcards + design

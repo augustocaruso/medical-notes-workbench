@@ -50,16 +50,46 @@ def test_resolve_explicit_file_manifest_has_deck_deeplink_and_tags(tmp_path: Pat
     assert payload["dry_run"] is True
     assert record["deck"] == "Wiki_Medicina::Cardiologia::Ponte Miocardica"
     assert record["vault_relative_path"] == "Cardiologia/Ponte Miocardica.md"
-    assert record["deeplink"] == (
-        "obsidian://open?"
-        f"vault={quote('Wiki_Medicina', safe='')}&"
-        f"file={quote('Cardiologia/Ponte Miocardica.md', safe='')}"
-    )
+    assert record["deeplink"] == f"obsidian://open?path={quote(str(note.resolve()), safe='')}"
     assert record["frontmatter_tags"] == ["cardio", "revisar"]
     assert record["inline_tags"] == ["prova"]
     assert record["tags"] == ["cardio", "revisar", "prova"]
     assert record["already_marked_anki"] is False
+    assert record["link_mode"] == "absolute_path"
     assert len(record["content_sha256"]) == 64
+
+
+def test_resolve_explicit_file_outside_vault_uses_absolute_path_deeplink(tmp_path: Path):
+    note = _note(tmp_path / "Notas Soltas" / "Ponte Miocardica.md")
+
+    result = _run("resolve", str(note), "--dry-run")
+
+    assert result.returncode == 0, result.stderr
+    record = json.loads(result.stdout)["notes"][0]
+    assert record["vault_root"] is None
+    assert record["vault_name"] is None
+    assert record["vault_relative_path"] == "Ponte Miocardica.md"
+    assert record["link_mode"] == "absolute_path"
+    assert record["deck"] == "Medicina::Notas Soltas::Ponte Miocardica"
+    assert record["deeplink"] == f"obsidian://open?path={quote(str(note.resolve()), safe='')}"
+
+
+def test_resolve_explicit_file_keeps_nearest_vault_metadata_but_links_real_path(tmp_path: Path):
+    configured = tmp_path / "Wiki_Medicina"
+    (configured / ".obsidian").mkdir(parents=True)
+    other_vault = tmp_path / "Residencia"
+    (other_vault / ".obsidian").mkdir(parents=True)
+    note = _note(other_vault / "Cardiologia" / "Ponte.md")
+
+    result = _run("resolve", str(note), env={"MED_WIKI_DIR": str(configured)})
+
+    assert result.returncode == 0, result.stderr
+    record = json.loads(result.stdout)["notes"][0]
+    assert record["vault_root"] == str(other_vault)
+    assert record["vault_name"] == "Residencia"
+    assert record["vault_relative_path"] == "Cardiologia/Ponte.md"
+    assert record["link_mode"] == "absolute_path"
+    assert record["deeplink"] == f"obsidian://open?path={quote(str(note.resolve()), safe='')}"
 
 
 def test_resolve_directory_and_glob_ignore_generated_or_attachment_dirs(tmp_path: Path):

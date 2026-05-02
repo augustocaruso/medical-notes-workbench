@@ -24,6 +24,7 @@ checagens deterministicas antes/depois da escrita.
 
 - Nao cria comando local `/twenty_rules`.
 - Nao adiciona tags Anki.
-- O campo `Obsidian` usa deeplink portavel `obsidian://open?vault=...&file=...`.
+- O campo `Obsidian` usa o path real da nota:
+  `obsidian://open?path=<absolute-note-path>`. O workflow nao depende de
+  adivinhar um vault especifico para abrir a fonte.
 - Lotes grandes exigem confirmacao.
-

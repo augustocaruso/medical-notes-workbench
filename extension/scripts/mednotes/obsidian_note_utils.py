@@ -124,12 +124,15 @@ def obsidian_deeplink(
     vault_root: str | None = None,
     vault_name: str | None = None,
     pane_type: str | None = None,
-    absolute_path: bool = False,
+    absolute_path: bool = True,
+    fallback_to_absolute_path: bool = True,
 ) -> str:
     """Return an Obsidian URI for a note path.
 
-    By default, use `vault` + vault-relative `file` so the link works across
-    devices that store the same vault in different filesystem locations.
+    By default, use the real resolved filesystem path. The caller already has
+    access to the note file, so the link should not depend on guessing which
+    vault contains it. Passing ``absolute_path=False`` opts into the portable
+    `vault` + vault-relative `file` form when a vault root is inferable.
     """
     resolved = path.resolve()
     if absolute_path:
@@ -138,13 +141,17 @@ def obsidian_deeplink(
     else:
         root = infer_vault_root(resolved, explicit_root=vault_root)
         if root is None:
-            raise UsageError(
-                "Could not infer the Obsidian vault root. Pass --vault-root or create a .obsidian "
-                "directory in the vault."
-            )
-        name = vault_name or root.name
-        file_path = resolved.relative_to(root).as_posix()
-        uri = f"obsidian://open?vault={quote(name, safe='')}&file={quote(file_path, safe='')}"
+            if not fallback_to_absolute_path:
+                raise UsageError(
+                    "Could not infer the Obsidian vault root. Pass --vault-root or create a .obsidian "
+                    "directory in the vault."
+                )
+            encoded_path = quote(str(resolved), safe="")
+            uri = f"obsidian://open?path={encoded_path}"
+        else:
+            name = vault_name or root.name
+            file_path = resolved.relative_to(root).as_posix()
+            uri = f"obsidian://open?vault={quote(name, safe='')}&file={quote(file_path, safe='')}"
     if pane_type:
         uri += f"&paneType={quote(pane_type, safe='')}"
     return uri
@@ -353,7 +360,10 @@ def build_parser() -> argparse.ArgumentParser:
     deeplink.add_argument(
         "--vault-root",
         default=None,
-        help="vault root path; defaults to MED_WIKI_DIR, nearest .obsidian parent, or Wiki_Medicina",
+        help=(
+            "vault root path used with --vault-file; defaults to MED_WIKI_DIR, "
+            "nearest .obsidian parent, or Wiki_Medicina"
+        ),
     )
     deeplink.add_argument(
         "--vault-name",
@@ -363,7 +373,14 @@ def build_parser() -> argparse.ArgumentParser:
     deeplink.add_argument(
         "--absolute-path",
         action="store_true",
-        help="emit obsidian://open?path=... instead of portable vault+file links",
+        default=True,
+        help="emit obsidian://open?path=... using the real note path; this is the default",
+    )
+    deeplink.add_argument(
+        "--vault-file",
+        dest="absolute_path",
+        action="store_false",
+        help="emit obsidian://open?vault=...&file=... when a vault root can be inferred",
     )
     deeplink.add_argument(
         "--pane-type",

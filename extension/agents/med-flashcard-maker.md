@@ -54,9 +54,9 @@ Write mode:
 - Use only the provided source content as factual basis.
 - Process Markdown files independently and derive each deck exactly as specified
   in `flashcard-ingestion.md`.
-- Every Markdown-backed card must include the manifest-provided portable
-  `Obsidian` deeplink. If a file source lacks a manifest/deeplink, ask the
-  parent to regenerate the manifest before writing.
+- Every Markdown-backed card must include the manifest-provided `Obsidian`
+  deeplink. If a file source lacks a manifest/deeplink, ask the parent to
+  regenerate the manifest before writing.
 - Prefer a model with `Frente`, `Verso`, optional `Verso Extra`, and required
   `Obsidian`. If no suitable model exists, stop before writing and report
   available model/field names.

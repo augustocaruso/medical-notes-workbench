@@ -449,37 +449,38 @@ def _deck_for_note(path: Path, root: Path) -> str:
     return "::".join(parts)
 
 
+def _fallback_deck_for_note(path: Path) -> str:
+    parent = path.parent.name if path.parent.name else "Inbox"
+    return "::".join(["Medicina", parent, path.stem])
+
+
 def _manifest_note(path: Path, args: argparse.Namespace) -> dict[str, Any]:
     text = path.read_text(encoding="utf-8")
     root = infer_vault_root(path, explicit_root=args.vault_root or args.wiki_dir)
-    if root is None:
-        configured = _root_from_args(args)
-        if configured and _is_relative_to(path, configured):
-            root = configured
-        else:
-            raise UsageError(
-                f"Could not infer the Obsidian vault root for {path}. "
-                "Pass --vault-root or create a .obsidian directory in the vault."
-            )
+    configured = _root_from_args(args)
+    if root is None and configured and _is_relative_to(path, configured):
+        root = configured
 
     frontmatter_tags = extract_frontmatter_tags(text)
     inline_tags = extract_inline_tags(text)
     all_tags = list(dict.fromkeys([*frontmatter_tags, *inline_tags]))
-    relative = path.relative_to(root).as_posix()
+    relative = path.relative_to(root).as_posix() if root else path.name
+    vault_name = (args.vault_name or root.name) if root else None
+    link_mode = "absolute_path"
     heading_count = sum(1 for line in text.splitlines() if line.lstrip().startswith("#"))
 
     return {
         "path": str(path),
         "title": path.stem,
-        "vault_root": str(root),
-        "vault_name": args.vault_name or root.name,
+        "vault_root": str(root) if root else None,
+        "vault_name": vault_name,
         "vault_relative_path": relative,
+        "link_mode": link_mode,
         "deeplink": obsidian_deeplink(
             path,
-            vault_root=str(root),
-            vault_name=args.vault_name,
+            absolute_path=True,
         ),
-        "deck": _deck_for_note(path, root),
+        "deck": _deck_for_note(path, root) if root else _fallback_deck_for_note(path),
         "frontmatter_tags": frontmatter_tags,
         "inline_tags": inline_tags,
         "tags": all_tags,
