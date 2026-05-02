@@ -16,7 +16,7 @@ Invariantes do launcher:
   subagents. Só passe `--max-concurrency >5` se o usuário pedir explicitamente.
 - Paralelize apenas work items de `plan-subagents`; um raw chat por subagent.
 - Aplique `triage`, `discard`, `stage-note`, catálogo, dry-run, publish e linker em série.
-- Use um único manifest por lote; `stage-note` suporta vários raw chats no mesmo manifest.
+- Exija inventário de cobertura exaustivo; use `stage-note --coverage` no manifest único do lote.
 - Não substitua `med-chat-triager`; cada raw chat planejado pertence a um subagent.
 - Sempre rode `publish-batch --dry-run` antes do publish real.
 - Publique após `med-publish-guard approve`; rode `run-linker`; se bloquear: `/mednotes:fix-wiki --dry-run`.

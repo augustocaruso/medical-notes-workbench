@@ -35,9 +35,11 @@ Todos os exemplos assumem `uv run python`. Em instalações da extensão, config
   (`triage`/`architect`: default 5; `style-rewrite`: default 3)
 - `uv run python scripts/mednotes/med_ops.py triage|discard`
 - `uv run python scripts/mednotes/med_ops.py validate-note|fix-note`
-- `uv run python scripts/mednotes/med_ops.py stage-note`
+- `uv run python scripts/mednotes/med_ops.py stage-note --coverage coverage.json`
 - `uv run python scripts/mednotes/med_ops.py publish-batch --dry-run`
 - `uv run python scripts/mednotes/med_ops.py publish-batch`
+  (`publish-batch` exige cobertura por padrão; `--skip-coverage` é override de
+  emergência/desenvolvimento)
 - `uv run python scripts/mednotes/med_ops.py validate-wiki`
 - `uv run python scripts/mednotes/med_ops.py fix-wiki --dry-run --json`
 - `uv run python scripts/mednotes/med_ops.py fix-wiki --apply --backup --json`

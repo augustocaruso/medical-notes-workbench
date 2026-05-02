@@ -29,6 +29,9 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
 - Nunca edite YAML/status de raw chats manualmente.
 - Nunca sobrescreva nota existente silenciosamente.
 - Sempre rode `publish-batch --dry-run` antes de `publish-batch` real.
+- Todo raw chat arquitetado precisa de inventário de cobertura exaustivo
+  `medical-notes-workbench.raw-coverage.v1`; `publish-batch` bloqueia manifest
+  sem `coverage_path` ou com inventário diferente das notas staged.
 - Rode o workflow de grafo/linker uma única vez ao final do lote.
 - O agente principal consolida estado compartilhado em série: `triage`,
   `discard`, `stage-note`, catálogo, dry-run, publish e linker.
@@ -97,6 +100,9 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
    escreve somente no próprio `temp_dir`.
    Use `canonical_parent_commands` do plano para validação, fix, staging,
    dry-run e publish; não invente nomes alternativos de flags.
+   Cada architect deve escrever antes um `coverage.json` no `temp_dir`,
+   inventariando todos os temas duráveis do raw chat. Chat longo deve ser
+   varrido em passes; não aceite "top N" nem conjunto representativo.
 8. Antes de staging, valide cada nota temporária:
 
    ```bash
@@ -110,11 +116,12 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
    LLM, como normalizador final. Isso inclui YAML variável gerado pelo agente: o
    fix deve reduzir o frontmatter da Wiki a `aliases`, `tags` e `images_*`, ou
    removê-lo quando todos estiverem vazios.
-9. Monte um único manifest para o lote atual apenas com `stage-note`. O
-   `stage-note` aceita vários raw chats no mesmo manifest e cria `batches`
-   internamente; não crie um manifest por raw chat salvo se o usuário pediu
-   isolamento explícito. Se taxonomia/estilo bloquear, corrija a nota ou a
-   escolha de taxonomia; não edite o manifest manualmente.
+9. Monte um único manifest para o lote atual apenas com `stage-note --coverage
+   <coverage.json>`. O `stage-note` aceita vários raw chats no mesmo manifest e
+   cria `batches` internamente; não crie um manifest por raw chat salvo se o
+   usuário pediu isolamento explícito. Se taxonomia/estilo/cobertura bloquear,
+   corrija a nota, o inventário ou a escolha de taxonomia; não edite o manifest
+   manualmente.
 10. Rode `med-catalog-curator` em série para atualizar/validar
     `CATALOGO_WIKI.json`, usando o caminho configurado ou
     `~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json`.
@@ -149,6 +156,9 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
   ou nota final entre dois subagents.
 - Se um raw chat gerar várias notas, o mesmo `med-knowledge-architect` decide
   todas.
+- A primeira entrega do architect é o inventário de cobertura: todos os itens
+  `create_note` precisam aparecer no manifest e toda nota staged precisa estar
+  nesse inventário.
 - Se houver 0 ou 1 item, use zero ou um subagent; não crie paralelismo artificial.
 - Quando `plan-subagents` retornar `truncated: true`, termine a fase atual antes
   de planejar o próximo lote; não misture itens fora do plano limitado.

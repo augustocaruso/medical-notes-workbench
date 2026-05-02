@@ -36,6 +36,11 @@ from wiki.config import (
     resolve_config,
     validate_config,
 )
+from wiki.coverage import (
+    RAW_COVERAGE_SCHEMA,
+    validate_raw_coverage,
+    validate_raw_coverage_structure,
+)
 from wiki.graph_fixes import GRAPH_FIX_SCHEMA, fix_wiki_graph
 from wiki.health import fix_wiki_health
 from wiki.linking import graph_audit, run_linker
@@ -103,6 +108,7 @@ __all__ = [
     "EXIT_VALIDATION",
     "MIGRATION_PLAN_SCHEMA",
     "MIGRATION_RECEIPT_SCHEMA",
+    "RAW_COVERAGE_SCHEMA",
     "SUBAGENT_PLAN_SCHEMA",
     "BLOCKER_RESOLUTION_SCHEMA",
     "WIKI_HEALTH_FIX_SCHEMA",
@@ -156,6 +162,8 @@ __all__ = [
     "update_frontmatter",
     "validate_config",
     "validate_note_style_file",
+    "validate_raw_coverage",
+    "validate_raw_coverage_structure",
     "validate_wiki_note_contract",
     "validate_wiki_style",
     "write_new_note",

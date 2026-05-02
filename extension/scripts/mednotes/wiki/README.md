@@ -16,6 +16,7 @@ Módulos internos:
 - `cli.py`: parser e dispatch dos subcomandos públicos.
 - `config.py`: paths, variáveis de ambiente e `config.toml`.
 - `raw_chats.py`: leitura/listagem/mutação de frontmatter dos chats brutos.
+- `coverage.py`: inventário exaustivo de temas por raw chat antes do publish.
 - `taxonomy/`: subdomínio de taxonomia com schema, normalização, resolução,
   auditoria, migração e rollback.
 - `publish.py`: `stage-note`, `publish-batch` e colisões de destino.

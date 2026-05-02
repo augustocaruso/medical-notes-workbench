@@ -48,6 +48,29 @@ def _wiki_note(title: str = "ISRS", fonte_id: str = "chat123") -> str:
     )
 
 
+def _coverage(path: Path, raw: Path, titles: list[str]) -> Path:
+    return _write(
+        path,
+        json.dumps(
+            {
+                "schema": "medical-notes-workbench.raw-coverage.v1",
+                "raw_file": str(raw),
+                "exhaustive": True,
+                "items": [
+                    {
+                        "id": f"T{idx:03d}",
+                        "title": title,
+                        "action": "create_note",
+                        "staged_title": title,
+                    }
+                    for idx, title in enumerate(titles, start=1)
+                ],
+            },
+            ensure_ascii=False,
+        ),
+    )
+
+
 def _config(raw_dir: Path, wiki_dir: Path, linker_path: Path | None = None):
     return wiki_api.MedConfig(
         raw_dir=raw_dir,
@@ -545,9 +568,16 @@ def test_publish_batch_dry_run_writes_nothing(tmp_path):
     _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
     raw = _write(raw_dir / "chat.md", _raw_chat())
     content = _write(tmp_path / "tmp" / "nota.md", _wiki_note())
+    coverage = _coverage(tmp_path / "tmp" / "coverage.json", raw, ["ISRS"])
     manifest = _write(
         tmp_path / "manifest.json",
-        json.dumps({"raw_file": str(raw), "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}]}),
+        json.dumps(
+            {
+                "raw_file": str(raw),
+                "coverage_path": str(coverage),
+                "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}],
+            }
+        ),
     )
 
     result = wiki_api.publish_batch(manifest, _config(raw_dir, wiki_dir), dry_run=True)
@@ -568,19 +598,43 @@ def test_stage_note_can_build_one_manifest_for_multiple_raw_chats(tmp_path):
     second_raw = _write(raw_dir / "chat-2.md", _raw_chat(fonte_id="chat2"))
     first_note = _write(tmp_path / "tmp" / "isrs.md", _wiki_note(title="ISRS", fonte_id="chat1"))
     second_note = _write(tmp_path / "tmp" / "fa.md", _wiki_note(title="Fibrilação Atrial", fonte_id="chat2"))
+    first_coverage = _coverage(tmp_path / "tmp" / "coverage-1.json", first_raw, ["ISRS"])
+    second_coverage = _coverage(tmp_path / "tmp" / "coverage-2.json", second_raw, ["Fibrilação Atrial"])
     manifest = tmp_path / "manifest.json"
     config = _config(raw_dir, wiki_dir)
 
-    first = wiki_api.stage_note(manifest, first_raw, "Psiquiatria", "ISRS", first_note, config=config)
-    second = wiki_api.stage_note(manifest, second_raw, "Cardiologia", "Fibrilação Atrial", second_note, config=config)
+    first = wiki_api.stage_note(
+        manifest,
+        first_raw,
+        "Psiquiatria",
+        "ISRS",
+        first_note,
+        config=config,
+        coverage_path=first_coverage,
+    )
+    second = wiki_api.stage_note(
+        manifest,
+        second_raw,
+        "Cardiologia",
+        "Fibrilação Atrial",
+        second_note,
+        config=config,
+        coverage_path=second_coverage,
+    )
 
     data = json.loads(manifest.read_text(encoding="utf-8"))
     assert first["batch_count"] == 1
+    assert first["coverage_path"] == str(first_coverage)
     assert second["batch_count"] == 2
     assert [Path(batch["raw_file"]).name for batch in data["batches"]] == ["chat-1.md", "chat-2.md"]
+    assert [Path(batch["coverage_path"]).name for batch in data["batches"]] == [
+        "coverage-1.json",
+        "coverage-2.json",
+    ]
 
     dry_run = wiki_api.publish_batch(manifest, config, dry_run=True)
     assert len(dry_run["planned_batches"]) == 2
+    assert dry_run["planned_batches"][0]["coverage"]["create_note_count"] == 1
 
     published = wiki_api.publish_batch(manifest, config)
     assert published["created_count"] == 2
@@ -589,7 +643,7 @@ def test_stage_note_can_build_one_manifest_for_multiple_raw_chats(tmp_path):
     assert (wiki_dir / "1. Clínica Médica" / "Cardiologia" / "Fibrilação Atrial.md").exists()
 
 
-def test_publish_batch_creates_notes_then_marks_raw_processed_without_backup(tmp_path):
+def test_publish_batch_requires_exhaustive_coverage_inventory(tmp_path):
     raw_dir = tmp_path / "raw"
     wiki_dir = tmp_path / "wiki"
     _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
@@ -598,6 +652,60 @@ def test_publish_batch_creates_notes_then_marks_raw_processed_without_backup(tmp
     manifest = _write(
         tmp_path / "manifest.json",
         json.dumps({"raw_file": str(raw), "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}]}),
+    )
+
+    try:
+        wiki_api.publish_batch(manifest, _config(raw_dir, wiki_dir), dry_run=True)
+    except wiki_api.ValidationError as exc:
+        assert "missing coverage_path" in str(exc)
+    else:
+        raise AssertionError("publish should require coverage by default")
+
+
+def test_publish_batch_blocks_unstaged_coverage_items(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
+    raw = _write(raw_dir / "chat.md", _raw_chat())
+    content = _write(tmp_path / "tmp" / "nota.md", _wiki_note())
+    coverage = _coverage(tmp_path / "tmp" / "coverage.json", raw, ["ISRS", "Síndrome Serotoninérgica"])
+    manifest = _write(
+        tmp_path / "manifest.json",
+        json.dumps(
+            {
+                "raw_file": str(raw),
+                "coverage_path": str(coverage),
+                "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}],
+            },
+            ensure_ascii=False,
+        ),
+    )
+
+    try:
+        wiki_api.publish_batch(manifest, _config(raw_dir, wiki_dir), dry_run=True)
+    except wiki_api.ValidationError as exc:
+        assert "create_note items not staged" in str(exc)
+        assert "Síndrome Serotoninérgica" in str(exc)
+    else:
+        raise AssertionError("publish should block missing staged notes from coverage")
+
+
+def test_publish_batch_creates_notes_then_marks_raw_processed_without_backup(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
+    raw = _write(raw_dir / "chat.md", _raw_chat())
+    content = _write(tmp_path / "tmp" / "nota.md", _wiki_note())
+    coverage = _coverage(tmp_path / "tmp" / "coverage.json", raw, ["ISRS"])
+    manifest = _write(
+        tmp_path / "manifest.json",
+        json.dumps(
+            {
+                "raw_file": str(raw),
+                "coverage_path": str(coverage),
+                "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}],
+            }
+        ),
     )
 
     result = wiki_api.publish_batch(manifest, _config(raw_dir, wiki_dir))
@@ -619,9 +727,17 @@ def test_publish_batch_creates_new_taxonomy_leaf_by_default(tmp_path):
     raw = _write(raw_dir / "chat.md", _raw_chat())
     title = "Estudo Eletrofisiológico"
     content = _write(tmp_path / "tmp" / "nota.md", _wiki_note(title=title))
+    coverage = _coverage(tmp_path / "tmp" / "coverage.json", raw, [title])
     manifest = _write(
         tmp_path / "manifest.json",
-        json.dumps({"raw_file": str(raw), "notes": [{"taxonomy": "Cardiologia/Eletrofisiologia", "title": title, "content_path": str(content)}]}),
+        json.dumps(
+            {
+                "raw_file": str(raw),
+                "coverage_path": str(coverage),
+                "notes": [{"taxonomy": "Cardiologia/Eletrofisiologia", "title": title, "content_path": str(content)}],
+            },
+            ensure_ascii=False,
+        ),
     )
 
     result = wiki_api.publish_batch(manifest, _config(raw_dir, wiki_dir))
@@ -638,9 +754,16 @@ def test_publish_batch_can_create_backup_when_requested(tmp_path):
     _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
     raw = _write(raw_dir / "chat.md", _raw_chat())
     content = _write(tmp_path / "tmp" / "nota.md", _wiki_note())
+    coverage = _coverage(tmp_path / "tmp" / "coverage.json", raw, ["ISRS"])
     manifest = _write(
         tmp_path / "manifest.json",
-        json.dumps({"raw_file": str(raw), "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}]}),
+        json.dumps(
+            {
+                "raw_file": str(raw),
+                "coverage_path": str(coverage),
+                "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}],
+            }
+        ),
     )
 
     result = wiki_api.publish_batch(manifest, _config(raw_dir, wiki_dir), backup=True)
@@ -655,9 +778,16 @@ def test_publish_batch_collision_abort_and_suffix(tmp_path):
     raw = _write(raw_dir / "chat.md", _raw_chat())
     content = _write(tmp_path / "tmp" / "nota.md", _wiki_note())
     _write(wiki_dir / "1. Clínica Médica" / "Psiquiatria" / "ISRS.md", "existente\n")
+    coverage = _coverage(tmp_path / "tmp" / "coverage.json", raw, ["ISRS"])
     manifest = _write(
         tmp_path / "manifest.json",
-        json.dumps({"raw_file": str(raw), "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}]}),
+        json.dumps(
+            {
+                "raw_file": str(raw),
+                "coverage_path": str(coverage),
+                "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}],
+            }
+        ),
     )
 
     try:
@@ -678,9 +808,16 @@ def test_publish_batch_blocks_taxonomy_that_repeats_title_folder(tmp_path):
     _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
     raw = _write(raw_dir / "chat.md", _raw_chat())
     content = _write(tmp_path / "tmp" / "nota.md", _wiki_note())
+    coverage = _coverage(tmp_path / "tmp" / "coverage.json", raw, ["ISRS"])
     manifest = _write(
         tmp_path / "manifest.json",
-        json.dumps({"raw_file": str(raw), "notes": [{"taxonomy": "Psiquiatria/ISRS", "title": "ISRS", "content_path": str(content)}]}),
+        json.dumps(
+            {
+                "raw_file": str(raw),
+                "coverage_path": str(coverage),
+                "notes": [{"taxonomy": "Psiquiatria/ISRS", "title": "ISRS", "content_path": str(content)}],
+            }
+        ),
     )
 
     try:
@@ -717,9 +854,16 @@ def test_commit_batch_cli_alias_still_works(tmp_path):
     _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
     raw = _write(raw_dir / "chat.md", _raw_chat())
     content = _write(tmp_path / "tmp" / "nota.md", _wiki_note())
+    coverage = _coverage(tmp_path / "tmp" / "coverage.json", raw, ["ISRS"])
     manifest = _write(
         tmp_path / "manifest.json",
-        json.dumps({"raw_file": str(raw), "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}]}),
+        json.dumps(
+            {
+                "raw_file": str(raw),
+                "coverage_path": str(coverage),
+                "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}],
+            }
+        ),
     )
 
     result = subprocess.run(
@@ -1096,9 +1240,16 @@ def test_public_med_ops_commands_still_work_after_cli_split(tmp_path):
     _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
     raw = _write(raw_dir / "chat.md", _raw_chat())
     content = _write(tmp_path / "tmp" / "nota.md", _wiki_note())
+    coverage = _coverage(tmp_path / "tmp" / "coverage.json", raw, ["ISRS"])
     manifest = _write(
         tmp_path / "manifest.json",
-        json.dumps({"raw_file": str(raw), "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}]}),
+        json.dumps(
+            {
+                "raw_file": str(raw),
+                "coverage_path": str(coverage),
+                "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}],
+            }
+        ),
     )
     base = [
         sys.executable,

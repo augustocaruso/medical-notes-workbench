@@ -216,6 +216,7 @@ def build_parser() -> argparse.ArgumentParser:
     stage.add_argument("--taxonomy", required=True)
     stage.add_argument("--title", required=True)
     stage.add_argument("--content", required=True)
+    stage.add_argument("--coverage", help="Exhaustive raw coverage inventory JSON for this raw chat.")
     stage.add_argument("--dry-run", action="store_true")
     _add_taxonomy_creation_mode(stage)
 
@@ -225,6 +226,13 @@ def build_parser() -> argparse.ArgumentParser:
     publish.add_argument("--dry-run", action="store_true")
     publish.add_argument("--backup", action="store_true", help="Create .bak files before mutating raw chat frontmatter.")
     publish.add_argument("--collision", choices=("abort", "suffix"), default="abort")
+    publish.add_argument(
+        "--skip-coverage",
+        action="store_false",
+        dest="require_coverage",
+        default=True,
+        help="Developer/emergency override: publish without an exhaustive raw coverage inventory.",
+    )
     _add_taxonomy_creation_mode(publish)
 
     commit = sub.add_parser("commit-batch", help="Compatibility alias for publish-batch.")
@@ -233,6 +241,13 @@ def build_parser() -> argparse.ArgumentParser:
     commit.add_argument("--dry-run", action="store_true")
     commit.add_argument("--backup", action="store_true", help="Create .bak files before mutating raw chat frontmatter.")
     commit.add_argument("--collision", choices=("abort", "suffix"), default="abort")
+    commit.add_argument(
+        "--skip-coverage",
+        action="store_false",
+        dest="require_coverage",
+        default=True,
+        help="Developer/emergency override: publish without an exhaustive raw coverage inventory.",
+    )
     _add_taxonomy_creation_mode(commit)
 
     linker = sub.add_parser("run-linker", help="Run configured semantic linker once.")
@@ -373,6 +388,7 @@ def main(argv: list[str] | None = None) -> int:
                     args.dry_run,
                     config=config,
                     allow_new_taxonomy_leaf=args.allow_new_taxonomy_leaf,
+                    coverage_path=_path(args.coverage) if args.coverage else None,
                 )
             )
         elif args.command in {"publish-batch", "commit-batch"}:
@@ -384,6 +400,7 @@ def main(argv: list[str] | None = None) -> int:
                     dry_run=args.dry_run,
                     backup=args.backup,
                     allow_new_taxonomy_leaf=args.allow_new_taxonomy_leaf,
+                    require_coverage=args.require_coverage,
                 )
             )
         elif args.command == "run-linker":

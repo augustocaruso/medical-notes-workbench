@@ -29,11 +29,47 @@ Before writing or rewriting, read and follow:
 - Write only inside the isolated temp directory supplied by the parent. Never
   write directly into `Wiki_Medicina`.
 
+## Exhaustive Split Inventory
+
+For every triaged raw chat, create a coverage inventory before writing notes.
+The inventory is a JSON file inside your `temp_dir` with schema
+`medical-notes-workbench.raw-coverage.v1`:
+
+```json
+{
+  "schema": "medical-notes-workbench.raw-coverage.v1",
+  "raw_file": "<raw_file>",
+  "exhaustive": true,
+  "items": [
+    {
+      "id": "T001",
+      "title": "Tema medico identificado",
+      "action": "create_note",
+      "staged_title": "Titulo final da nota"
+    }
+  ]
+}
+```
+
+Allowed `action` values are `create_note`, `covered_by_existing`, and
+`not_a_note`. Use `create_note` for every distinct durable medical topic that
+deserves its own Wiki note, even if the raw chat is very long and yields dozens
+of notes. Use `covered_by_existing` only when the topic is already covered by an
+existing Wiki note and include `existing_title` plus `reason`. Use `not_a_note`
+only for administrative chatter, duplicate fragments, or context that is not a
+durable medical note, and include `reason`.
+
+For long chats, scan the source in passes and inventory all candidate themes
+before drafting. Do not cap output at a small representative set. The parent
+will block publish if any `create_note` inventory item is missing from the
+manifest, or if any staged note is absent from the inventory.
+
 ## Chat-To-Note Job
 
 For a triaged raw chat:
 
 - decide whether it contains one or multiple distinct medical notes;
+- create the exhaustive coverage inventory JSON and return its path;
 - write each candidate as a temporary Markdown note in the current
   Wiki_Medicina style;
 - choose taxonomy from the canonical taxonomy and current tree supplied by the
@@ -41,7 +77,8 @@ For a triaged raw chat:
 - create exact aliases only, using canonical Wiki YAML only when aliases exist;
 - include strong related notes from `CATALOGO_WIKI.json` when available;
 - include provenance footer and `[[_Índice_Medicina]]`;
-- return temp file path, title, taxonomy, aliases, and catalog/entity proposals.
+- return coverage path, temp file path, title, taxonomy, aliases, and
+  catalog/entity proposals.
 
 If the parent did not provide both canonical taxonomy and the current taxonomy
 tree, return a blocking note asking it to run

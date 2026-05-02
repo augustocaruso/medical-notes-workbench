@@ -17,6 +17,7 @@ quando solicitado.
 ## Familias Atuais
 
 - `medical-notes-workbench.subagent-plan.v1`
+- `medical-notes-workbench.raw-coverage.v1`
 - `medical-notes-workbench.taxonomy-migration-plan.v1`
 - `medical-notes-workbench.taxonomy-migration-receipt.v1`
 - `medical-notes-workbench.wiki-health-fix.v1`
@@ -67,3 +68,12 @@ base no catálogo; o texto visível é preservado e apenas o target muda.
 agente principal deve usar depois que subagents retornarem. Esses templates são
 contrato operacional, não alias de conveniência: slash commands devem seguir os
 nomes e flags públicos documentados pela CLI.
+
+## Cobertura De Raw Chats
+
+`medical-notes-workbench.raw-coverage.v1` é o inventário exaustivo criado pelo
+`med-knowledge-architect` antes de staged notes. Campos mínimos: `schema`,
+`raw_file`, `exhaustive: true` e `items`. Cada item tem `id`, `title` e
+`action`: `create_note`, `covered_by_existing` ou `not_a_note`. Itens
+`create_note` devem bater com os títulos staged; itens dispensados precisam de
+`reason`, e `covered_by_existing` também precisa de `existing_title`.

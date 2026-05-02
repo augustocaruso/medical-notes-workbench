@@ -9,6 +9,7 @@ from typing import Any
 
 from wiki.common import CollisionError, MedOpsError, MissingPathError, ValidationError, _now_iso
 from wiki.config import MedConfig, _path
+from wiki.coverage import validate_raw_coverage, validate_raw_coverage_structure
 from wiki.raw_chats import atomic_write_text, mutate_raw_frontmatter
 from wiki.style import validate_wiki_note_contract
 from wiki.taxonomy import (
@@ -101,7 +102,7 @@ def _manifest_note_count(data: dict[str, Any]) -> int:
     return sum(len(batch.get("notes", [])) for batch in _manifest_batches(data) if isinstance(batch, dict))
 
 
-def _notes_for_stage(data: dict[str, Any], raw_file: Path) -> list[dict[str, Any]]:
+def _batch_for_stage(data: dict[str, Any], raw_file: Path) -> dict[str, Any]:
     raw_text = str(raw_file)
     if "batches" in data:
         batches = data["batches"]
@@ -114,10 +115,10 @@ def _notes_for_stage(data: dict[str, Any], raw_file: Path) -> list[dict[str, Any
                 notes = batch.setdefault("notes", [])
                 if not isinstance(notes, list):
                     raise ValidationError("manifest batch notes must be a list")
-                return notes
+                return batch
         new_batch: dict[str, Any] = {"raw_file": raw_text, "notes": []}
         batches.append(new_batch)
-        return new_batch["notes"]
+        return new_batch
 
     existing_raw = data.get("raw_file")
     if not existing_raw:
@@ -125,22 +126,25 @@ def _notes_for_stage(data: dict[str, Any], raw_file: Path) -> list[dict[str, Any
         notes = data.setdefault("notes", [])
         if not isinstance(notes, list):
             raise ValidationError("manifest.notes must be a list")
-        return notes
+        return data
     if _paths_match(str(existing_raw), raw_file):
         notes = data.setdefault("notes", [])
         if not isinstance(notes, list):
             raise ValidationError("manifest.notes must be a list")
-        return notes
+        return data
 
     existing_notes = data.get("notes", [])
     if not isinstance(existing_notes, list):
         raise ValidationError("manifest.notes must be a list")
+    existing_batch: dict[str, Any] = {"raw_file": str(existing_raw), "notes": existing_notes}
+    if data.get("coverage_path"):
+        existing_batch["coverage_path"] = data["coverage_path"]
     data.clear()
     data["batches"] = [
-        {"raw_file": str(existing_raw), "notes": existing_notes},
+        existing_batch,
         {"raw_file": raw_text, "notes": []},
     ]
-    return data["batches"][1]["notes"]
+    return data["batches"][1]
 
 
 def plan_publish_batch(
@@ -148,6 +152,7 @@ def plan_publish_batch(
     config: MedConfig,
     collision: str,
     allow_new_taxonomy_leaf: bool = True,
+    require_coverage: bool = True,
 ) -> list[dict[str, Any]]:
     planned_batches: list[dict[str, Any]] = []
     reserved: set[Path] = set()
@@ -164,6 +169,12 @@ def plan_publish_batch(
         if not raw_file.exists():
             raise MissingPathError(f"Raw file not found: {raw_file}")
         notes: list[dict[str, Any]] = []
+        coverage_path_value = batch.get("coverage_path")
+        if require_coverage and not coverage_path_value:
+            raise ValidationError(
+                "Manifest batch missing coverage_path; create an exhaustive raw coverage inventory "
+                "and stage notes with stage-note --coverage <coverage.json>"
+            )
         for raw_item in notes_value:
             item = _validate_note_item(raw_item)
             content_path = _path(item["content_path"])
@@ -190,7 +201,16 @@ def plan_publish_batch(
                     "target_path": str(target),
                 }
             )
-        planned_batches.append({"raw_file": str(raw_file), "notes": notes})
+        planned_batch: dict[str, Any] = {"raw_file": str(raw_file), "notes": notes}
+        if coverage_path_value:
+            coverage_path = _path(str(coverage_path_value))
+            planned_batch["coverage_path"] = str(coverage_path)
+            planned_batch["coverage"] = validate_raw_coverage(
+                coverage_path,
+                raw_file,
+                [str(note["title"]) for note in notes],
+            )
+        planned_batches.append(planned_batch)
     return planned_batches
 
 
@@ -201,9 +221,16 @@ def publish_batch(
     dry_run: bool = False,
     backup: bool = False,
     allow_new_taxonomy_leaf: bool = True,
+    require_coverage: bool = True,
 ) -> dict[str, Any]:
     data = _load_manifest(manifest)
-    plan = plan_publish_batch(data, config, collision, allow_new_taxonomy_leaf=allow_new_taxonomy_leaf)
+    plan = plan_publish_batch(
+        data,
+        config,
+        collision,
+        allow_new_taxonomy_leaf=allow_new_taxonomy_leaf,
+        require_coverage=require_coverage,
+    )
     created: list[str] = []
     raw_updates: list[dict[str, Any]] = []
     if dry_run:
@@ -212,6 +239,7 @@ def publish_batch(
             "backup": backup,
             "manifest": str(manifest),
             "allow_new_taxonomy_leaf": allow_new_taxonomy_leaf,
+            "require_coverage": require_coverage,
             "planned_batches": plan,
             "created": [],
             "raw_updates": [],
@@ -243,6 +271,7 @@ def publish_batch(
         "backup": backup,
         "manifest": str(manifest),
         "allow_new_taxonomy_leaf": allow_new_taxonomy_leaf,
+        "require_coverage": require_coverage,
         "created": created,
         "raw_updates": raw_updates,
         "created_count": len(created),
@@ -259,6 +288,7 @@ def stage_note(
     dry_run: bool = False,
     config: MedConfig | None = None,
     allow_new_taxonomy_leaf: bool = True,
+    coverage_path: Path | None = None,
 ) -> dict[str, Any]:
     taxonomy_resolution = (
         resolve_taxonomy(config.wiki_dir, taxonomy, title=title, allow_new_leaf=allow_new_taxonomy_leaf)
@@ -279,7 +309,16 @@ def stage_note(
     else:
         data = {"raw_file": str(raw_file), "notes": []}
     item = {"taxonomy": canonical_taxonomy, "title": title, "content_path": str(content_path)}
-    notes = _notes_for_stage(data, raw_file)
+    batch = _batch_for_stage(data, raw_file)
+    notes = batch["notes"]
+    if coverage_path is not None:
+        validate_raw_coverage_structure(coverage_path, raw_file)
+        existing_coverage = batch.get("coverage_path")
+        if existing_coverage and not _paths_match(str(existing_coverage), coverage_path):
+            raise ValidationError(
+                f"Manifest batch already has a different coverage_path: {existing_coverage}"
+            )
+        batch["coverage_path"] = str(coverage_path)
     if not dry_run:
         manifest.parent.mkdir(parents=True, exist_ok=True)
         notes.append(item)
@@ -291,6 +330,8 @@ def stage_note(
         "note_count": _manifest_note_count(data) + (1 if dry_run else 0),
         "batch_count": len(_manifest_batches(data)),
     }
+    if coverage_path is not None:
+        result["coverage_path"] = str(coverage_path)
     if taxonomy_resolution is not None:
         result["taxonomy_resolution"] = taxonomy_resolution.to_json(config.wiki_dir, title=title)
     return result

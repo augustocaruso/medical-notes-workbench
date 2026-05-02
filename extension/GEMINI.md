@@ -48,7 +48,8 @@ operational JSON is for agents, hooks, and tests unless the user asks for it.
   embeds/captions and append its own keys; never rewrite existing frontmatter.
 - Raw-chat processing must go through `scripts/mednotes/med_ops.py`; never edit
   raw-chat YAML/status manually and always run `publish-batch --dry-run` before
-  a real publish.
+  a real publish. Publishing requires an exhaustive raw-chat coverage inventory
+  (`medical-notes-workbench.raw-coverage.v1`) attached as `coverage_path`.
 - Wiki_Medicina taxonomy is category folders only; `title` becomes the `.md`
   filename. Use the fixed 5 big areas from `knowledge/knowledge-architect.md`
   and the current tree from `scripts/mednotes/wiki_tree.py --max-depth 4 --audit --format text`.

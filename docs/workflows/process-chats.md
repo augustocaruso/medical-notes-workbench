@@ -26,14 +26,19 @@ e escrita clinica por unidade isolada.
    `med_ops.py plan-subagents --phase architect --temp-root <tmp-agents> --limit <N>`
    quando o usuário pediu lote finito. O mesmo teto default de 5 subagents vale
    aqui; omita `--max-concurrency` para usar esse default.
-7. Validar/fixar notas temporarias com `validate-note` e `fix-note`, incluindo
+7. Cada `med-knowledge-architect` deve criar primeiro um inventário de cobertura
+   exaustivo (`medical-notes-workbench.raw-coverage.v1`) para o raw chat:
+   todo tema durável vira `create_note`; itens já cobertos usam
+   `covered_by_existing`; ruído usa `not_a_note` com motivo. Não aceite amostra
+   representativa em chat longo.
+8. Validar/fixar notas temporarias com `validate-note` e `fix-note`, incluindo
    YAML canônico da Wiki (`aliases`, `tags`, `images_*`, ou nenhum YAML quando
    todos estiverem vazios).
-8. Montar um único manifest de lote somente com `stage-note`; ele aceita vários
-   raw chats e cria `batches` internamente.
-9. Rodar `publish-batch --dry-run` uma vez para esse manifest, acionar
+9. Montar um único manifest de lote somente com `stage-note --coverage
+   <coverage.json>`; ele aceita vários raw chats e cria `batches` internamente.
+10. Rodar `publish-batch --dry-run` uma vez para esse manifest, acionar
    `med-publish-guard` e publicar uma vez apenas se aprovado.
-10. Rodar `run-linker` uma unica vez depois do publish do lote inteiro. Se o
+11. Rodar `run-linker` uma unica vez depois do publish do lote inteiro. Se o
     linker bloquear por grafo, a próxima ação padrão é
     `/mednotes:fix-wiki --dry-run`; deixe fusão/deleção manual apenas para
     duplicatas não-idênticas que o fix-wiki não consegue resolver.
@@ -53,4 +58,7 @@ e escrita clinica por unidade isolada.
 - Se `validate-note` retornar `requires_llm_rewrite: true`, use o
   `rewrite_prompt` com `med-knowledge-architect`; `fix-note` é normalizador
   determinístico e não cria seções clínicas ausentes.
+- `publish-batch` bloqueia manifest sem `coverage_path` ou com inventário que
+  não bate com as notas staged; não marque raw chat como `processado` sem essa
+  cobertura.
 - Taxonomia e pasta de categoria; `title` vira o arquivo `.md`.

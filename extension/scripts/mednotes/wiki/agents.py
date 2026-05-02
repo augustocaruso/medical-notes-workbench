@@ -58,13 +58,13 @@ def plan_subagents(
             "unit": "one triaged raw chat per subagent; all notes split from that chat stay with the same subagent",
             "serial_after": [
                 "parent validates/fixes each returned temp note",
-                "parent stages notes with med_ops.py stage-note",
+                "parent stages notes with med_ops.py stage-note and the architect coverage inventory",
                 "catalog, dry-run, guard, publish and linker stay serial",
             ],
             "canonical_parent_commands": [
                 'validate-note: uv run python "<med_ops.py>" validate-note --content "<temp.md>" --title "<title>" --raw-file "<raw_file>" --json',
                 'fix-note: uv run python "<med_ops.py>" fix-note --content "<temp.md>" --title "<title>" --raw-file "<raw_file>" --output "<temp.md>" --json',
-                'stage-note: uv run python "<med_ops.py>" stage-note --manifest "<manifest.json>" --raw-file "<raw_file>" --taxonomy "<taxonomy>" --title "<title>" --content "<temp.md>"',
+                'stage-note: uv run python "<med_ops.py>" stage-note --manifest "<manifest.json>" --raw-file "<raw_file>" --coverage "<coverage.json>" --taxonomy "<taxonomy>" --title "<title>" --content "<temp.md>"',
                 'publish dry-run: uv run python "<med_ops.py>" publish-batch --manifest "<manifest.json>" --dry-run',
                 'publish: uv run python "<med_ops.py>" publish-batch --manifest "<manifest.json>"',
             ],
@@ -217,6 +217,7 @@ def plan_subagents(
             "Spawn at most one subagent per work_item.raw_file.",
             "Never spawn multiple subagents for the same raw chat or generated note.",
             "Do not split one raw chat across multiple med-knowledge-architect agents.",
+            "Every architect result must include an exhaustive raw coverage inventory before staging.",
             "Do not launch more subagents than item_count or max_concurrency.",
             "If item_count is 0 or 1, there is no useful fan-out for this phase.",
             "When limit is set, spawn only the returned work_items",
