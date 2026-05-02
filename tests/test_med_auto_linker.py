@@ -83,6 +83,42 @@ def test_linker_uses_catalog_as_primary_vocabulary(tmp_path):
     assert "[[Acatisia por Lurasidona|inquietação motora]]" in source.read_text(encoding="utf-8")
 
 
+def test_linker_rewrites_existing_alias_link_to_catalog_target(tmp_path):
+    wiki = tmp_path / "wiki"
+    canonical = wiki / "Cardiologia" / "Hipertensão Arterial Sistêmica.md"
+    canonical.parent.mkdir(parents=True)
+    canonical.write_text("# Hipertensão Arterial Sistêmica\n", encoding="utf-8")
+    old_alias_note = wiki / "Cardiologia" / "HAS.md"
+    old_alias_note.write_text("# HAS\n", encoding="utf-8")
+    source = wiki / "Emergencia" / "Seguimento.md"
+    source.parent.mkdir(parents=True)
+    source.write_text("Rever [[HAS]] no retorno.\n", encoding="utf-8")
+    catalog = tmp_path / "CATALOGO_WIKI.json"
+    catalog.write_text(
+        json.dumps(
+            {
+                "entities": [
+                    {
+                        "arquivo": "Cardiologia/Hipertensão Arterial Sistêmica.md",
+                        "aliases": ["HAS"],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    vocab = med_linker.build_vocabulary(wiki, catalog_path=catalog)
+    plan = med_linker.link_file(source, vocab)
+
+    assert plan.changed is True
+    assert len(plan.rewrites) == 1
+    assert plan.rewrites[0].old_target == "HAS"
+    assert plan.rewrites[0].new_target == "Hipertensão Arterial Sistêmica"
+    assert "[[Hipertensão Arterial Sistêmica|HAS]]" in source.read_text(encoding="utf-8")
+
+
 def test_linker_dry_run_json_does_not_write(tmp_path, capsys):
     wiki = tmp_path / "wiki"
     target = wiki / "Cardiologia" / "Infarto.md"

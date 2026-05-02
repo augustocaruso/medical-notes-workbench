@@ -13,6 +13,7 @@ if str(SCRIPT_DIR) not in sys.path:
 from wiki.api import (
     EXIT_IO,
     EXIT_LINKER,
+    EXIT_MISSING,
     EXIT_OK,
     EXIT_USAGE,
     EXIT_VALIDATION,
@@ -71,6 +72,75 @@ def _add_taxonomy_creation_mode(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _status_payload(rows: list[dict[str, str]], mode: str, args: argparse.Namespace) -> list[dict[str, str]] | dict[str, object]:
+    limit = max(0, int(getattr(args, "limit", 0) or 0))
+    if getattr(args, "summary", False):
+        sample_limit = limit or 20
+        return {"mode": mode, "count": len(rows), "sample": rows[:sample_limit]}
+    if limit:
+        return rows[:limit]
+    return rows
+
+
+def _compact_linker_payload(result: dict[str, object]) -> dict[str, object]:
+    blockers = result.get("blockers")
+    blocker_list = blockers if isinstance(blockers, list) else []
+    graph = result.get("graph_audit_before")
+    graph_summary = {}
+    if isinstance(graph, dict):
+        graph_summary = {
+            "ok": graph.get("ok"),
+            "error_count": graph.get("error_count"),
+            "warning_count": graph.get("warning_count"),
+        }
+    compact = {
+        "ok": result.get("ok"),
+        "error": result.get("error"),
+        "parse_error": result.get("parse_error"),
+        "blocked": result.get("blocked"),
+        "dry_run": result.get("dry_run"),
+        "returncode": result.get("returncode"),
+        "wiki_dir": result.get("wiki_dir"),
+        "catalog_path": result.get("catalog_path"),
+        "catalog_exists": result.get("catalog_exists"),
+        "vocabulary_count": result.get("vocabulary_count"),
+        "files_scanned": result.get("files_scanned"),
+        "files_changed": result.get("files_changed"),
+        "links_planned": result.get("links_planned"),
+        "links_rewritten": result.get("links_rewritten"),
+        "index_files_changed": result.get("index_files_changed"),
+        "index_entries_planned": result.get("index_entries_planned"),
+        "blocker_count": result.get("blocker_count"),
+        "blocker_summary": _issue_summary(blocker_list),
+        "blockers_sample": blocker_list[:10],
+        "graph_audit_before": graph_summary,
+        "linker_path": result.get("linker_path"),
+    }
+    stderr = result.get("stderr")
+    if stderr:
+        compact["stderr"] = stderr
+    return compact
+
+
+def _issue_summary(issues: list[object], *, sample_size: int = 3) -> list[dict[str, object]]:
+    grouped: dict[str, dict[str, object]] = {}
+    for raw_issue in issues:
+        if not isinstance(raw_issue, dict):
+            continue
+        code = str(raw_issue.get("code") or "unknown")
+        group = grouped.setdefault(code, {"code": code, "count": 0, "examples": []})
+        group["count"] = int(group["count"]) + 1
+        examples = group["examples"]
+        if isinstance(examples, list) and len(examples) < sample_size:
+            examples.append(_issue_example(raw_issue))
+    return sorted(grouped.values(), key=lambda item: (-int(item["count"]), str(item["code"])))
+
+
+def _issue_example(issue: dict[str, object]) -> dict[str, object]:
+    keys = ("file", "target", "line", "raw", "files", "message")
+    return {key: issue[key] for key in keys if key in issue}
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Medical Notes Workbench deterministic chat-processing operations.")
     _add_common(parser)
@@ -78,8 +148,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     pending = sub.add_parser("list-pending", help="List raw chats with no status or status=pendente.")
     _add_common(pending, suppress_defaults=True)
+    pending.add_argument("--summary", action="store_true", help="Emit counts plus a small sample instead of the full list.")
+    pending.add_argument("--limit", type=int, default=0, help="Limit returned rows, or sample size with --summary.")
     triados = sub.add_parser("list-triados", help="List raw chats with status=triado and tipo=medicina.")
     _add_common(triados, suppress_defaults=True)
+    triados.add_argument("--summary", action="store_true", help="Emit counts plus a small sample instead of the full list.")
+    triados.add_argument("--limit", type=int, default=0, help="Limit returned rows, or sample size with --summary.")
 
     plan_agents = sub.add_parser("plan-subagents", help="Build a safe subagent work plan for process-chats.")
     _add_common(plan_agents, suppress_defaults=True)
@@ -160,6 +234,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(linker, suppress_defaults=True)
     linker.add_argument("--dry-run", action="store_true")
     linker.add_argument("--json", action="store_true", help="Emit JSON report. Accepted for explicitness; output is always JSON.")
+    linker.add_argument("--full", action="store_true", help="Include per-file linker plans in the JSON output.")
 
     graph = sub.add_parser("graph-audit", help="Audit Wiki_Medicina link graph health without writing files.")
     _add_common(graph, suppress_defaults=True)
@@ -212,9 +287,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         config = resolve_config(args)
         if args.command == "list-pending":
-            _json(list_by_status(config.raw_dir, "pending"))
+            rows = list_by_status(config.raw_dir, "pending")
+            _json(_status_payload(rows, "pending", args))
         elif args.command == "list-triados":
-            _json(list_by_status(config.raw_dir, "triados"))
+            rows = list_by_status(config.raw_dir, "triados")
+            _json(_status_payload(rows, "triados", args))
         elif args.command == "plan-subagents":
             _json(
                 plan_subagents(
@@ -306,7 +383,9 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "run-linker":
             result = run_linker(config, dry_run=args.dry_run)
-            _json(result)
+            _json(result if args.full else _compact_linker_payload(result))
+            if result.get("error") or result.get("parse_error"):
+                return EXIT_MISSING if result.get("returncode") == EXIT_MISSING else EXIT_LINKER
             if not result.get("dry_run") and result.get("returncode", 0) != 0:
                 return EXIT_LINKER
         elif args.command == "graph-audit":

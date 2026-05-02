@@ -13,22 +13,29 @@ e escrita clinica por unidade isolada.
 1. Validar ambiente com `med_ops.py validate`.
 2. Carregar contexto de taxonomia com
    `scripts/mednotes/wiki_tree.py --max-depth 4 --audit --format text`.
-3. Planejar triagem com
+3. Conferir backlog com `med_ops.py list-pending --summary` e
+   `med_ops.py list-triados --summary`; use listas completas só quando precisar
+   depurar um item específico.
+4. Planejar triagem com
    `med_ops.py plan-subagents --phase triage --max-concurrency <N> --limit <N>`
    quando o usuário pediu lote finito; para máximo paralelismo, use o mesmo
    valor nos dois argumentos.
-4. Aplicar `triage` ou `discard` em serie pelo agente principal.
-5. Planejar arquitetura com
+5. Aplicar `triage` ou `discard` em serie pelo agente principal.
+6. Planejar arquitetura com
    `med_ops.py plan-subagents --phase architect --max-concurrency <N> --temp-root <tmp-agents> --limit <N>`
    quando o usuário pediu lote finito; para máximo paralelismo, use o mesmo
    valor nos dois argumentos.
-6. Validar/fixar notas temporarias com `validate-note` e `fix-note`, incluindo
+7. Validar/fixar notas temporarias com `validate-note` e `fix-note`, incluindo
    YAML canônico da Wiki (`aliases`, `tags`, `images_*`, ou nenhum YAML quando
    todos estiverem vazios).
-7. Montar manifest somente com `stage-note`.
-8. Rodar `publish-batch --dry-run`, acionar `med-publish-guard` e publicar
-   apenas se aprovado.
-9. Rodar `run-linker` uma unica vez ao final do lote.
+8. Montar um único manifest de lote somente com `stage-note`; ele aceita vários
+   raw chats e cria `batches` internamente.
+9. Rodar `publish-batch --dry-run` uma vez para esse manifest, acionar
+   `med-publish-guard` e publicar uma vez apenas se aprovado.
+10. Rodar `run-linker` uma unica vez depois do publish do lote inteiro. Se o
+    linker bloquear por grafo, a próxima ação padrão é
+    `/mednotes:fix-wiki --dry-run`; deixe fusão/deleção manual apenas para
+    duplicatas não-idênticas que o fix-wiki não consegue resolver.
 
 ## Limites
 

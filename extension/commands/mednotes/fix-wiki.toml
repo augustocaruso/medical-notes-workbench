@@ -4,19 +4,17 @@ Audite ou corrija a saúde da Wiki_Medicina.
 
 Argumentos do usuário: {{args}}
 
-Use a skill `fix-medical-wiki`. Ela é o runbook oficial; o resumo do workflow
-está em `docs/workflows/fix-wiki.md`.
-Use também `knowledge/workflow-output-contract.md` para transformar o JSON em
-resumo legível, status com emoji e próxima ação.
+Use a skill `fix-medical-wiki`; o runbook está em `docs/workflows/fix-wiki.md`.
+Use `knowledge/workflow-output-contract.md` para o resumo visível.
 
 Invariantes do launcher:
 - Modo padrão é reparar: rode `uv run python scripts/mednotes/med_ops.py fix-wiki --apply --backup --json`.
 - Se o usuário passar `--dry-run`, rode `uv run python scripts/mednotes/med_ops.py fix-wiki --dry-run --json`.
 - O apply faz style/YAML fix, `graph_fix` seguro e linker em série.
-- Se houver `requires_llm_rewrite: true`, planeje e aplique reescritas via
-  `plan-subagents --phase style-rewrite --max-concurrency 3` e `apply-style-rewrite`.
-- Se houver `taxonomy_action_required`, resolva no mesmo workflow com
-  `taxonomy-migrate` plano/recibo/rollback; não mova pasta manualmente.
+- "Blocker" não é resposta final: classifique em IO externo, decisão clínica,
+  rota automática/orquestrável ou bug do reparo.
+- Se houver `requires_llm_rewrite: true`, use `plan-subagents --phase style-rewrite --max-concurrency 3` e `apply-style-rewrite`.
+- Se houver `taxonomy_action_required`, resolva com `taxonomy-migrate` plano/recibo/rollback; não mova pasta manualmente.
 - Backup tem ciclo de vida: manter 3 por nota e apagar os com mais de 14 dias.
 - Use `/mednotes:link` para linkagem pura.
 - Não mostre JSON bruto por padrão; resuma arquivos que mudariam/mudaram,

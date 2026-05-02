@@ -39,10 +39,11 @@ def run_linker(config: MedConfig, dry_run: bool = False) -> dict[str, Any]:
             "dry_run": dry_run,
             "linker_path": str(linker),
             "returncode": returncode,
-            "stdout": stdout_text,
             "stderr": stderr_text,
         }
     )
+    if payload.get("parse_error"):
+        payload["stdout"] = stdout_text
     return payload
 
 

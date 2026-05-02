@@ -89,6 +89,60 @@ def _validate_note_item(item: Any) -> dict[str, str]:
     return {field: str(item[field]) for field in required}
 
 
+def _paths_match(left: str, right: Path) -> bool:
+    left_path = _path(left)
+    try:
+        return left_path.resolve() == right.resolve()
+    except OSError:
+        return str(left_path) == str(right)
+
+
+def _manifest_note_count(data: dict[str, Any]) -> int:
+    return sum(len(batch.get("notes", [])) for batch in _manifest_batches(data) if isinstance(batch, dict))
+
+
+def _notes_for_stage(data: dict[str, Any], raw_file: Path) -> list[dict[str, Any]]:
+    raw_text = str(raw_file)
+    if "batches" in data:
+        batches = data["batches"]
+        if not isinstance(batches, list):
+            raise ValidationError("manifest.batches must be a list")
+        for batch in batches:
+            if not isinstance(batch, dict):
+                raise ValidationError("Each manifest batch must be an object")
+            if batch.get("raw_file") and _paths_match(str(batch["raw_file"]), raw_file):
+                notes = batch.setdefault("notes", [])
+                if not isinstance(notes, list):
+                    raise ValidationError("manifest batch notes must be a list")
+                return notes
+        new_batch: dict[str, Any] = {"raw_file": raw_text, "notes": []}
+        batches.append(new_batch)
+        return new_batch["notes"]
+
+    existing_raw = data.get("raw_file")
+    if not existing_raw:
+        data["raw_file"] = raw_text
+        notes = data.setdefault("notes", [])
+        if not isinstance(notes, list):
+            raise ValidationError("manifest.notes must be a list")
+        return notes
+    if _paths_match(str(existing_raw), raw_file):
+        notes = data.setdefault("notes", [])
+        if not isinstance(notes, list):
+            raise ValidationError("manifest.notes must be a list")
+        return notes
+
+    existing_notes = data.get("notes", [])
+    if not isinstance(existing_notes, list):
+        raise ValidationError("manifest.notes must be a list")
+    data.clear()
+    data["batches"] = [
+        {"raw_file": str(existing_raw), "notes": existing_notes},
+        {"raw_file": raw_text, "notes": []},
+    ]
+    return data["batches"][1]["notes"]
+
+
 def plan_publish_batch(
     data: dict[str, Any],
     config: MedConfig,
@@ -224,22 +278,18 @@ def stage_note(
         data = _load_manifest(manifest)
     else:
         data = {"raw_file": str(raw_file), "notes": []}
-    if data.get("raw_file") and str(_path(str(data["raw_file"]))) != str(raw_file):
-        raise ValidationError("Manifest already belongs to a different raw_file")
-    notes = data.setdefault("notes", [])
-    if not isinstance(notes, list):
-        raise ValidationError("manifest.notes must be a list")
     item = {"taxonomy": canonical_taxonomy, "title": title, "content_path": str(content_path)}
+    notes = _notes_for_stage(data, raw_file)
     if not dry_run:
         manifest.parent.mkdir(parents=True, exist_ok=True)
-        data["raw_file"] = str(raw_file)
         notes.append(item)
         atomic_write_text(manifest, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
     result: dict[str, Any] = {
         "manifest": str(manifest),
         "dry_run": dry_run,
         "staged": item,
-        "note_count": len(notes) + (1 if dry_run else 0),
+        "note_count": _manifest_note_count(data) + (1 if dry_run else 0),
+        "batch_count": len(_manifest_batches(data)),
     }
     if taxonomy_resolution is not None:
         result["taxonomy_resolution"] = taxonomy_resolution.to_json(config.wiki_dir, title=title)

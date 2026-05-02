@@ -29,8 +29,8 @@ Todos os exemplos assumem `uv run python`. Em instalações da extensão, config
 - `uv run python scripts/mednotes/med_ops.py validate`
 - `uv run python scripts/mednotes/wiki_tree.py --max-depth 4 --audit` (JSON)
 - `uv run python scripts/mednotes/wiki_tree.py --max-depth 4 --audit --format text` (árvore legível)
-- `uv run python scripts/mednotes/med_ops.py list-pending`
-- `uv run python scripts/mednotes/med_ops.py list-triados`
+- `uv run python scripts/mednotes/med_ops.py list-pending [--summary] [--limit N]`
+- `uv run python scripts/mednotes/med_ops.py list-triados [--summary] [--limit N]`
 - `uv run python scripts/mednotes/med_ops.py plan-subagents --phase triage|architect|style-rewrite [--limit N]`
 - `uv run python scripts/mednotes/med_ops.py triage|discard`
 - `uv run python scripts/mednotes/med_ops.py validate-note|fix-note`
@@ -41,7 +41,7 @@ Todos os exemplos assumem `uv run python`. Em instalações da extensão, config
 - `uv run python scripts/mednotes/med_ops.py fix-wiki --dry-run --json`
 - `uv run python scripts/mednotes/med_ops.py fix-wiki --apply --backup --json`
 - `uv run python scripts/mednotes/med_ops.py taxonomy-canonical|taxonomy-tree|taxonomy-audit|taxonomy-resolve|taxonomy-migrate`
-- `uv run python scripts/mednotes/med_ops.py graph-audit|run-linker`
+- `uv run python scripts/mednotes/med_ops.py graph-audit|run-linker [--full]`
 
 Entradas do pacote Wiki para uso direto quando útil:
 

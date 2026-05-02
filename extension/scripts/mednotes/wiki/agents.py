@@ -42,6 +42,10 @@ def plan_subagents(
                 "parent applies med_ops.py triage or discard after each returned item",
                 "parent refreshes list-triados before architect planning",
             ],
+            "canonical_parent_commands": [
+                'triage: uv run python "<med_ops.py>" triage --raw-file "<raw_file>" --tipo medicina --titulo "<titulo_triagem>" --fonte-id "<fonte_id>"',
+                'discard: uv run python "<med_ops.py>" discard --raw-file "<raw_file>" --reason "<reason>"',
+            ],
         },
         "architect": {
             "agent": "med-knowledge-architect",
@@ -54,6 +58,13 @@ def plan_subagents(
                 "parent stages notes with med_ops.py stage-note",
                 "catalog, dry-run, guard, publish and linker stay serial",
             ],
+            "canonical_parent_commands": [
+                'validate-note: uv run python "<med_ops.py>" validate-note --content "<temp.md>" --title "<title>" --raw-file "<raw_file>" --json',
+                'fix-note: uv run python "<med_ops.py>" fix-note --content "<temp.md>" --title "<title>" --raw-file "<raw_file>" --output "<temp.md>" --json',
+                'stage-note: uv run python "<med_ops.py>" stage-note --manifest "<manifest.json>" --raw-file "<raw_file>" --taxonomy "<taxonomy>" --title "<title>" --content "<temp.md>"',
+                'publish dry-run: uv run python "<med_ops.py>" publish-batch --manifest "<manifest.json>" --dry-run',
+                'publish: uv run python "<med_ops.py>" publish-batch --manifest "<manifest.json>"',
+            ],
         },
         "style-rewrite": {
             "agent": "med-knowledge-architect",
@@ -65,6 +76,10 @@ def plan_subagents(
                 "parent validates each returned temp rewrite with med_ops.py apply-style-rewrite --dry-run",
                 "parent applies accepted rewrites serially with med_ops.py apply-style-rewrite",
                 "parent runs validate-wiki again after rewrites",
+            ],
+            "canonical_parent_commands": [
+                'apply rewrite dry-run: uv run python "<med_ops.py>" apply-style-rewrite --target "<note.md>" --content "<rewrite.md>" --dry-run --json',
+                'apply rewrite: uv run python "<med_ops.py>" apply-style-rewrite --target "<note.md>" --content "<rewrite.md>" --backup --json',
             ],
         },
     }
@@ -142,6 +157,7 @@ def plan_subagents(
                 "Run serial apply-style-rewrite validation and application after each batch returns.",
             ],
             "serial_after": spec["serial_after"],
+            "canonical_parent_commands": spec["canonical_parent_commands"],
             "source_audit": {
                 "schema": audit["schema"],
                 "wiki_dir": audit["wiki_dir"],
@@ -205,4 +221,5 @@ def plan_subagents(
             "Run serial consolidation after each batch returns.",
         ],
         "serial_after": spec["serial_after"],
+        "canonical_parent_commands": spec["canonical_parent_commands"],
     }

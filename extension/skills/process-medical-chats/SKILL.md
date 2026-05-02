@@ -66,7 +66,8 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
    primeiro `--dry-run --plan-output <plano.json>`, depois aplique somente com
    confirmação explícita via `--apply --plan <plano.json> --receipt <recibo.json>`.
    Use `--rollback --receipt <recibo.json>` se precisar desfazer.
-5. Rode `list-pending` e `list-triados`.
+5. Rode `list-pending --summary` e `list-triados --summary` para orientar o
+   tamanho do backlog sem despejar listas grandes no terminal.
 6. Para chats pendentes, rode:
 
    ```bash
@@ -79,9 +80,9 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
    Para cada `work_item.raw_file` retornado, lance no máximo um
    `med-chat-triager`, seguindo `batches`. Não leia vários raw chats no agente
    principal para substituir o triager. Depois aplique `triage` ou `discard` em
-   série via `med_ops.py`. Se a próxima ação era apenas triagem, pare aqui com
-   resumo e nova próxima ação.
-7. Atualize `list-triados`. Para chats triados, rode:
+   série via `med_ops.py`, seguindo `canonical_parent_commands` do plano. Se a
+   próxima ação era apenas triagem, pare aqui com resumo e nova próxima ação.
+7. Atualize `list-triados --summary`. Para chats triados, rode:
 
    ```bash
    uv run python "<med_ops.py>" plan-subagents --phase architect --max-concurrency <N> --temp-root <tmp-agents> --limit <N>
@@ -92,6 +93,8 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
    seguindo `batches`. Para máximo paralelismo, use `--max-concurrency` igual ao
    lote. Passe `work_id`, `raw_file`, `temp_dir`, taxonomia canônica, árvore real
    e snapshot do catálogo. Cada architect escreve somente no próprio `temp_dir`.
+   Use `canonical_parent_commands` do plano para validação, fix, staging,
+   dry-run e publish; não invente nomes alternativos de flags.
 8. Antes de staging, valide cada nota temporária:
 
    ```bash
@@ -105,12 +108,15 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
    LLM, como normalizador final. Isso inclui YAML variável gerado pelo agente: o
    fix deve reduzir o frontmatter da Wiki a `aliases`, `tags` e `images_*`, ou
    removê-lo quando todos estiverem vazios.
-9. Monte o manifest apenas com `stage-note`. Se taxonomia/estilo bloquear,
-   corrija a nota ou a escolha de taxonomia; não edite o manifest manualmente.
+9. Monte um único manifest para o lote atual apenas com `stage-note`. O
+   `stage-note` aceita vários raw chats no mesmo manifest e cria `batches`
+   internamente; não crie um manifest por raw chat salvo se o usuário pediu
+   isolamento explícito. Se taxonomia/estilo bloquear, corrija a nota ou a
+   escolha de taxonomia; não edite o manifest manualmente.
 10. Rode `med-catalog-curator` em série para atualizar/validar
     `CATALOGO_WIKI.json`, usando o caminho configurado ou
     `~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json`.
-11. Rode:
+11. Rode uma única vez para o manifest do lote:
 
     ```bash
     uv run python "<med_ops.py>" publish-batch --manifest <manifest.json> --dry-run
@@ -119,14 +125,18 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
     Revise colisões, destinos e `taxonomy_new_dirs`.
 12. Acione `med-publish-guard` com o manifest e o dry-run. Publique apenas se
     ele retornar `approve`.
-13. Rode `publish-batch` real e, ao final, rode:
+13. Rode `publish-batch` real uma única vez para o mesmo manifest e, somente
+    depois de publicar o lote inteiro, rode:
 
     ```bash
     uv run python "<med_ops.py>" run-linker
     ```
 
     O `run-linker` faz preflight de grafo, aplica apenas se não houver blockers
-    e retorna auditoria final.
+    e retorna auditoria final. Se houver `blocker_count > 0`, não sugira
+    deleção manual como primeira ação: recomende `/mednotes:fix-wiki --dry-run`
+    para limpar links quebrados/self/ambíguos e identificar duplicatas exatas.
+    Duplicatas não-idênticas continuam como decisão humana de fusão.
 14. Responda usando o contrato de saída, com status emoji, triados,
     descartados, notas criadas, raw chats processados, canonizações de
     taxonomia, colisões, resultado do linker, warnings de estilo e próxima ação.

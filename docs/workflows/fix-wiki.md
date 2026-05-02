@@ -18,16 +18,24 @@ correções determinísticas de grafo, linker seguro e taxonomia via
    `uv run python scripts/mednotes/med_ops.py fix-wiki --dry-run --json`
 3. No modo reparo, o `fix-wiki` aplica em série: style/YAML fix, `graph_fix`
    seguro (`dangling_link`, `self_link`, link ambíguo, marcador contraditório e
-   duplicata exata), dry-run do linker e linker real quando não restarem
-   blockers.
+   duplicata exata), dry-run do linker e resolução de blockers.
+   Quando o catálogo tiver evidência unívoca de canonicalização, o linker também
+   reescreve WikiLinks existentes, por exemplo `[[HAS]]` para
+   `[[Hipertensão Arterial Sistêmica|HAS]]`, e reporta isso em
+   `linker_dry_run.links_rewritten`.
+   Blocker não é fim do workflow nem desculpa de encerramento: leia
+   `blocker_resolution.groups`, execute a rota indicada e repita
+   `fix-wiki --apply --backup --json`. O linker real só entra quando
+   `blocker_resolution.linker_can_apply` for verdadeiro.
    Se algum arquivo estiver bloqueado para escrita, o comando ainda emite JSON
    com `write_error_count`/`write_errors`, pula o linker real e sai com erro de
    IO em vez de despejar traceback.
 4. Repita o ciclo de reparo até estabilizar: se o JSON ainda trouxer
    `changed_count`, `graph_fix.changed_count`, `linker_applied`,
-   `write_error_count`, `requires_llm_rewrite_count` ou
-   `taxonomy_action_required`, execute o passo correspondente abaixo e rode
-   `fix-wiki --apply --backup --json` novamente.
+   `write_error_count`, `requires_llm_rewrite_count`,
+   `taxonomy_action_required` ou `blocker_resolution.has_blockers`, execute a
+   rota correspondente abaixo e rode `fix-wiki --apply --backup --json`
+   novamente.
 5. Se `requires_llm_rewrite` vier verdadeiro, planejar:
    `uv run python scripts/mednotes/med_ops.py plan-subagents --phase style-rewrite --max-concurrency 3 --temp-root <tmp-rewrites>`
 6. Cada reescrita vai para arquivo temporario e entra pelo gate:
@@ -50,6 +58,14 @@ correções determinísticas de grafo, linker seguro e taxonomia via
 - Pode remover WikiLinks inválidos convertendo-os em texto visível; duplicatas
   só são removidas automaticamente quando o conteúdo é idêntico. Duplicatas com
   conteúdo divergente viram `duplicate_merge_required`.
+- Pode reescrever WikiLinks existentes apenas quando o catálogo apontar de forma
+  unívoca que o alvo antigo é alias de um alvo canônico. Link válido mas
+  semanticamente errado, sem evidência determinística, vira revisão/reescrita.
+- Blockers restantes sempre devem aparecer em `blocker_resolution`, com rota,
+  amostra e próxima ação; não deixe o agente apenas reportar `graph_blockers`.
+- Se `linker_skipped_reason` vier preenchido, a resposta final não pode usar
+  status de concluído; deve dizer qual rota foi executada ou qual decisão
+  humana/externa ainda impede o fechamento.
 - Não acumula backups indefinidamente; a limpeza aparece em `backup_cleanup`.
 - Não move pastas manualmente; qualquer taxonomia é via `taxonomy-migrate` com
   plano, recibo e rollback.

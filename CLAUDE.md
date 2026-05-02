@@ -61,7 +61,8 @@ Referências:
 - `fix-wiki` deve resolver problemas determinísticos da Wiki; migração de
   pastas é sempre `taxonomy-migrate` com plano, recibo e rollback.
 - `link` não corrige estilo, YAML ou publicação.
-- `process-chats` publica notas novas e roda linker uma vez ao final.
+- `process-chats` publica notas novas com um manifest por lote e roda linker
+  uma vez ao final.
 - `/flashcards` usa o MCP global `anki-mcp`, não cria comando local
   `/twenty_rules`, não adiciona tags Anki e marca tag Obsidian `anki` somente
   depois de sucesso real no Anki.

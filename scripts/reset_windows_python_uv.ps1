@@ -306,11 +306,150 @@ function Remove-ResidualPythonDirectories {
     }
 }
 
+function Add-UvCandidatePaths {
+    $paths = @(
+        (Join-Path $HOME ".local\bin"),
+        (Join-Path $env:USERPROFILE ".local\bin"),
+        (Join-Path $env:LOCALAPPDATA "Programs\uv")
+    )
+
+    foreach ($path in $paths) {
+        if ($path -and (Test-Path $path) -and (($env:Path -split ";") -notcontains $path)) {
+            $env:Path = "$path;$env:Path"
+        }
+    }
+
+    $wingetRoot = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages"
+    if (Test-Path $wingetRoot) {
+        Get-ChildItem -Path $wingetRoot -Recurse -Filter "uv.exe" -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty DirectoryName -Unique |
+            ForEach-Object {
+                if (($env:Path -split ";") -notcontains $_) {
+                    $env:Path = "$_;$env:Path"
+                }
+            }
+    }
+}
+
+function Find-UvExecutable {
+    Add-UvCandidatePaths
+    $command = Get-Command uv -ErrorAction SilentlyContinue
+    if ($command) {
+        return $command.Source
+    }
+    return $null
+}
+
+function Invoke-UvInstallerUrl {
+    param([string] $Url)
+
+    Write-Step "Tentando instalador uv: $Url"
+    try {
+        $command = "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; irm '$Url' | iex"
+        powershell -NoProfile -ExecutionPolicy Bypass -Command $command
+        if ($LASTEXITCODE -eq 0) {
+            return $true
+        }
+        Write-Warning "Instalador uv retornou codigo $LASTEXITCODE."
+    }
+    catch {
+        Write-Warning "Instalador uv falhou: $($_.Exception.Message)"
+    }
+    return $false
+}
+
+function Install-UvWithWinget {
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if (-not $winget) {
+        return $false
+    }
+
+    Write-Step "Tentando instalar uv via winget"
+    try {
+        & $winget.Source install --id astral-sh.uv -e --accept-package-agreements --accept-source-agreements --silent
+        if ($LASTEXITCODE -eq 0) {
+            return $true
+        }
+        Write-Warning "winget retornou codigo $LASTEXITCODE."
+    }
+    catch {
+        Write-Warning "winget falhou: $($_.Exception.Message)"
+    }
+    return $false
+}
+
+function Install-UvFromReleaseZip {
+    Write-Step "Tentando instalar uv pelo zip do GitHub Releases"
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") {
+            "aarch64"
+        }
+        elseif ([Environment]::Is64BitOperatingSystem) {
+            "x86_64"
+        }
+        else {
+            "i686"
+        }
+        $release = Invoke-RestMethod -Uri "https://api.github.com/repos/astral-sh/uv/releases/latest" -UseBasicParsing
+        $assetName = "uv-$arch-pc-windows-msvc.zip"
+        $asset = $release.assets | Where-Object { $_.name -eq $assetName } | Select-Object -First 1
+        if (-not $asset) {
+            throw "Asset nao encontrado: $assetName"
+        }
+
+        $binDir = Join-Path $env:USERPROFILE ".local\bin"
+        $tmpDir = Join-Path $env:TEMP ("uv-release-" + [guid]::NewGuid().ToString("N"))
+        $zipPath = Join-Path $env:TEMP $assetName
+        New-Item -ItemType Directory -Force $binDir | Out-Null
+        New-Item -ItemType Directory -Force $tmpDir | Out-Null
+        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -UseBasicParsing
+        Expand-Archive -LiteralPath $zipPath -DestinationPath $tmpDir -Force
+
+        foreach ($exeName in @("uv.exe", "uvx.exe")) {
+            $exe = Get-ChildItem -Path $tmpDir -Recurse -Filter $exeName -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($exe) {
+                Copy-Item -LiteralPath $exe.FullName -Destination (Join-Path $binDir $exeName) -Force
+            }
+        }
+        Remove-Item -LiteralPath $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
+
+        if (($env:Path -split ";") -notcontains $binDir) {
+            $env:Path = "$binDir;$env:Path"
+        }
+        $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        if (($userPath -split ";") -notcontains $binDir) {
+            [Environment]::SetEnvironmentVariable("Path", "$binDir;$userPath", "User")
+        }
+        return $true
+    }
+    catch {
+        Write-Warning "Download direto do uv falhou: $($_.Exception.Message)"
+    }
+    return $false
+}
+
 function Install-UvStandalone {
-    Write-Step "Instalando/atualizando uv standalone com o instalador oficial"
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/install.ps1 | iex"
-    if ($LASTEXITCODE -ne 0) {
-        throw "Falha ao instalar uv."
+    Write-Step "Instalando/atualizando uv"
+    $installed = $false
+    foreach ($url in @(
+        "https://astral.sh/uv/install.ps1",
+        "https://releases.astral.sh/github/uv/releases/download/0.11.8/uv-installer.ps1"
+    )) {
+        if (Invoke-UvInstallerUrl $url) {
+            $installed = $true
+            break
+        }
+    }
+    if (-not $installed) {
+        $installed = Install-UvWithWinget
+    }
+    if (-not $installed) {
+        $installed = Install-UvFromReleaseZip
+    }
+    if (-not $installed) {
+        throw "Falha ao instalar uv por instalador oficial, winget e zip direto."
     }
 }
 
@@ -318,9 +457,9 @@ function Resolve-Uv {
     param([switch] $ForceInstall)
 
     if (-not $ForceInstall) {
-        $command = Get-Command uv -ErrorAction SilentlyContinue
-        if ($command) {
-            return $command.Source
+        $uv = Find-UvExecutable
+        if ($uv) {
+            return $uv
         }
     }
     else {
@@ -329,23 +468,9 @@ function Resolve-Uv {
 
     Install-UvStandalone
 
-    $candidatePaths = @(
-        (Join-Path $HOME ".local\bin\uv.exe"),
-        (Join-Path $env:USERPROFILE ".local\bin\uv.exe"),
-        (Join-Path $env:LOCALAPPDATA "Programs\uv\uv.exe")
-    ) | Where-Object { $_ -and (Test-Path $_) }
-
-    foreach ($candidate in $candidatePaths) {
-        $candidateDir = Split-Path -Parent $candidate
-        if (($env:Path -split ";") -notcontains $candidateDir) {
-            $env:Path = "$candidateDir;$env:Path"
-        }
-        return $candidate
-    }
-
-    $command = Get-Command uv -ErrorAction SilentlyContinue
-    if ($command) {
-        return $command.Source
+    $uv = Find-UvExecutable
+    if ($uv) {
+        return $uv
     }
 
     throw "uv foi instalado, mas nao entrou no PATH desta sessao. Abra um novo PowerShell e rode novamente."

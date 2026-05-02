@@ -46,7 +46,9 @@ emoji por bullet.
   `write_error_count`, `taxonomy_action_required`,
   `requires_llm_rewrite_count`, grafo/linker, backups e exemplos de notas
   afetadas. Se houver `write_errors`, destaque que a escrita ficou bloqueada e
-  que o linker real foi pulado.
+  que o linker real foi pulado. Se `linker_skipped_reason` ou
+  `blocker_resolution.has_blockers` estiverem preenchidos, não use status de
+  concluído; informe a rota executada ou a decisão externa/humana que falta.
 - `process-chats`: pendentes/triados, work items, notas staged/publicadas,
   chats marcados como processados, dry-run/publish, linker e canonizações de
   taxonomia.

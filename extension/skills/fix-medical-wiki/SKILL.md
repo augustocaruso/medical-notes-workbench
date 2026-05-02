@@ -48,27 +48,34 @@ canônico de notas Wiki, reescritas necessárias e grafo.
 3. Resuma `file_count`, `changed_count`, `written_count`, `error_count`,
    `taxonomy_action_required`, `taxonomy_issue_count`, `graph_error_count`,
    `write_error_count`, `requires_llm_rewrite_count`,
-   `linker_dry_run.links_planned`,
-   `backup_policy` e `backup_cleanup`. Quando uma mudança vier só de YAML,
+   `linker_dry_run.links_planned`, `linker_dry_run.links_rewritten`,
+   `blocker_resolution`, `backup_policy` e `backup_cleanup`. Quando uma mudança
+   vier só de YAML,
    trate como fix determinístico: `aliases`, `tags` e `images_*`, ou nenhum
    YAML quando todos estiverem vazios. Quando vier de grafo, destaque
    `graph_fix`: links quebrados/self/ambíguos são convertidos para texto
    visível, marcador contraditório é removido e duplicatas exatas podem ser
-   removidas com backup.
+   removidas com backup. Quando o linker reescrever link existente, explique que
+   isso só ocorre com evidência unívoca do catálogo, preservando o texto visível
+   do link.
    Se `write_error_count` for maior que zero, trate como bloqueio de IO:
    mostre poucos exemplos de `write_errors`, explique que o linker real foi
    pulado com `linker_skipped_reason: write_errors` e peça liberar iCloud,
    Obsidian, antivírus ou outro processo antes de retentar.
 4. Depois do fix determinístico aplicado, leia `taxonomy_audit`, `style_audit`,
    `graph_fix`, `graph_audit`, `linker_dry_run`, `linker_apply` e
-   `graph_audit_final` no JSON retornado. Se `graph_fix.duplicates` trouxer
-   `manual_merge_required`, trate como decisão clínica/humana; não peça a
+   `graph_audit_final` no JSON retornado. Se `linker_skipped_reason` for
+   `graph_blockers`, `taxonomy_action_required` ou `blocker_resolution`, não
+   pare como se fosse resultado final: leia `blocker_resolution.groups`, execute
+   a rota de resolução e repita `fix-wiki --apply --backup --json`. Se
+   `graph_fix.duplicates` ou `blocker_resolution` trouxer
+   `duplicate_merge_required`, trate como decisão clínica/humana; não peça a
    outro agente para apagar uma das notas sem revisar conteúdo.
 5. Repita o ciclo até estabilizar: se uma rodada aplicar mudanças, reescritas,
-   taxonomia ou linker, rode `fix-wiki --apply --backup --json` novamente após
-   o subpasso correspondente. Encerre só quando não houver mudanças
-   determinísticas pendentes e os bloqueios restantes forem decisões clínicas
-   explicitamente listadas.
+   taxonomia, blocker_resolution ou linker, rode `fix-wiki --apply --backup
+   --json` novamente após o subpasso correspondente. Encerre só quando não
+   houver mudanças determinísticas pendentes e os bloqueios restantes forem
+   decisões clínicas explicitamente listadas.
 6. Se qualquer relatório exigir reescrita LLM, planeje automaticamente:
 
    ```bash
@@ -87,7 +94,9 @@ canônico de notas Wiki, reescritas necessárias e grafo.
    uv run python "<med_ops.py>" apply-style-rewrite --target <nota.md> --content <temp.md> --dry-run --json
    ```
 
-   Só aplique se `validation.errors` estiver vazio e o usuário autorizou escrita.
+   Só aplique se `validation.errors` estiver vazio. No modo padrão do
+   `/mednotes:fix-wiki`, a escrita já foi autorizada pelo `--apply`; em
+   `--dry-run`, não aplique.
 8. A aplicação real usa:
 
    ```bash

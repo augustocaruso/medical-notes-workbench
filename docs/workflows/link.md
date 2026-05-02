@@ -17,12 +17,14 @@ todas as notas Markdown publicadas.
 3. Se o dry-run estiver coerente e sem blockers, rodar sem `--dry-run`.
 4. Conferir no JSON `index_files_changed` e `index_entries_planned` para saber
    se o indice seria criado/atualizado e quantas notas entrariam nele.
-5. Reportar arquivos alterados, links inseridos, indice, catalogo usado,
-   blockers e avisos do graph audit.
+5. Reportar arquivos alterados, links inseridos, links reescritos, indice,
+   catalogo usado, blockers e avisos do graph audit.
 
 ## Limites
 
 - Nao corrigir estilo.
 - Nao publicar chats.
 - Nao atualizar catalogo com aliases genericos.
+- Reescrever WikiLinks existentes somente quando o catálogo apontar de forma
+  unívoca que o alvo antigo é alias de um alvo canônico.
 - Nao fazer linkagem manual por regex fora do script.

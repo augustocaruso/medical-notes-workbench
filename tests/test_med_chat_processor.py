@@ -185,6 +185,36 @@ def test_list_pending_and_triados(tmp_path):
     assert triados[0]["titulo_triagem"] == "ISRS"
 
 
+def test_status_cli_can_emit_compact_summary(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    for idx in range(3):
+        _write(raw_dir / f"pendente-{idx}.md", "Sem yaml\n")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(MED_OPS_PATH),
+            "--raw-dir",
+            str(raw_dir),
+            "--wiki-dir",
+            str(wiki_dir),
+            "list-pending",
+            "--summary",
+            "--limit",
+            "2",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["count"] == 3
+    assert len(payload["sample"]) == 2
+
+
 def test_plan_subagents_chunks_pending_chats_without_duplicate_owners(tmp_path):
     raw_dir = tmp_path / "raw"
     wiki_dir = tmp_path / "wiki"
@@ -201,6 +231,8 @@ def test_plan_subagents_chunks_pending_chats_without_duplicate_owners(tmp_path):
     assert [len(batch["items"]) for batch in plan["batches"]] == [2, 2, 1]
     assert len({item["owner_key"] for item in plan["work_items"]}) == 5
     assert "Never spawn multiple subagents for the same raw chat or generated note." in plan["rules"]
+    assert "--raw-file" in plan["canonical_parent_commands"][0]
+    assert "--titulo" in plan["canonical_parent_commands"][0]
 
 
 def test_plan_subagents_limit_caps_next_batch_and_reports_available_count(tmp_path):
@@ -259,6 +291,11 @@ def test_plan_subagents_architect_assigns_isolated_temp_dirs(tmp_path):
     assert {Path(item["raw_file"]).name for item in plan["work_items"]} == {"a.md", "b.md"}
     assert all(str(temp_root) in item["temp_dir"] for item in plan["work_items"])
     assert len({item["temp_dir"] for item in plan["work_items"]}) == 2
+    joined_commands = "\n".join(plan["canonical_parent_commands"])
+    assert "stage-note" in joined_commands
+    assert "--manifest" in joined_commands
+    assert "--taxonomy" in joined_commands
+    assert "--content" in joined_commands
 
 
 def test_plan_subagents_style_rewrite_shards_by_unique_wiki_note(tmp_path):
@@ -507,6 +544,36 @@ def test_publish_batch_dry_run_writes_nothing(tmp_path):
     assert result["planned_batches"][0]["notes"][0]["target_path"].endswith("1. Clínica Médica/Psiquiatria/ISRS.md")
     assert not (wiki_dir / "1. Clínica Médica" / "Psiquiatria" / "ISRS.md").exists()
     assert "status: triado" in raw.read_text(encoding="utf-8")
+
+
+def test_stage_note_can_build_one_manifest_for_multiple_raw_chats(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
+    _mkdir_canonical(wiki_dir, "1. Clínica Médica/Cardiologia")
+    first_raw = _write(raw_dir / "chat-1.md", _raw_chat(fonte_id="chat1"))
+    second_raw = _write(raw_dir / "chat-2.md", _raw_chat(fonte_id="chat2"))
+    first_note = _write(tmp_path / "tmp" / "isrs.md", _wiki_note(title="ISRS", fonte_id="chat1"))
+    second_note = _write(tmp_path / "tmp" / "fa.md", _wiki_note(title="Fibrilação Atrial", fonte_id="chat2"))
+    manifest = tmp_path / "manifest.json"
+    config = _config(raw_dir, wiki_dir)
+
+    first = wiki_api.stage_note(manifest, first_raw, "Psiquiatria", "ISRS", first_note, config=config)
+    second = wiki_api.stage_note(manifest, second_raw, "Cardiologia", "Fibrilação Atrial", second_note, config=config)
+
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    assert first["batch_count"] == 1
+    assert second["batch_count"] == 2
+    assert [Path(batch["raw_file"]).name for batch in data["batches"]] == ["chat-1.md", "chat-2.md"]
+
+    dry_run = wiki_api.publish_batch(manifest, config, dry_run=True)
+    assert len(dry_run["planned_batches"]) == 2
+
+    published = wiki_api.publish_batch(manifest, config)
+    assert published["created_count"] == 2
+    assert published["processed_raw_count"] == 2
+    assert (wiki_dir / "1. Clínica Médica" / "Psiquiatria" / "ISRS.md").exists()
+    assert (wiki_dir / "1. Clínica Médica" / "Cardiologia" / "Fibrilação Atrial.md").exists()
 
 
 def test_publish_batch_creates_notes_then_marks_raw_processed_without_backup(tmp_path):
@@ -831,6 +898,35 @@ def test_run_linker_missing_path_raises(tmp_path):
         raise AssertionError("missing linker should raise")
 
 
+def test_run_linker_cli_reports_missing_wiki_as_failure(tmp_path):
+    raw_dir = tmp_path / "raw"
+    missing_wiki = tmp_path / "missing-wiki"
+    linker = MED_OPS_PATH.with_name("med_linker.py")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(MED_OPS_PATH),
+            "--raw-dir",
+            str(raw_dir),
+            "--wiki-dir",
+            str(missing_wiki),
+            "--linker-path",
+            str(linker),
+            "run-linker",
+            "--dry-run",
+            "--json",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == wiki_api.EXIT_MISSING
+    payload = json.loads(result.stdout)
+    assert payload["error"] == f"Wiki dir não encontrado: {missing_wiki}"
+
+
 def test_graph_audit_and_linker_dry_run_return_structured_reports(tmp_path):
     raw_dir = tmp_path / "raw"
     wiki_dir = tmp_path / "wiki"
@@ -846,6 +942,80 @@ def test_graph_audit_and_linker_dry_run_return_structured_reports(tmp_path):
     assert linker_plan["dry_run"] is True
     assert linker_plan["links_planned"] == 1
     assert linker_plan["plans"][0]["insertions"][0]["target"] == "Infarto"
+    assert "stdout" not in linker_plan
+
+
+def test_run_linker_cli_compacts_large_plan_by_default(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    linker = MED_OPS_PATH.with_name("med_linker.py")
+    _write(wiki_dir / "Infarto.md", "---\naliases: [IAM]\n---\n# Infarto\n")
+    _write(wiki_dir / "Dor.md", "IAM deve ser lembrado.\n\n## 🔗 Notas Relacionadas\n- [[Infarto]]\n")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(MED_OPS_PATH),
+            "--raw-dir",
+            str(raw_dir),
+            "--wiki-dir",
+            str(wiki_dir),
+            "--linker-path",
+            str(linker),
+            "run-linker",
+            "--dry-run",
+            "--json",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["links_planned"] == 1
+    assert payload["blocker_summary"] == []
+    assert payload["blockers_sample"] == []
+    assert "plans" not in payload
+    assert "stdout" not in payload
+
+
+def test_run_linker_cli_summarizes_graph_blockers(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    linker = MED_OPS_PATH.with_name("med_linker.py")
+    _write(wiki_dir / "Cardio" / "ISRS.md", "# ISRS\n")
+    _write(wiki_dir / "Psiq" / "ISRS.md", "# ISRS diferente\n")
+    _write(
+        wiki_dir / "Dor.md",
+        "Ver [[Ausente]] e [[Ausente Dois]].\n\n## 🔗 Notas Relacionadas\n- [[Ausente]]\n",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(MED_OPS_PATH),
+            "--raw-dir",
+            str(raw_dir),
+            "--wiki-dir",
+            str(wiki_dir),
+            "--linker-path",
+            str(linker),
+            "run-linker",
+            "--json",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == wiki_api.EXIT_LINKER
+    payload = json.loads(result.stdout)
+    summary = {item["code"]: item for item in payload["blocker_summary"]}
+    assert summary["dangling_link"]["count"] == 3
+    assert summary["duplicate_stem"]["count"] == 1
+    assert len(payload["blockers_sample"]) <= 10
+    assert "blockers" not in payload
 
 
 def test_resolve_config_prefers_bundled_linker_when_no_override(monkeypatch, tmp_path):

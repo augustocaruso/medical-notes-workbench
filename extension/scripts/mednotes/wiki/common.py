@@ -16,6 +16,7 @@ MIGRATION_PLAN_SCHEMA = "medical-notes-workbench.taxonomy-migration-plan.v1"
 MIGRATION_RECEIPT_SCHEMA = "medical-notes-workbench.taxonomy-migration-receipt.v1"
 SUBAGENT_PLAN_SCHEMA = "medical-notes-workbench.subagent-plan.v1"
 WIKI_HEALTH_FIX_SCHEMA = "medical-notes-workbench.wiki-health-fix.v1"
+BLOCKER_RESOLUTION_SCHEMA = "medical-notes-workbench.blocker-resolution.v1"
 
 
 class MedOpsError(Exception):

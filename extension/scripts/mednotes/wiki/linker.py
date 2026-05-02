@@ -117,22 +117,36 @@ class Insertion:
 
 
 @dataclass
+class LinkRewrite:
+    raw: str
+    old_target: str
+    new_target: str
+    display_text: str
+    replacement: str
+    start: int
+    end: int
+    source: str
+
+
+@dataclass
 class LinkPlan:
     file: str
     insertions: list[Insertion] = field(default_factory=list)
+    rewrites: list[LinkRewrite] = field(default_factory=list)
     skipped: list[dict[str, str]] = field(default_factory=list)
     index_updated: bool = False
     index_entries: int = 0
 
     @property
     def changed(self) -> bool:
-        return bool(self.insertions) or self.index_updated
+        return bool(self.insertions) or bool(self.rewrites) or self.index_updated
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "file": self.file,
             "changed": self.changed,
             "insertions": [item.__dict__ for item in self.insertions],
+            "rewrites": [item.__dict__ for item in self.rewrites],
             "skipped": self.skipped,
             "index_updated": self.index_updated,
             "index_entries": self.index_entries,
@@ -343,6 +357,71 @@ def _replacement(target: str, matched_text: str, *, in_table: bool) -> str:
     return f"[[{target}{separator}{matched_text}]]"
 
 
+_WIKILINK_RE = re.compile(r"(?<!!)\[\[([^\]]+)\]\]")
+
+
+def _wikilink_target(raw: str) -> str:
+    return Path(raw.split("|", 1)[0].split("#", 1)[0].strip()).stem
+
+
+def _wikilink_display(raw: str) -> str:
+    if "|" in raw:
+        return raw.rsplit("|", 1)[1].strip()
+    return _wikilink_target(raw)
+
+
+def _catalog_rewrite_targets(vocabulary: list[LinkTerm]) -> dict[str, LinkTerm]:
+    by_term: dict[str, list[LinkTerm]] = {}
+    for term in vocabulary:
+        if term.source != "catalog":
+            continue
+        by_term.setdefault(term.normalized, []).append(term)
+
+    mapping: dict[str, LinkTerm] = {}
+    for normalized, terms in by_term.items():
+        target_keys = {normalize_key(term.target) for term in terms}
+        if len(target_keys) == 1:
+            mapping[normalized] = terms[0]
+    return mapping
+
+
+def _rewrite_existing_links(body: str, vocabulary: list[LinkTerm], current_stem: str) -> tuple[str, list[LinkRewrite]]:
+    rewrite_targets = _catalog_rewrite_targets(vocabulary)
+    rewrites: list[LinkRewrite] = []
+
+    def replace(match: re.Match[str]) -> str:
+        raw = match.group(1).strip()
+        if "#" in raw:
+            return match.group(0)
+        old_target = _wikilink_target(raw)
+        if not old_target or is_index_target(old_target):
+            return match.group(0)
+        term = rewrite_targets.get(normalize_key(old_target))
+        if term is None:
+            return match.group(0)
+        new_target = term.target.replace(".md", "")
+        if normalize_key(new_target) in {normalize_key(old_target), normalize_key(current_stem)}:
+            return match.group(0)
+
+        display_text = _wikilink_display(raw)
+        replacement = _replacement(new_target, display_text, in_table=_is_table_match(body, match.start()))
+        rewrites.append(
+            LinkRewrite(
+                raw=raw,
+                old_target=old_target,
+                new_target=new_target,
+                display_text=display_text,
+                replacement=replacement,
+                start=match.start(),
+                end=match.end(),
+                source=term.source,
+            )
+        )
+        return replacement
+
+    return _WIKILINK_RE.sub(replace, body), rewrites
+
+
 def plan_file(
     filepath: Path,
     vocabulary: list[LinkTerm],
@@ -355,6 +434,7 @@ def plan_file(
     content = filepath.read_text(encoding="utf-8")
     yaml_part, body = _split_frontmatter(content)
     plan = LinkPlan(file=str(filepath))
+    body, plan.rewrites = _rewrite_existing_links(body, vocabulary, filepath.stem)
     protected = _protected_spans(body)
     used_targets: set[str] = set()
     used_ranges: list[tuple[int, int]] = []
@@ -487,6 +567,7 @@ def run(
         "files_scanned": len(files),
         "files_changed": len(changed),
         "links_planned": sum(len(plan.insertions) for plan in plans),
+        "links_rewritten": sum(len(plan.rewrites) for plan in plans),
         "index_files_changed": sum(1 for plan in changed if plan.index_updated),
         "index_entries_planned": sum(plan.index_entries for plan in plans),
         "blocker_count": len(blockers),
@@ -497,6 +578,7 @@ def run(
 
     if blocked:
         summary["links_planned"] = sum(len(plan.insertions) for plan in plans)
+        summary["links_rewritten"] = sum(len(plan.rewrites) for plan in plans)
     elif not dry_run:
         summary["graph_audit_after"] = wiki_graph.audit_wiki_graph(wiki_dir, catalog_path=catalog_path)
 
@@ -504,7 +586,10 @@ def run(
         print(json.dumps(summary, ensure_ascii=False, indent=2))
     else:
         for plan in changed:
-            print(f"{'Planejado' if dry_run else 'Linkado'}: {Path(plan.file).name} ({len(plan.insertions)} links)")
+            print(
+                f"{'Planejado' if dry_run else 'Linkado'}: {Path(plan.file).name} "
+                f"({len(plan.insertions)} links, {len(plan.rewrites)} reescritas)"
+            )
         print(f"Fim. {len(changed)} notas {'seriam interconectadas' if dry_run else 'foram interconectadas'}.")
 
     if verify and not dry_run:

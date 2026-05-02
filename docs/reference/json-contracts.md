@@ -20,6 +20,7 @@ quando solicitado.
 - `medical-notes-workbench.taxonomy-migration-plan.v1`
 - `medical-notes-workbench.taxonomy-migration-receipt.v1`
 - `medical-notes-workbench.wiki-health-fix.v1`
+- `medical-notes-workbench.blocker-resolution.v1`
 - `medical-notes-workbench.wiki-graph-fix.v1`
 - `medical-notes-workbench.wiki-graph-audit.v1`
 - `medical-notes-workbench.backup-cleanup.v1`
@@ -39,3 +40,30 @@ ou mais escritas falharam mesmo após retry local, normalmente por lock de
 Obsidian, iCloud Drive, antivírus ou outro processo. Em `fix-wiki`, qualquer
 erro desse tipo pula o linker real com `linker_skipped_reason: write_errors` e
 retorna código de IO.
+
+## Resolução De Blockers
+
+`medical-notes-workbench.blocker-resolution.v1` aparece dentro de
+`fix-wiki` como `blocker_resolution`. Ele transforma blockers em rotas
+acionáveis, em vez de deixar o workflow parar no `linker_skipped_reason`.
+Rotas determinísticas ou orquestráveis incluem `graph_fix_retry`,
+`catalog_repair`, `style_rewrite` e `taxonomy_migrate`; rotas que exigem
+intervenção externa ou decisão humana incluem `io_retry`,
+`duplicate_merge_required` e `unknown_graph_blocker`.
+
+Enquanto `blocker_resolution.linker_can_apply` for falso, `fix-wiki --apply`
+não aplica o linker real. O campo `linker_skipped_reason` deve apontar a causa
+operacional, por exemplo `write_errors`, `requires_llm_rewrite`,
+`graph_blockers` ou `taxonomy_action_required`.
+
+Relatórios do linker podem incluir `links_rewritten` e `plans[].rewrites`.
+Esses campos indicam canonicalização determinística de WikiLinks existentes com
+base no catálogo; o texto visível é preservado e apenas o target muda.
+
+## Planos De Subagents
+
+`medical-notes-workbench.subagent-plan.v1` deve incluir
+`canonical_parent_commands` com templates dos comandos seriais canônicos que o
+agente principal deve usar depois que subagents retornarem. Esses templates são
+contrato operacional, não alias de conveniência: slash commands devem seguir os
+nomes e flags públicos documentados pela CLI.

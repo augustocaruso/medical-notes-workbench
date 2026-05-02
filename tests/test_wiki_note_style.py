@@ -617,6 +617,97 @@ def test_fix_wiki_apply_repairs_invalid_graph_links_before_linker(tmp_path):
     assert "termo fantasma" in fixed
 
 
+def test_fix_wiki_turns_remaining_graph_blockers_into_resolution_routes(tmp_path):
+    wiki = tmp_path / "Wiki_Medicina"
+    _write(wiki / "1. Clínica Médica" / "Psiquiatria" / "ISRS.md", _valid_note("ISRS", related="Depressão"))
+    _write(
+        wiki / "1. Clínica Médica" / "Farmacologia" / "ISRS.md",
+        _valid_note("ISRS", related="Depressão").replace("Texto.", "Texto farmacológico diferente."),
+    )
+    _write(wiki / "1. Clínica Médica" / "Psiquiatria" / "Depressão.md", _valid_note("Depressão", related="ISRS"))
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(MED_OPS_PATH),
+            "--wiki-dir",
+            str(wiki),
+            "fix-wiki",
+            "--apply",
+            "--backup",
+            "--json",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 3, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["linker_skipped_reason"] == "graph_blockers"
+    resolution = payload["blocker_resolution"]
+    assert resolution["schema"] == "medical-notes-workbench.blocker-resolution.v1"
+    assert resolution["linker_can_apply"] is False
+    duplicate_route = next(item for item in resolution["groups"] if item["route"] == "duplicate_merge_required")
+    assert duplicate_route["automatic"] is False
+    assert duplicate_route["count"] == 1
+    assert duplicate_route["sample"][0]["code"] == "duplicate_stem"
+    assert "fundir conteúdo" in duplicate_route["next_action"]
+
+
+def test_fix_wiki_rewrites_existing_alias_links_via_linker_catalog(tmp_path):
+    wiki = tmp_path / "Wiki_Medicina"
+    folder = wiki / "1. Clínica Médica" / "Cardiologia"
+    _write(folder / "Hipertensão Arterial Sistêmica.md", _valid_note("Hipertensão Arterial Sistêmica", related="HAS"))
+    _write(folder / "HAS.md", _valid_note("HAS", related="Hipertensão Arterial Sistêmica"))
+    source = _write(
+        folder / "Seguimento.md",
+        _valid_note("Seguimento", related="Hipertensão Arterial Sistêmica").replace(
+            "Texto.",
+            "Texto com [[HAS]] no seguimento.",
+        ),
+    )
+    catalog = tmp_path / "CATALOGO_WIKI.json"
+    catalog.write_text(
+        json.dumps(
+            {
+                "entities": [
+                    {
+                        "arquivo": "Cardiologia/Hipertensão Arterial Sistêmica.md",
+                        "aliases": ["HAS"],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(MED_OPS_PATH),
+            "--wiki-dir",
+            str(wiki),
+            "--catalog-path",
+            str(catalog),
+            "fix-wiki",
+            "--apply",
+            "--backup",
+            "--json",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["linker_applied"] is True
+    assert payload["linker_dry_run"]["links_rewritten"] == 1
+    assert "[[Hipertensão Arterial Sistêmica|HAS]]" in source.read_text(encoding="utf-8")
+
+
 def test_fix_wiki_reports_taxonomy_issues_without_migrating(tmp_path):
     wiki = tmp_path / "Wiki_Medicina"
     legacy = wiki / "Cardiologia"
@@ -642,9 +733,49 @@ def test_fix_wiki_reports_taxonomy_issues_without_migrating(tmp_path):
     assert payload["taxonomy_action_required"] is True
     assert payload["taxonomy_issue_count"] == 1
     assert payload["taxonomy_proposed_move_count"] == 1
+
+
+def test_fix_wiki_apply_skips_linker_until_taxonomy_route_is_clear(tmp_path):
+    wiki = tmp_path / "Wiki_Medicina"
+    legacy = wiki / "Cardiologia"
+    source = _write(
+        legacy / "Seguimento.md",
+        _valid_note("Seguimento", related="Controle").replace(
+            "Texto.",
+            "Texto sobre Hipertensão Arterial Sistêmica no retorno.",
+        ),
+    )
+    _write(legacy / "Controle.md", _valid_note("Controle", related="Seguimento"))
+    _write(legacy / "Hipertensão Arterial Sistêmica.md", _valid_note("Hipertensão Arterial Sistêmica", related="Seguimento"))
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(MED_OPS_PATH),
+            "--wiki-dir",
+            str(wiki),
+            "fix-wiki",
+            "--apply",
+            "--backup",
+            "--json",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 3
+    payload = json.loads(result.stdout)
+    assert payload["taxonomy_action_required"] is True
+    assert payload["blocker_resolution"]["linker_can_apply"] is False
+    assert payload["linker_dry_run"]["links_planned"] >= 1
+    assert payload["linker_apply"] is None
+    assert payload["linker_applied"] is False
+    assert payload["linker_skipped_reason"] == "taxonomy_action_required"
+    assert "[[Hipertensão Arterial Sistêmica]]" not in source.read_text(encoding="utf-8")
     assert payload["taxonomy_audit"]["proposed_moves"][0]["source"] == "Cardiologia"
     assert payload["taxonomy_audit"]["proposed_moves"][0]["destination"] == "1. Clínica Médica/Cardiologia"
-    assert (legacy / "FA.md").exists()
+    assert source.exists()
 
 
 def test_apply_style_rewrite_validates_and_replaces_existing_note(tmp_path):
