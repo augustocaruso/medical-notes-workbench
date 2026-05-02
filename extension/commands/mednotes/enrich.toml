@@ -12,8 +12,10 @@ legível, status com emoji e próxima ação.
 Invariantes do launcher:
 - Identifique arquivos `.md`, diretórios, globs e menções `@...`; peça caminho se não houver alvo.
 - Execute o orquestrador canônico `scripts/enrich_notes.py` com todos os alvos em uma invocação.
+- Use o config persistente `~/.gemini/medical-notes-workbench/config.toml` e a venv persistente quando existirem. A pasta `~/.gemini/extensions/medical-notes-workbench` é bundle auto-updatable, não lugar para estado do usuário.
 - Use `--force` somente se o usuário pedir refazer.
 - Não edite texto clínico fora dos blocos de imagem/caption do enricher.
+- Se o ambiente Python/config estiver quebrado no Windows, rode/peça `/mednotes:setup`; não edite scripts do enricher como workaround.
 - Não despeje logs brutos se o usuário não pedir; ao final, destaque notas,
   imagens inseridas, fontes, pulos, falhas e caminhos.
 '''

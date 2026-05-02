@@ -749,6 +749,40 @@ def test_resolve_config_prefers_bundled_linker_when_no_override(monkeypatch, tmp
     assert cfg.catalog_path.parts[-3:] == (".gemini", "medical-notes-workbench", "CATALOGO_WIKI.json")
 
 
+def test_resolve_config_uses_persistent_user_config(monkeypatch, tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / "config.toml").write_text(
+        "[chat_processor]\n"
+        f'raw_dir = "{raw_dir}"\n'
+        f'wiki_dir = "{wiki_dir}"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MEDNOTES_HOME", str(state))
+    monkeypatch.delenv("MEDNOTES_CONFIG", raising=False)
+    monkeypatch.delenv("MEDICAL_NOTES_CONFIG", raising=False)
+    monkeypatch.delenv("MED_RAW_DIR", raising=False)
+    monkeypatch.delenv("MED_WIKI_DIR", raising=False)
+    args = type(
+        "Args",
+        (),
+        {
+            "config": None,
+            "raw_dir": None,
+            "wiki_dir": None,
+            "linker_path": None,
+            "catalog_path": None,
+        },
+    )()
+
+    cfg = wiki_api.resolve_config(args)
+
+    assert cfg.raw_dir == raw_dir
+    assert cfg.wiki_dir == wiki_dir
+
+
 def test_public_med_ops_commands_still_work_after_cli_split(tmp_path):
     raw_dir = tmp_path / "raw"
     wiki_dir = tmp_path / "wiki"

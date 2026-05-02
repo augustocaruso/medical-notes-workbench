@@ -15,11 +15,16 @@ contagens, arquivos relevantes, warnings/blockers e proxima acao.
 ## Image orchestrator
 
 - `python scripts/enrich_notes.py <nota|pasta|glob> [mais alvos] [--config config.toml] [--force]`
+- Em instalações Gemini CLI, use config persistente:
+  `--config ~/.gemini/medical-notes-workbench/config.toml`.
+  O fallback sem `--config` também procura esse caminho, mas o argumento
+  explícito evita confusão com arquivos temporários dentro do bundle.
 
 ## Wiki operations
 
 - `python scripts/mednotes/med_ops.py validate`
-- `python scripts/mednotes/wiki_tree.py --max-depth 4 --audit`
+- `python scripts/mednotes/wiki_tree.py --max-depth 4 --audit` (JSON)
+- `python scripts/mednotes/wiki_tree.py --max-depth 4 --audit --format text` (árvore legível)
 - `python scripts/mednotes/med_ops.py list-pending`
 - `python scripts/mednotes/med_ops.py list-triados`
 - `python scripts/mednotes/med_ops.py plan-subagents --phase triage|architect|style-rewrite`

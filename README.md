@@ -70,7 +70,27 @@ Configuração opcional da SerpAPI:
 gemini extensions config medical-notes-workbench SERPAPI_KEY
 ```
 
-Sem `SERPAPI_KEY`, `web_search` retorna `[]` e Wikimedia continua funcionando.
+Fallback persistente, útil em Windows e em reinstalações:
+
+```bash
+# macOS/Linux
+mkdir -p ~/.gemini/medical-notes-workbench
+cp config.example.toml ~/.gemini/medical-notes-workbench/config.toml
+cp .env.example ~/.gemini/medical-notes-workbench/.env
+```
+
+```powershell
+# Windows PowerShell
+New-Item -ItemType Directory -Force "$HOME\.gemini\medical-notes-workbench"
+Copy-Item config.example.toml "$HOME\.gemini\medical-notes-workbench\config.toml"
+Copy-Item .env.example "$HOME\.gemini\medical-notes-workbench\.env"
+```
+
+Edite o `config.toml` e a `.env` persistentes, não arquivos dentro de
+`~/.gemini/extensions/medical-notes-workbench`. Essa pasta pertence ao bundle
+auto-updatable e pode ser recriada a cada update. O enricher aceita
+`SERPAPI_KEY` e `SERPAPI_API_KEY`; sem chave, `web_search` retorna `[]` e
+Wikimedia continua funcionando.
 
 ## Desenvolvimento
 

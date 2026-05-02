@@ -18,6 +18,8 @@ DEFAULT_RAW_DIR = r"C:\Users\leona\OneDrive\Chats_Raw"
 DEFAULT_WIKI_DIR = r"C:\Users\leona\iCloudDrive\iCloud~md~obsidian\Wiki_Medicina"
 DEFAULT_CATALOG_PATH = "~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json"
 DEFAULT_LINKER_PATH = "med_linker.py"
+APP_HOME_ENV_VARS = ("MEDNOTES_HOME", "MEDICAL_NOTES_WORKBENCH_HOME")
+CONFIG_ENV_VARS = ("MEDNOTES_CONFIG", "MEDICAL_NOTES_CONFIG")
 
 
 @dataclass(frozen=True)
@@ -32,6 +34,14 @@ def _path(value: str | os.PathLike[str]) -> Path:
     return Path(os.path.expandvars(str(value))).expanduser()
 
 
+def _user_state_dir() -> Path:
+    for env_name in APP_HOME_ENV_VARS:
+        value = os.environ.get(env_name)
+        if value:
+            return _path(value)
+    return _path("~/.gemini/medical-notes-workbench")
+
+
 def _read_toml(path: Path | None) -> dict[str, Any]:
     if not path or not path.exists():
         return {}
@@ -44,11 +54,22 @@ def _read_toml(path: Path | None) -> dict[str, Any]:
 def _find_config(explicit: str | None) -> Path | None:
     if explicit:
         return _path(explicit)
+    for env_name in CONFIG_ENV_VARS:
+        value = os.environ.get(env_name)
+        if value:
+            candidate = _path(value)
+            if candidate.exists():
+                return candidate
+    if any(os.environ.get(env_name) for env_name in APP_HOME_ENV_VARS):
+        candidate = _user_state_dir() / "config.toml"
+        if candidate.exists():
+            return candidate
     candidates: list[Path] = []
     cwd = Path.cwd().resolve()
     candidates.extend(parent / "config.toml" for parent in (cwd, *cwd.parents))
     script = Path(__file__).resolve()
     candidates.extend(parent / "config.toml" for parent in script.parents)
+    candidates.append(_user_state_dir() / "config.toml")
     return next((candidate for candidate in candidates if candidate.exists()), None)
 
 

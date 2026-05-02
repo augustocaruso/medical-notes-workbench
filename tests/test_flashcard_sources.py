@@ -13,6 +13,9 @@ SCRIPT = ROOT / "extension" / "scripts" / "mednotes" / "flashcards" / "sources.p
 def _run(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     merged_env = os.environ.copy()
     merged_env.pop("MED_WIKI_DIR", None)
+    merged_env.pop("MEDNOTES_HOME", None)
+    merged_env.pop("MEDNOTES_CONFIG", None)
+    merged_env.pop("MEDICAL_NOTES_CONFIG", None)
     if env:
         merged_env.update(env)
     return subprocess.run(
@@ -114,6 +117,30 @@ def test_resolve_tag_scope_requires_search_root(tmp_path: Path):
 
     assert result.returncode == 2
     assert "Tag filters need" in result.stderr
+
+
+def test_resolve_tag_scope_uses_persistent_config(tmp_path: Path):
+    vault = tmp_path / "Wiki_Medicina"
+    (vault / ".obsidian").mkdir(parents=True)
+    note = _note(vault / "Cardiologia" / "A.md", "---\ntags: [revisar]\n---\n# A\n")
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / "config.toml").write_text(
+        "[chat_processor]\n"
+        f'wiki_dir = "{vault}"\n',
+        encoding="utf-8",
+    )
+
+    result = _run(
+        "resolve",
+        "--scope",
+        "notas com tag #revisar",
+        env={"MEDNOTES_HOME": str(state)},
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert [record["path"] for record in payload["notes"]] == [str(note)]
 
 
 def test_resolve_free_text_scope_returns_empty_manifest_with_warning():

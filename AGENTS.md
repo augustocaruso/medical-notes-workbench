@@ -48,6 +48,9 @@ Referências:
 
 ## Regras Operacionais
 
+- Estado mutável do usuário/extensão (`config.toml`, `.env`, `.venv`, cache,
+  índices e catálogos) deve viver em `~/.gemini/medical-notes-workbench`, nunca
+  como única cópia dentro de `~/.gemini/extensions/medical-notes-workbench`.
 - Nunca reescreva frontmatter existente do enricher; ele é additive-only.
 - Nunca edite YAML/status de raw chats manualmente; use `med_ops.py`.
 - Sempre rode `publish-batch --dry-run` antes de publish real.

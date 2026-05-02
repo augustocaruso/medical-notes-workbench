@@ -12,6 +12,11 @@
 - `extension/hooks/`: declaracao dos hooks.
 - `extension/scripts/`: scripts empacotados no bundle.
 
+Estado editavel do usuario nao deve ser salvo dentro da pasta instalada em
+`~/.gemini/extensions/medical-notes-workbench`, pois updates podem recriar esse
+bundle. Use `~/.gemini/medical-notes-workbench` para `config.toml`, `.env`,
+cache/indices locais e venv persistente quando o workflow precisar de Python.
+
 Hooks usam uma entrada publica unica, `scripts/hooks/mednotes_hook.mjs`. A logica
 interna fica em `scripts/hooks/mednotes_hook/` para manter guardas, recibos,
 preflight do Anki e runtime JSON separados sem mudar o contrato de `hooks.json`.

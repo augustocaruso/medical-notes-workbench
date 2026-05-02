@@ -163,7 +163,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--config",
         type=Path,
         default=None,
-        help="config.toml (default: busca na árvore acima do CWD)",
+        help=(
+            "config.toml (default: busca na árvore acima do CWD e depois em "
+            "~/.gemini/medical-notes-workbench/config.toml)"
+        ),
     )
 
     sub = p.add_subparsers(dest="cmd", required=True)

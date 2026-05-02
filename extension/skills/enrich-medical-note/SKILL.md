@@ -22,86 +22,125 @@ Não usar para:
 
 ## Raiz da extensão
 
-Use `${extensionPath}` como raiz da extensão. Se o conteúdo não tiver sido
-hidratado pelo Gemini CLI, use o caminho padrão:
+Use `${extensionPath}` como raiz da extensão somente para ler o bundle e executar
+scripts empacotados. Se o conteúdo não tiver sido hidratado pelo Gemini CLI, use
+o caminho padrão:
 
 ```bash
 ~/.gemini/extensions/medical-notes-workbench
 ```
 
+Estado editável do usuário deve ficar fora desse bundle auto-updatable:
+
+```bash
+~/.gemini/medical-notes-workbench
+```
+
+Esse diretório persistente guarda `config.toml`, `.env`, cache/índices locais e
+a `.venv` do workflow quando necessário. Não grave a única cópia de segredo ou
+config em `${extensionPath}`.
+
 ## Pré-condições
 
 1. Cada nota alvo é um arquivo `.md` legível.
-2. `${extensionPath}/config.toml` existe e tem `[vault].path` preenchido.
-3. `${extensionPath}/.venv` existe com o pacote instalado em modo editável.
+2. `~/.gemini/medical-notes-workbench/config.toml` existe e tem `[vault].path`
+   preenchido.
+3. `~/.gemini/medical-notes-workbench/.venv` existe com o pacote instalado em
+   modo editável a partir de `${extensionPath}`.
 4. O `gemini` CLI está autenticado, pois `scripts/enrich_notes.py` chama o Gemini
    para âncoras e rerank visual.
 
 Se faltar ambiente Python:
 
-```bash
-cd "${extensionPath}"
-# Windows
-py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e .
+```powershell
+# Windows PowerShell, rodando a partir de ${extensionPath}
+New-Item -ItemType Directory -Force "$HOME\.gemini\medical-notes-workbench"
+py -3 -m venv "$HOME\.gemini\medical-notes-workbench\.venv"
+& "$HOME\.gemini\medical-notes-workbench\.venv\Scripts\python.exe" -m pip install -e .
+```
 
-# macOS/Linux
-python3 -m venv .venv
-.venv/bin/python -m pip install -e .
+```bash
+# macOS/Linux, rodando a partir de ${extensionPath}
+mkdir -p ~/.gemini/medical-notes-workbench
+python3 -m venv ~/.gemini/medical-notes-workbench/.venv
+~/.gemini/medical-notes-workbench/.venv/bin/python -m pip install -e .
 ```
 
 Se faltar configuração:
 
-```bash
-cd "${extensionPath}"
-cp config.example.toml config.toml
+```powershell
+# Windows PowerShell, rodando a partir de ${extensionPath}
+New-Item -ItemType Directory -Force "$HOME\.gemini\medical-notes-workbench"
+Copy-Item config.example.toml "$HOME\.gemini\medical-notes-workbench\config.toml"
 ```
 
-Depois peça o caminho do vault Obsidian e preencha `[vault].path`.
+```bash
+# macOS/Linux, rodando a partir de ${extensionPath}
+mkdir -p ~/.gemini/medical-notes-workbench
+cp config.example.toml ~/.gemini/medical-notes-workbench/config.toml
+```
+
+Depois peça o caminho do vault Obsidian e preencha `[vault].path` no config
+persistente.
+
+Se houver `config.toml` ou `.env` antigo dentro de `${extensionPath}`, migre
+para `~/.gemini/medical-notes-workbench` antes de editar.
 
 ## Como executar
 
-```bash
+```powershell
 cd "${extensionPath}"
 # Windows
-.\.venv\Scripts\python.exe scripts/enrich_notes.py "<caminho-da-nota.md>" --config config.toml
+& "$HOME\.gemini\medical-notes-workbench\.venv\Scripts\python.exe" scripts\enrich_notes.py "<caminho-da-nota.md>" --config "$HOME\.gemini\medical-notes-workbench\config.toml"
+```
 
+```bash
+cd "${extensionPath}"
 # macOS/Linux
-.venv/bin/python scripts/enrich_notes.py "<caminho-da-nota.md>" --config config.toml
+~/.gemini/medical-notes-workbench/.venv/bin/python scripts/enrich_notes.py "<caminho-da-nota.md>" --config ~/.gemini/medical-notes-workbench/config.toml
 ```
 
 Para enriquecer várias notas na mesma invocação:
 
-```bash
+```powershell
 cd "${extensionPath}"
 # Windows
-.\.venv\Scripts\python.exe scripts/enrich_notes.py "<nota1.md>" "<nota2.md>" --config config.toml
+& "$HOME\.gemini\medical-notes-workbench\.venv\Scripts\python.exe" scripts\enrich_notes.py "<nota1.md>" "<nota2.md>" --config "$HOME\.gemini\medical-notes-workbench\config.toml"
+```
 
+```bash
+cd "${extensionPath}"
 # macOS/Linux
-.venv/bin/python scripts/enrich_notes.py "<nota1.md>" "<nota2.md>" --config config.toml
+~/.gemini/medical-notes-workbench/.venv/bin/python scripts/enrich_notes.py "<nota1.md>" "<nota2.md>" --config ~/.gemini/medical-notes-workbench/config.toml
 ```
 
 Também é possível passar diretórios e globs; diretórios são expandidos
 recursivamente para `.md`, com dedupe e ignorando anexos/cache:
 
-```bash
+```powershell
 cd "${extensionPath}"
 # Windows
-.\.venv\Scripts\python.exe scripts/enrich_notes.py "<pasta-de-notas>" "**\*.md" --config config.toml
+& "$HOME\.gemini\medical-notes-workbench\.venv\Scripts\python.exe" scripts\enrich_notes.py "<pasta-de-notas>" "**\*.md" --config "$HOME\.gemini\medical-notes-workbench\config.toml"
+```
 
+```bash
+cd "${extensionPath}"
 # macOS/Linux
-.venv/bin/python scripts/enrich_notes.py "<pasta-de-notas>" "**/*.md" --config config.toml
+~/.gemini/medical-notes-workbench/.venv/bin/python scripts/enrich_notes.py "<pasta-de-notas>" "**/*.md" --config ~/.gemini/medical-notes-workbench/config.toml
 ```
 
 Para refazer notas já enriquecidas, aplique `--force` ao lote:
 
-```bash
+```powershell
 cd "${extensionPath}"
 # Windows
-.\.venv\Scripts\python.exe scripts/enrich_notes.py "<nota1.md>" "<nota2.md>" --config config.toml --force
+& "$HOME\.gemini\medical-notes-workbench\.venv\Scripts\python.exe" scripts\enrich_notes.py "<nota1.md>" "<nota2.md>" --config "$HOME\.gemini\medical-notes-workbench\config.toml" --force
+```
 
+```bash
+cd "${extensionPath}"
 # macOS/Linux
-.venv/bin/python scripts/enrich_notes.py "<nota1.md>" "<nota2.md>" --config config.toml --force
+~/.gemini/medical-notes-workbench/.venv/bin/python scripts/enrich_notes.py "<nota1.md>" "<nota2.md>" --config ~/.gemini/medical-notes-workbench/config.toml --force
 ```
 
 ## Como interpretar
@@ -122,14 +161,21 @@ bruto por padrão.
 
 ## Falhas comuns
 
-- **Vault não configurado**: peça o caminho e atualize `config.toml`.
+- **Vault não configurado**: peça o caminho e atualize
+  `~/.gemini/medical-notes-workbench/config.toml`.
 - **Gemini CLI sem login**: peça para autenticar o Gemini CLI.
-- **Sem `SERPAPI_KEY`**: `web_search` retorna `[]`; Wikimedia ainda funciona.
+- **Gemini CLI não encontrado no Windows**: o orquestrador resolve `gemini`
+  para `gemini.cmd` no PATH ou em `%APPDATA%\npm`. Se ainda falhar, ajuste
+  `[gemini].binary` no config persistente para o caminho absoluto do
+  `gemini.cmd`.
+- **Sem `SERPAPI_KEY`/`SERPAPI_API_KEY`**: `web_search` retorna `[]`; Wikimedia
+  ainda funciona.
   Para habilitar, peça ao usuário criar conta em https://serpapi.com/, copiar a
   API key do dashboard e rodar
   `gemini extensions config medical-notes-workbench SERPAPI_KEY`.
-  A chave é uma setting sensível da extensão e não precisa ser digitada a cada
-  update normal.
+  Fallback persistente: gravar `SERPAPI_KEY=...` ou `SERPAPI_API_KEY=...` em
+  `~/.gemini/medical-notes-workbench/.env`. Não grave a chave dentro de
+  `${extensionPath}`.
 - **Cota/limite SerpAPI esgotado**: o lote para imediatamente com `rc=9` e
   aviso claro para evitar novas chamadas à API. Oriente o usuário a renovar a
   cota/chave ou rodar novamente só com fontes disponíveis.

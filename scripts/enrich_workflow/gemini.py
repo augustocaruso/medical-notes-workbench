@@ -2,11 +2,62 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Callable
 
 from enrich_workflow.models import GeminiError, _DEFAULT_GEMINI_TIMEOUT_SECONDS
+
+
+def _resolve_gemini_binary(binary: str) -> str:
+    """Resolve o executável do Gemini CLI de forma portável.
+
+    No Windows, o Gemini instalado por npm costuma existir como `gemini.cmd`
+    em `%APPDATA%\npm`. `subprocess` com `shell=False` nem sempre resolve esse
+    shim quando o config diz só `gemini`, então normalizamos antes de montar o
+    comando.
+    """
+    expanded = os.path.expandvars(os.path.expanduser(binary))
+    if _is_pathish(expanded):
+        return expanded
+
+    found = shutil.which(expanded)
+    if found:
+        return found
+
+    if expanded.lower() in {"gemini", "gemini.cmd"}:
+        for candidate in _npm_gemini_candidates():
+            if candidate.is_file():
+                return str(candidate)
+
+    return expanded
+
+
+def _is_pathish(value: str) -> bool:
+    return (
+        "/" in value
+        or "\\" in value
+        or (len(value) >= 2 and value[1] == ":")
+    )
+
+
+def _npm_gemini_candidates() -> list[Path]:
+    candidates: list[Path] = []
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        candidates.append(Path(appdata) / "npm" / "gemini.cmd")
+    prefix = os.environ.get("NPM_CONFIG_PREFIX")
+    if prefix:
+        prefix_path = Path(prefix)
+        candidates.extend(
+            [
+                prefix_path / "gemini.cmd",
+                prefix_path / "bin" / "gemini",
+            ]
+        )
+    return candidates
 
 
 def _invoke_gemini(
@@ -20,7 +71,7 @@ def _invoke_gemini(
     """
     try:
         proc = subprocess.run(
-            cmd,
+            _subprocess_command(cmd),
             capture_output=True,
             text=True,
             check=False,
@@ -30,11 +81,29 @@ def _invoke_gemini(
         raise GeminiError(
             f"gemini CLI excedeu timeout de {timeout_seconds}s"
         ) from e
+    except FileNotFoundError as e:
+        raise GeminiError(
+            "gemini CLI não encontrado. Configure [gemini].binary com o caminho "
+            "do executável, ou garanta que `gemini`/`gemini.cmd` esteja no PATH."
+        ) from e
+    except OSError as e:
+        raise GeminiError(f"gemini CLI não pôde ser iniciado: {e}") from e
     if proc.returncode != 0:
         raise GeminiError(
             f"gemini CLI falhou (rc={proc.returncode}): {proc.stderr.strip()}"
         )
     return proc.stdout
+
+
+def _subprocess_command(cmd: list[str]) -> list[str]:
+    if not cmd:
+        return cmd
+    executable = cmd[0]
+    suffix = Path(executable).suffix.lower()
+    if os.name == "nt" and suffix in {".cmd", ".bat"}:
+        comspec = os.environ.get("COMSPEC") or "cmd.exe"
+        return [comspec, "/d", "/s", "/c", *cmd]
+    return cmd
 
 
 def call_gemini(
@@ -48,7 +117,7 @@ def call_gemini(
 ) -> str:
     """Chama o gemini CLI em modo headless. Multimodal via `@arquivo` no
     próprio prompt + `--include-directories` pra dar acesso ao path."""
-    cmd: list[str] = [binary]
+    cmd: list[str] = [_resolve_gemini_binary(binary)]
     if skip_trust:
         cmd.append("--skip-trust")
     if include_dirs:

@@ -123,12 +123,16 @@ def test_public_workflows_are_preserved_and_documented():
 
 def test_extension_build_excludes_generated_python_caches():
     build = (ROOT / "scripts" / "build_gemini_cli_extension.py").read_text(encoding="utf-8")
+    package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
 
     assert "shutil.ignore_patterns" in build
     assert '"__pycache__"' in build
     assert '"*.pyc"' in build
     assert 'ROOT / "scripts" / "enrich_workflow"' in build
     assert 'SOURCE / "scripts"' in build
+    assert '"run_python.mjs"' in build
+    assert "node scripts/run_python.mjs" in package["scripts"]["build:gemini-cli-extension"]
+    assert "python3 scripts/" not in json.dumps(package["scripts"])
 
 
 def test_launchers_are_short_and_point_to_runbooks():
@@ -192,6 +196,7 @@ def test_image_orchestrator_has_single_clear_entrypoint():
     for module in ("models", "gemini", "prompts", "parsing", "candidates", "inputs", "runner", "cli"):
         assert (package / f"{module}.py").exists()
     assert "scripts/enrich_notes.py" in command
+    assert "~/.gemini/medical-notes-workbench/config.toml" in command
     assert '"enrich_notes.py"' in build
     assert '"enrich_workflow"' in build
     assert "run_agent.py" not in build
@@ -216,6 +221,19 @@ def test_image_orchestrator_has_single_clear_entrypoint():
                 sys.path.remove(script_dir)
             except ValueError:
                 pass
+
+
+def test_enricher_docs_keep_user_state_out_of_auto_updated_extension():
+    skill = (EXTENSION / "skills" / "enrich-medical-note" / "SKILL.md").read_text(encoding="utf-8")
+    setup = (EXTENSION / "commands" / "mednotes" / "setup.toml").read_text(encoding="utf-8")
+    status = (EXTENSION / "commands" / "mednotes" / "status.toml").read_text(encoding="utf-8")
+    workflow = (ROOT / "docs" / "workflows" / "enrich.md").read_text(encoding="utf-8")
+
+    combined = "\n".join([skill, setup, status, workflow])
+    assert "~/.gemini/medical-notes-workbench" in combined
+    assert "auto-updatable" in combined
+    assert "SERPAPI_API_KEY" in combined
+    assert "não edite scripts do enricher" in (EXTENSION / "commands" / "mednotes" / "enrich.toml").read_text(encoding="utf-8")
 
 
 def test_domain_script_layout_is_declared():

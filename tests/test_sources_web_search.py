@@ -10,6 +10,12 @@ from enricher.sources import ImageCandidate, SourceQuotaExceeded, web_search
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+def _clear_serpapi(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("SERPAPI_KEY", raising=False)
+    monkeypatch.delenv("SERPAPI_API_KEY", raising=False)
+    monkeypatch.setenv("MEDNOTES_HOME", str(tmp_path / "state"))
+
+
 def _client_with(
     response_json: dict,
     *,
@@ -25,7 +31,7 @@ def _client_with(
 
 
 def test_search_sem_key_devolve_lista_vazia(monkeypatch, tmp_path):
-    monkeypatch.delenv("SERPAPI_KEY", raising=False)
+    _clear_serpapi(monkeypatch, tmp_path)
     monkeypatch.chdir(tmp_path)
     # Note: `client` não chega a ser usado porque a função sai antes.
     out = web_search.search("qualquer coisa", "diagram", top_k=4)
@@ -33,7 +39,7 @@ def test_search_sem_key_devolve_lista_vazia(monkeypatch, tmp_path):
 
 
 def test_search_carrega_key_do_dotenv(monkeypatch, tmp_path):
-    monkeypatch.delenv("SERPAPI_KEY", raising=False)
+    _clear_serpapi(monkeypatch, tmp_path)
     (tmp_path / ".env").write_text("SERPAPI_KEY=K_DOTENV\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     captured: dict = {}
@@ -48,8 +54,43 @@ def test_search_carrega_key_do_dotenv(monkeypatch, tmp_path):
     assert captured["params"]["api_key"] == "K_DOTENV"
 
 
+def test_search_carrega_key_do_dotenv_persistente(monkeypatch, tmp_path):
+    _clear_serpapi(monkeypatch, tmp_path)
+    persistent = tmp_path / "state"
+    persistent.mkdir()
+    (persistent / ".env").write_text("SERPAPI_API_KEY=K_PERSISTENT\n", encoding="utf-8")
+    work = tmp_path / "work"
+    work.mkdir()
+    monkeypatch.chdir(work)
+    captured: dict = {}
+
+    def on_request(request: httpx.Request) -> None:
+        captured["params"] = dict(request.url.params)
+
+    with _client_with({"images_results": []}, on_request=on_request) as client:
+        out = web_search.search("q", "diagram", top_k=1, client=client)
+
+    assert out == []
+    assert captured["params"]["api_key"] == "K_PERSISTENT"
+
+
+def test_search_aceita_alias_serpapi_api_key(monkeypatch, tmp_path):
+    _clear_serpapi(monkeypatch, tmp_path)
+    monkeypatch.setenv("SERPAPI_API_KEY", "K_ALIAS")
+    monkeypatch.chdir(tmp_path)
+    captured: dict = {}
+
+    def on_request(request: httpx.Request) -> None:
+        captured["params"] = dict(request.url.params)
+
+    with _client_with({"images_results": []}, on_request=on_request) as client:
+        web_search.search("q", "diagram", top_k=1, client=client)
+
+    assert captured["params"]["api_key"] == "K_ALIAS"
+
+
 def test_search_api_key_explicita_tem_precedencia_sobre_dotenv(monkeypatch, tmp_path):
-    monkeypatch.delenv("SERPAPI_KEY", raising=False)
+    _clear_serpapi(monkeypatch, tmp_path)
     (tmp_path / ".env").write_text("SERPAPI_KEY=K_DOTENV\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     captured: dict = {}

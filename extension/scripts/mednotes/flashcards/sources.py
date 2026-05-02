@@ -66,6 +66,8 @@ INLINE_TAG_RE = re.compile(r"(?<![\w/])#([A-Za-z0-9_/-]+)")
 TAG_KEY_RE = re.compile(r"^\s*(tags?|Tags?)\s*:\s*(?P<value>.*)$")
 LIST_ITEM_RE = re.compile(r"^\s*-\s*(?P<value>.*?)\s*$")
 PATHISH_RE = re.compile(r"^([~./$]|[A-Za-z]:|.*[/\\]|.*\.(?:md|markdown)$|.*[*?\[\]]).*$")
+APP_HOME_ENV_VARS = ("MEDNOTES_HOME", "MEDICAL_NOTES_WORKBENCH_HOME")
+CONFIG_ENV_VARS = ("MEDNOTES_CONFIG", "MEDICAL_NOTES_CONFIG")
 
 
 @dataclass(frozen=True)
@@ -80,6 +82,14 @@ class Scope:
 
 def _path(value: str | os.PathLike[str]) -> Path:
     return Path(os.path.expandvars(str(value))).expanduser()
+
+
+def _user_state_dir() -> Path:
+    for env_name in APP_HOME_ENV_VARS:
+        value = os.environ.get(env_name)
+        if value:
+            return _path(value)
+    return _path("~/.gemini/medical-notes-workbench")
 
 
 def _is_relative_to(path: Path, parent: Path) -> bool:
@@ -116,11 +126,22 @@ def _read_toml(path: Path | None) -> dict[str, Any]:
 def _find_config(explicit: str | None) -> Path | None:
     if explicit:
         return _path(explicit)
+    for env_name in CONFIG_ENV_VARS:
+        value = os.environ.get(env_name)
+        if value:
+            candidate = _path(value)
+            if candidate.exists():
+                return candidate
+    if any(os.environ.get(env_name) for env_name in APP_HOME_ENV_VARS):
+        candidate = _user_state_dir() / "config.toml"
+        if candidate.exists():
+            return candidate
     candidates: list[Path] = []
     cwd = Path.cwd().resolve()
     candidates.extend(parent / "config.toml" for parent in (cwd, *cwd.parents))
     script = Path(__file__).resolve()
     candidates.extend(parent / "config.toml" for parent in script.parents)
+    candidates.append(_user_state_dir() / "config.toml")
     return next((candidate for candidate in candidates if candidate.exists()), None)
 
 

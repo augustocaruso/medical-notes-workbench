@@ -1,7 +1,8 @@
 """Adapter de busca web genérica via SerpAPI (engine ``google_images``).
 
 Pra cobrir o que Wikimedia/fontes médicas curadas não têm. Pago — usuário
-fornece ``SERPAPI_KEY`` no ambiente. Sem a chave, ``search`` devolve ``[]``
+fornece ``SERPAPI_KEY``/``SERPAPI_API_KEY`` no ambiente ou no `.env`
+persistente do workbench. Sem a chave, ``search`` devolve ``[]``
 silenciosamente. Cota/limite esgotado levanta ``SourceQuotaExceeded`` para o
 orquestrador parar o lote e avisar o usuário.
 """
@@ -13,6 +14,7 @@ from typing import Any
 
 import httpx
 
+from enricher.config import default_env_path
 from enricher.sources import ImageCandidate, SourceQuotaExceeded
 
 
@@ -31,6 +33,7 @@ _QUOTA_MARKERS = (
     "rate limit",
     "too many requests",
 )
+_KEY_NAMES = ("SERPAPI_KEY", "SERPAPI_API_KEY")
 
 
 _LANGUAGE_TO_GOOGLE_PARAMS = {
@@ -39,15 +42,22 @@ _LANGUAGE_TO_GOOGLE_PARAMS = {
 }
 
 
+def _dotenv_paths(*, start: Path | None = None) -> list[Path]:
+    cur = (start or Path.cwd()).resolve()
+    paths = [d / ".env" for d in [cur, *cur.parents]]
+    persistent = default_env_path()
+    if persistent not in paths:
+        paths.append(persistent)
+    return paths
+
+
 def _dotenv_value(name: str, *, start: Path | None = None) -> str | None:
-    """Busca `name` em um `.env` simples na árvore acima do CWD.
+    """Busca `name` em `.env` local e no `.env` persistente do usuário.
 
     Não substitui `python-dotenv`: cobre só `KEY=value`, suficiente para a
     configuração local do projeto sem adicionar dependência de runtime.
     """
-    cur = (start or Path.cwd()).resolve()
-    for d in [cur, *cur.parents]:
-        env_path = d / ".env"
+    for env_path in _dotenv_paths(start=start):
         if not env_path.is_file():
             continue
         for line in env_path.read_text(encoding="utf-8").splitlines():
@@ -68,6 +78,20 @@ def _dotenv_value(name: str, *, start: Path | None = None) -> str | None:
     return None
 
 
+def _serpapi_key(explicit: str | None = None) -> str | None:
+    if explicit:
+        return explicit
+    for name in _KEY_NAMES:
+        value = os.environ.get(name)
+        if value:
+            return value
+    for name in _KEY_NAMES:
+        value = _dotenv_value(name)
+        if value:
+            return value
+    return None
+
+
 def search(
     query: str,
     visual_type: str,
@@ -79,8 +103,8 @@ def search(
 ) -> list[ImageCandidate]:
     """Busca imagens via SerpAPI (Google Images).
 
-    Sem ``SERPAPI_KEY`` em env/``.env`` e sem ``api_key`` explícito,
-    devolve ``[]``.
+    Sem ``SERPAPI_KEY``/``SERPAPI_API_KEY`` em env/``.env`` e sem ``api_key``
+    explícito, devolve ``[]``.
     ``visual_type`` é aceito por uniformidade com outros adapters mas não
     é mapeado em facets do SerpAPI.
 
@@ -88,7 +112,7 @@ def search(
     (geolocation) do Google Images. Aceita ``"pt-br"`` e ``"en"``;
     qualquer outro valor (inclusive ``"any"`` e ``None``) → sem param.
     """
-    key = api_key or os.environ.get("SERPAPI_KEY") or _dotenv_value("SERPAPI_KEY")
+    key = _serpapi_key(api_key)
     if not key:
         return []
 

@@ -1,4 +1,4 @@
-"""Carrega config.toml ao lado da raiz do projeto (ou caminho explícito)."""
+"""Carrega configuração local e persistente do Medical Notes Workbench."""
 from __future__ import annotations
 
 import os
@@ -6,6 +6,10 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+
+APP_DIR_NAME = "medical-notes-workbench"
+APP_HOME_ENV_VARS = ("MEDNOTES_HOME", "MEDICAL_NOTES_WORKBENCH_HOME")
+CONFIG_ENV_VARS = ("MEDNOTES_CONFIG", "MEDICAL_NOTES_CONFIG")
 
 _DEFAULTS: dict[str, Any] = {
     "vault": {"path": "", "attachments_subdir": "attachments/medicina"},
@@ -60,6 +64,32 @@ _DEFAULTS: dict[str, Any] = {
 }
 
 
+def expand_path(p: str) -> Path:
+    return Path(os.path.expandvars(os.path.expanduser(p)))
+
+
+def user_state_dir() -> Path:
+    """Diretório persistente para estado editável pelo usuário.
+
+    A extensão Gemini CLI é auto-updatable e pode recriar
+    ``~/.gemini/extensions/medical-notes-workbench``. Configuração, chaves,
+    cache e venv não devem depender desse diretório volátil.
+    """
+    for env_name in APP_HOME_ENV_VARS:
+        value = os.environ.get(env_name)
+        if value:
+            return expand_path(value)
+    return Path.home() / ".gemini" / APP_DIR_NAME
+
+
+def default_config_path() -> Path:
+    return user_state_dir() / "config.toml"
+
+
+def default_env_path() -> Path:
+    return user_state_dir() / ".env"
+
+
 def _deep_merge(base: dict[str, Any], over: dict[str, Any]) -> dict[str, Any]:
     out = dict(base)
     for k, v in over.items():
@@ -71,11 +101,26 @@ def _deep_merge(base: dict[str, Any], over: dict[str, Any]) -> dict[str, Any]:
 
 
 def find_config(start: Path | None = None) -> Path | None:
+    for env_name in CONFIG_ENV_VARS:
+        value = os.environ.get(env_name)
+        if value:
+            candidate = expand_path(value)
+            if candidate.is_file():
+                return candidate
+
+    if any(os.environ.get(env_name) for env_name in APP_HOME_ENV_VARS):
+        user_config = default_config_path()
+        if user_config.is_file():
+            return user_config
+
     cur = (start or Path.cwd()).resolve()
     for d in [cur, *cur.parents]:
         candidate = d / "config.toml"
         if candidate.is_file():
             return candidate
+    user_config = default_config_path()
+    if user_config.is_file():
+        return user_config
     return None
 
 
@@ -87,7 +132,3 @@ def load(path: Path | None = None) -> dict[str, Any]:
     with path.open("rb") as f:
         data = tomllib.load(f)
     return _deep_merge(_DEFAULTS, data)
-
-
-def expand_path(p: str) -> Path:
-    return Path(os.path.expandvars(os.path.expanduser(p)))

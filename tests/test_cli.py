@@ -81,6 +81,8 @@ def test_search_wikimedia_devolve_candidates_em_json(monkeypatch, capsys):
 
 def test_search_web_search_sem_key_devolve_lista_vazia(monkeypatch, tmp_path, capsys):
     monkeypatch.delenv("SERPAPI_KEY", raising=False)
+    monkeypatch.delenv("SERPAPI_API_KEY", raising=False)
+    monkeypatch.setenv("MEDNOTES_HOME", str(tmp_path / "state"))
     monkeypatch.chdir(tmp_path)
 
     rc = cli.main(["search", "web_search", "--query", "synapse"])
@@ -93,6 +95,7 @@ def test_search_web_search_com_key_usa_serpapi(monkeypatch, capsys):
     data = json.loads((FIXTURES / "serpapi_serotonin.json").read_text(encoding="utf-8"))
     _mock_httpx_client(monkeypatch, data)
     monkeypatch.setenv("SERPAPI_KEY", "fake")
+    monkeypatch.delenv("SERPAPI_API_KEY", raising=False)
 
     rc = cli.main(["search", "web_search", "--query", "synapse", "--top-k", "3"])
     assert rc == 0

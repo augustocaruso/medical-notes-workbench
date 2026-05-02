@@ -33,8 +33,12 @@ operational JSON is for agents, hooks, and tests unless the user asks for it.
   `knowledge/workflow-output-contract.md`; do not dump raw JSON by default.
 - Prefer `${extensionPath}`; fallback root is
   `~/.gemini/extensions/medical-notes-workbench`.
-- Use the extension-local `.venv`: Windows `.\.venv\Scripts\python.exe`,
-  macOS/Linux `.venv/bin/python`.
+- Treat `${extensionPath}` as read-only bundle content during normal workflows.
+  Mutable user state belongs in `~/.gemini/medical-notes-workbench`
+  (`config.toml`, `.env`, cache/catalog files, and the workflow `.venv`).
+- Use the persistent workflow venv when present:
+  Windows `$HOME\.gemini\medical-notes-workbench\.venv\Scripts\python.exe`,
+  macOS/Linux `~/.gemini/medical-notes-workbench/.venv/bin/python`.
 - The enricher is additive-only for note content/frontmatter: insert image
   embeds/captions and append its own keys; never rewrite existing frontmatter.
 - Raw-chat processing must go through `scripts/mednotes/med_ops.py`; never edit
@@ -42,7 +46,7 @@ operational JSON is for agents, hooks, and tests unless the user asks for it.
   a real publish.
 - Wiki_Medicina taxonomy is category folders only; `title` becomes the `.md`
   filename. Use the fixed 5 big areas from `knowledge/knowledge-architect.md`
-  and the current tree from `scripts/mednotes/wiki_tree.py --max-depth 4 --audit`.
+  and the current tree from `scripts/mednotes/wiki_tree.py --max-depth 4 --audit --format text`.
 - `/mednotes:fix-wiki` reports taxonomy health, but folder migrations stay in
   `taxonomy-migrate` with plan, receipt, and rollback.
 - Wiki_Medicina note style, taxonomy, related-note, and footer requirements live
@@ -53,7 +57,8 @@ operational JSON is for agents, hooks, and tests unless the user asks for it.
   command or ask the user to run it first.
 - Link and graph repair use `scripts/mednotes/wiki_graph.py` and
   `scripts/mednotes/med_linker.py`; do not hand-roll regex linking.
-- If `SERPAPI_KEY` is absent, `web_search` returns `[]`; Wikimedia still works.
+- If `SERPAPI_KEY`/`SERPAPI_API_KEY` is absent, `web_search` returns `[]`;
+  Wikimedia still works.
 
 ## Commands
 

@@ -280,6 +280,70 @@ def test_invoke_gemini_timeout_vira_gemini_error(monkeypatch):
         workflow_gemini._invoke_gemini(["gemini"], timeout_seconds=3)
 
 
+def test_invoke_gemini_file_not_found_vira_erro_acionavel(monkeypatch):
+    def fake_run(*_args, **_kwargs):
+        raise FileNotFoundError("missing")
+
+    monkeypatch.setattr(workflow_gemini.subprocess, "run", fake_run)
+
+    with pytest.raises(workflow_gemini.GeminiError, match="gemini CLI não encontrado"):
+        workflow_gemini._invoke_gemini(["gemini"], timeout_seconds=3)
+
+
+def test_call_gemini_resolve_gemini_cmd_do_path_windows(monkeypatch):
+    queue = GeminiQueue(["{}"])
+    monkeypatch.setattr(workflow_gemini, "_invoke_gemini", queue)
+    monkeypatch.setattr(
+        workflow_gemini.shutil,
+        "which",
+        lambda name: r"C:\Users\leona\AppData\Roaming\npm\gemini.cmd"
+        if name == "gemini"
+        else None,
+    )
+
+    workflow_gemini.call_gemini("prompt", binary="gemini", model="m")
+
+    assert queue.calls[0][0] == r"C:\Users\leona\AppData\Roaming\npm\gemini.cmd"
+
+
+def test_call_gemini_preserva_binary_explicitamente_pathish(monkeypatch):
+    queue = GeminiQueue(["{}"])
+    monkeypatch.setattr(workflow_gemini, "_invoke_gemini", queue)
+    monkeypatch.setattr(workflow_gemini.shutil, "which", lambda _name: "/usr/local/bin/gemini")
+
+    workflow_gemini.call_gemini(
+        "prompt",
+        binary=r"C:\Users\leona\AppData\Roaming\npm\gemini.cmd",
+        model="m",
+    )
+
+    assert queue.calls[0][0] == r"C:\Users\leona\AppData\Roaming\npm\gemini.cmd"
+
+
+def test_resolve_gemini_binary_consulta_appdata_npm(monkeypatch, tmp_path):
+    appdata = tmp_path / "AppData" / "Roaming"
+    shim = appdata / "npm" / "gemini.cmd"
+    shim.parent.mkdir(parents=True)
+    shim.write_text("@echo off\n", encoding="utf-8")
+    monkeypatch.setenv("APPDATA", str(appdata))
+    monkeypatch.delenv("NPM_CONFIG_PREFIX", raising=False)
+    monkeypatch.setattr(workflow_gemini.shutil, "which", lambda _name: None)
+
+    assert workflow_gemini._resolve_gemini_binary("gemini") == str(shim)
+
+
+def test_subprocess_command_em_windows_envolve_cmd_shim(monkeypatch):
+    monkeypatch.setattr(workflow_gemini.os, "name", "nt")
+    monkeypatch.setenv("COMSPEC", r"C:\Windows\System32\cmd.exe")
+
+    cmd = workflow_gemini._subprocess_command(
+        [r"C:\Users\leona\AppData\Roaming\npm\gemini.cmd", "--version"]
+    )
+
+    assert cmd[:4] == [r"C:\Windows\System32\cmd.exe", "/d", "/s", "/c"]
+    assert cmd[4:] == [r"C:\Users\leona\AppData\Roaming\npm\gemini.cmd", "--version"]
+
+
 def test_call_gemini_json_retry_corrige_resposta_invalida(monkeypatch):
     valid = json.dumps([{
         "section_path": ["T"],
