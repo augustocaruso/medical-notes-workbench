@@ -297,6 +297,20 @@ def test_validate_wiki_audits_existing_notes_without_writing(tmp_path):
     assert bad["errors"]
 
 
+def test_validate_wiki_skips_generated_index_note(tmp_path):
+    wiki = tmp_path / "Wiki_Medicina"
+    _write(wiki / "Boa.md", (FIXTURES / "wiki_style_disease.md").read_text(encoding="utf-8"))
+    _write(wiki / "_Índice_Medicina.md", "# Índice Medicina\n\n## 🔗 Notas Indexadas\n- [[Boa]]\n")
+
+    audit = note_style.validate_wiki_dir(wiki)
+    index = next(item for item in audit["reports"] if item["path"].endswith("_Índice_Medicina.md"))
+
+    assert audit["error_count"] == 0
+    assert index["ok"] is True
+    assert index["skipped"] is True
+    assert index["skip_reason"] == "wiki_index"
+
+
 def test_fix_wiki_dry_run_reports_batch_changes_without_writing(tmp_path):
     wiki = tmp_path / "Wiki_Medicina"
     folder = wiki / "1. Clínica Médica" / "Cardiologia"

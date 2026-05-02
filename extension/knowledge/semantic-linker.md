@@ -44,6 +44,9 @@ python scripts/mednotes/med_linker.py "<caminho_da_nota>" --dry-run --json
 ## Regras de Ouro
 - Nunca confie em scripts de regex simples para extrair sinônimos. Use seu próprio conhecimento médico (como IA) para mapear os termos exatos de cada nota no JSON.
 - Apenas a primeira ocorrência do termo na nota é linkada para não poluir visualmente o arquivo.
+- A nota `[[_Índice_Medicina]]` é operacional: o linker deve criar/atualizar
+  `_Índice_Medicina.md` como índice hierárquico de todas as notas Markdown da
+  Wiki, sem passar essa nota pelo contrato de mini-aula médica.
 
 ## Implementação
 
@@ -53,6 +56,8 @@ aliases YAML são apenas fallback quando o catálogo não existe ou está
 incompleto. A auditoria objetiva do grafo vive em
 `scripts/mednotes/wiki_graph.py` e verifica links quebrados, self-links,
 aliases conflitantes, targets ausentes e notas órfãs.
+O linker também mantém `_Índice_Medicina.md`; o JSON de dry-run/aplicação
+expõe `index_files_changed` e `index_entries_planned` para auditoria.
 
 Quando precisar apontar outro vault/catálogo:
 
