@@ -12,8 +12,8 @@ Invariantes do launcher:
 - Rode `med_ops.py validate` e `wiki_tree.py --max-depth 4 --audit --format text`.
 - Use `list-pending --summary` e `list-triados --summary`; não despeje backlog completo.
 - Se o usuário responder a uma "Próxima Ação", execute só essa fase.
-- Para lote explícito, use `plan-subagents --limit <N>`; para máximo paralelismo,
-  defina também `--max-concurrency <N>`. Processe só os `work_items` retornados.
+- Para lote explícito, use `plan-subagents --limit <N>`; default máximo 5
+  subagents. Só passe `--max-concurrency >5` se o usuário pedir explicitamente.
 - Paralelize apenas work items de `plan-subagents`; um raw chat por subagent.
 - Aplique `triage`, `discard`, `stage-note`, catálogo, dry-run, publish e linker em série.
 - Use um único manifest por lote; `stage-note` suporta vários raw chats no mesmo manifest.

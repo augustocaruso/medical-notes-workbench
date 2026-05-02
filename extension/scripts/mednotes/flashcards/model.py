@@ -15,7 +15,12 @@ from typing import Any
 
 
 SCHEMA = "medical-notes-workbench.anki-model-validation.v1"
+SET_SCHEMA = "medical-notes-workbench.anki-model-set-validation.v1"
 DEFAULT_REQUIRED_FIELDS = ("Frente", "Verso", "Verso Extra", "Obsidian")
+QA_REQUIRED_FIELDS = ("Frente", "Verso", "Verso Extra", "Obsidian")
+CLOZE_REQUIRED_FIELDS = ("Texto", "Verso Extra", "Obsidian")
+DEFAULT_QA_MODEL = "Medicina"
+DEFAULT_CLOZE_MODEL = "Medicina Cloze"
 
 EXIT_OK = 0
 EXIT_USAGE = 2
@@ -117,6 +122,57 @@ def validate_models(
     }
 
 
+def validate_model_set(
+    payload: Any,
+    *,
+    qa_required_fields: tuple[str, ...] = QA_REQUIRED_FIELDS,
+    cloze_required_fields: tuple[str, ...] = CLOZE_REQUIRED_FIELDS,
+    preferred_qa_model: str | None = DEFAULT_QA_MODEL,
+    preferred_cloze_model: str | None = DEFAULT_CLOZE_MODEL,
+) -> dict[str, Any]:
+    """Valida o par Q&A + Cloze a partir de um único payload de modelos.
+
+    O payload aceita as mesmas formas que `validate_models`: dict
+    `{nome: [campos]}`, ou `{ "models": [{"name": ..., "fields": [...]}] }`.
+    """
+
+    qa_result = validate_models(
+        payload,
+        required_fields=qa_required_fields,
+        preferred_model=preferred_qa_model,
+    )
+    cloze_result = validate_models(
+        payload,
+        required_fields=cloze_required_fields,
+        preferred_model=preferred_cloze_model,
+    )
+    ok = bool(qa_result.get("ok")) and bool(cloze_result.get("ok"))
+    missing_kinds = [
+        kind
+        for kind, result in (("qa", qa_result), ("cloze", cloze_result))
+        if not result.get("ok")
+    ]
+    return {
+        "schema": SET_SCHEMA,
+        "ok": ok,
+        "missing_kinds": missing_kinds,
+        "qa": {
+            "model": qa_result.get("model"),
+            "fields": qa_result.get("fields", []),
+            "required_fields": list(qa_required_fields),
+            "ok": bool(qa_result.get("ok")),
+            "checked_models": qa_result.get("checked_models", []),
+        },
+        "cloze": {
+            "model": cloze_result.get("model"),
+            "fields": cloze_result.get("fields", []),
+            "required_fields": list(cloze_required_fields),
+            "ok": bool(cloze_result.get("ok")),
+            "checked_models": cloze_result.get("checked_models", []),
+        },
+    }
+
+
 def _cmd_validate(args: argparse.Namespace) -> int:
     required_fields = tuple(args.required_field or DEFAULT_REQUIRED_FIELDS)
     result = validate_models(
@@ -145,7 +201,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     validate.set_defaults(func=_cmd_validate)
 
+    validate_set = sub.add_parser(
+        "validate-set",
+        help="valida em conjunto os modelos Q&A e Cloze",
+    )
+    validate_set.add_argument(
+        "--models-json", required=True, help="modelos capturados do Anki, ou '-' para stdin"
+    )
+    validate_set.add_argument("--qa-model", default=DEFAULT_QA_MODEL)
+    validate_set.add_argument("--cloze-model", default=DEFAULT_CLOZE_MODEL)
+    validate_set.set_defaults(func=_cmd_validate_set)
+
     return parser
+
+
+def _cmd_validate_set(args: argparse.Namespace) -> int:
+    result = validate_model_set(
+        _read_json(args.models_json),
+        preferred_qa_model=args.qa_model,
+        preferred_cloze_model=args.cloze_model,
+    )
+    _json(result)
+    return EXIT_OK if result["ok"] else EXIT_VALIDATION
 
 
 def main(argv: list[str] | None = None) -> int:

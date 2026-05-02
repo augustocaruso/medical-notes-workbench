@@ -256,6 +256,19 @@ def test_plan_subagents_limit_caps_next_batch_and_reports_available_count(tmp_pa
     assert "When limit is set, spawn only the returned work_items" in plan["rules"]
 
 
+def test_plan_subagents_defaults_process_chats_to_five_parallel_agents(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    for idx in range(10):
+        _write(raw_dir / f"chat-{idx}.md", "Sem yaml\n")
+
+    plan = wiki_api.plan_subagents(_config(raw_dir, wiki_dir), "triage", limit=10)
+
+    assert plan["item_count"] == 10
+    assert plan["max_concurrency"] == 5
+    assert [len(batch["items"]) for batch in plan["batches"]] == [5, 5]
+
+
 def test_plan_subagents_can_parallelize_entire_limited_batch(tmp_path):
     raw_dir = tmp_path / "raw"
     wiki_dir = tmp_path / "wiki"

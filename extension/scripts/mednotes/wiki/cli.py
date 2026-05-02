@@ -158,7 +158,12 @@ def build_parser() -> argparse.ArgumentParser:
     plan_agents = sub.add_parser("plan-subagents", help="Build a safe subagent work plan for process-chats.")
     _add_common(plan_agents, suppress_defaults=True)
     plan_agents.add_argument("--phase", choices=("triage", "architect", "style-rewrite"), required=True)
-    plan_agents.add_argument("--max-concurrency", type=int, default=0)
+    plan_agents.add_argument(
+        "--max-concurrency",
+        type=int,
+        default=0,
+        help="Override the conservative default fan-out; omit for process-chats default 5.",
+    )
     plan_agents.add_argument("--temp-root", help="Base temporary directory for isolated architect work.")
     plan_agents.add_argument("--limit", type=int, help="Limit returned work items for the next explicit batch.")
 

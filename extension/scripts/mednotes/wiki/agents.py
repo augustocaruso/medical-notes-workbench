@@ -12,6 +12,9 @@ from wiki.config import MedConfig
 from wiki.raw_chats import list_by_status
 from wiki.style import validate_wiki_style
 
+DEFAULT_PROCESS_CHATS_MAX_CONCURRENCY = 5
+DEFAULT_STYLE_REWRITE_MAX_CONCURRENCY = 3
+
 
 def _slug(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", value)
@@ -35,7 +38,7 @@ def plan_subagents(
         "triage": {
             "agent": "med-chat-triager",
             "mode": "pending",
-            "default_max_concurrency": 4,
+            "default_max_concurrency": DEFAULT_PROCESS_CHATS_MAX_CONCURRENCY,
             "item_type": "raw_chat",
             "unit": "one pending raw chat per subagent",
             "serial_after": [
@@ -50,7 +53,7 @@ def plan_subagents(
         "architect": {
             "agent": "med-knowledge-architect",
             "mode": "triados",
-            "default_max_concurrency": 3,
+            "default_max_concurrency": DEFAULT_PROCESS_CHATS_MAX_CONCURRENCY,
             "item_type": "triaged_raw_chat",
             "unit": "one triaged raw chat per subagent; all notes split from that chat stay with the same subagent",
             "serial_after": [
@@ -69,7 +72,7 @@ def plan_subagents(
         "style-rewrite": {
             "agent": "med-knowledge-architect",
             "mode": "wiki_style_rewrite",
-            "default_max_concurrency": 3,
+            "default_max_concurrency": DEFAULT_STYLE_REWRITE_MAX_CONCURRENCY,
             "item_type": "wiki_note_style_rewrite",
             "unit": "one existing Wiki_Medicina note per subagent; each target path is unique",
             "serial_after": [

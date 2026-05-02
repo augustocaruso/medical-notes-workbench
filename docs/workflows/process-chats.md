@@ -17,14 +17,15 @@ e escrita clinica por unidade isolada.
    `med_ops.py list-triados --summary`; use listas completas só quando precisar
    depurar um item específico.
 4. Planejar triagem com
-   `med_ops.py plan-subagents --phase triage --max-concurrency <N> --limit <N>`
-   quando o usuário pediu lote finito; para máximo paralelismo, use o mesmo
-   valor nos dois argumentos.
+   `med_ops.py plan-subagents --phase triage --limit <N>` quando o usuário
+   pediu lote finito. O default de concorrência é 5 subagents; use
+   `--max-concurrency 2` ou `--max-concurrency 3` em modo econômico e só passe
+   valor maior que 5 quando o usuário pedir explicitamente.
 5. Aplicar `triage` ou `discard` em serie pelo agente principal.
 6. Planejar arquitetura com
-   `med_ops.py plan-subagents --phase architect --max-concurrency <N> --temp-root <tmp-agents> --limit <N>`
-   quando o usuário pediu lote finito; para máximo paralelismo, use o mesmo
-   valor nos dois argumentos.
+   `med_ops.py plan-subagents --phase architect --temp-root <tmp-agents> --limit <N>`
+   quando o usuário pediu lote finito. O mesmo teto default de 5 subagents vale
+   aqui; omita `--max-concurrency` para usar esse default.
 7. Validar/fixar notas temporarias com `validate-note` e `fix-note`, incluindo
    YAML canônico da Wiki (`aliases`, `tags`, `images_*`, ou nenhum YAML quando
    todos estiverem vazios).
@@ -44,8 +45,9 @@ e escrita clinica por unidade isolada.
 - Nunca lançar dois subagents para o mesmo raw chat, temp note ou target final.
 - Nunca trocar um plano limitado por leitura manual de vários raw chats no agente
   principal; use apenas os `work_items` retornados e respeite `batches`.
-- `--limit` define o tamanho do lote, não a concorrência. Para paralelizar o
-  lote inteiro, use `--max-concurrency` igual ao `--limit`.
+- `--limit` define o tamanho do lote, não a concorrência. Para lote de 10, o
+  padrão prudente é 10 itens em até 5 subagents por batch, não 10 subagents em
+  paralelo.
 - Quando o usuário confirmar uma próxima ação de triagem, processe somente
   triagem e pare com resumo; não avance para arquitetura, staging ou publicação.
 - Se `validate-note` retornar `requires_llm_rewrite: true`, use o

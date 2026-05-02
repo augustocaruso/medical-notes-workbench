@@ -505,9 +505,10 @@ def test_subagent_parallelism_contract_is_explicit_and_sharded_by_note_owner():
     process_doc = (ROOT / "docs" / "workflows" / "process-chats.md").read_text(encoding="utf-8")
     fix_doc = (ROOT / "docs" / "workflows" / "fix-wiki.md").read_text(encoding="utf-8")
 
-    assert "plan-subagents --phase triage --max-concurrency <N> --limit <N>" in process_doc
-    assert "plan-subagents --phase architect --max-concurrency <N>" in process_doc
-    assert "máximo paralelismo" in process_doc
+    assert "plan-subagents --phase triage --limit <N>" in process_doc
+    assert "plan-subagents --phase architect --temp-root <tmp-agents> --limit <N>" in process_doc
+    assert "default de concorrência é 5 subagents" in process_doc
+    assert "padrão prudente é 10 itens em até 5 subagents" in process_doc
     assert "plan-subagents --limit <N>" in process
     assert "próxima ação de triagem" in process_doc
     assert "requires_llm_rewrite: true" in process_doc

@@ -17,11 +17,24 @@ globs, tags Obsidian, filtros em linguagem natural ou texto/briefing colado.
 
 - Metodologia: `${extensionPath}/knowledge/anki-mcp-twenty-rules.md`.
 - Regras locais: `${extensionPath}/knowledge/flashcard-ingestion.md`.
+- Templates Anki (HTML/CSS): `${extensionPath}/knowledge/anki-templates/`.
 - Resolver fontes: `${extensionPath}/scripts/mednotes/flashcard_sources.py`.
+- Provisão de modelos: `${extensionPath}/scripts/mednotes/flashcards/install_models.py`.
 - Plano/aplicação: `${extensionPath}/scripts/mednotes/flashcard_pipeline.py`.
 - Relatórios: `${extensionPath}/scripts/mednotes/flashcard_report.py`.
 - Saída visível: `${extensionPath}/knowledge/workflow-output-contract.md`.
 - Deeplink/tag Obsidian: `${extensionPath}/scripts/mednotes/obsidian_note_utils.py`.
+
+## Modelos Anki
+
+A skill mantém **dois** note types e provisiona ambos via Anki MCP:
+
+- `Medicina` (Q&A) → campos `Frente`, `Verso`, `Verso Extra`, `Obsidian`.
+- `Medicina Cloze` (cloze) → campos `Texto`, `Verso Extra`, `Obsidian`.
+
+Cada `candidate_card` declara `note_model` e roteia para o modelo certo. Use
+cloze quando o conteúdo é definição/fato/enumeração curta; use Q&A quando
+precisa reformular como pergunta. Ambos preenchem `Obsidian` com o deeplink.
 
 `/twenty_rules` sem namespace é o prompt MCP do servidor global `anki-mcp`.
 Não crie comando local com esse nome e não peça ao usuário para executá-lo
@@ -61,10 +74,23 @@ antes de `/flashcards`.
    fonte colada e use `Medicina::Inbox`, salvo deck explícito.
 5. Leia `anki-mcp-twenty-rules.md` e `flashcard-ingestion.md`; o conteúdo das
    fontes selecionadas é a única base factual.
-6. Chame `med-flashcard-maker` em modo candidato. Ele deve usar
-   `mcp_anki-mcp_modelNames`/`mcp_anki-mcp_modelFieldNames` e retornar JSON com
-   `preferred_model`, `models` e `candidate_cards`, sem chamar `addNotes`.
-7. Prepare o plano:
+6. Garanta os modelos no Anki **antes** de pedir candidatos. Chame
+   `mcp_anki-mcp_modelNames` + `mcp_anki-mcp_modelFieldNames` para `Medicina` e
+   `Medicina Cloze` e rode:
+
+   ```bash
+   uv run python "${extensionPath}/scripts/mednotes/flashcards/install_models.py" ensure --existing - --output -
+   ```
+
+   Para cada item em `actions`, chame a tool indicada
+   (`mcp_anki-mcp_createModel`, `mcp_anki-mcp_updateModelTemplates`,
+   `mcp_anki-mcp_updateModelStyling`) com `arguments`. Se algum status for
+   `incompatible`, pare e peça ao usuário para apagar/renomear o modelo no Anki.
+7. Chame `med-flashcard-maker` em modo candidato. Ele deve retornar JSON com
+   `preferred_models: {qa: "Medicina", cloze: "Medicina Cloze"}`, `models` (com
+   os campos dos dois modelos), e `candidate_cards` declarando `note_model` por
+   card. Não chamar `addNotes` ainda.
+8. Prepare o plano:
 
    ```bash
    uv run python "${extensionPath}/scripts/mednotes/flashcard_pipeline.py" prepare --input -
@@ -72,7 +98,7 @@ antes de `/flashcards`.
 
    Pare se `blocked` for verdadeiro. Se houver confirmação de reprocessamento,
    pergunte antes de escrever.
-8. Mostre o preview de cards:
+9. Mostre o preview de cards:
 
    ```bash
    uv run python "${extensionPath}/scripts/mednotes/flashcard_report.py" preview-cards --input -
@@ -80,22 +106,22 @@ antes de `/flashcards`.
 
    No modo padrão, não chame Anki antes da confirmação. Confirmação também é
    obrigatória para lotes com mais de 40 cards candidatos.
-9. Chame `med-flashcard-maker` em modo gravação apenas com `new_cards` aprovados
-   pelo plano e com `anki_find_queries`. Antes de `addNotes`, ele deve rodar
-   `mcp_anki-mcp_findNotes` e pular duplicados existentes no Anki.
-10. Depois de sucesso no Anki, aplique resultados:
+10. Chame `med-flashcard-maker` em modo gravação apenas com `new_cards` aprovados
+    pelo plano e com `anki_find_queries`. Antes de `addNotes`, ele deve rodar
+    `mcp_anki-mcp_findNotes` e pular duplicados existentes no Anki.
+11. Depois de sucesso no Anki, aplique resultados:
 
     ```bash
     uv run python "${extensionPath}/scripts/mednotes/flashcard_pipeline.py" apply --input -
     ```
 
-11. Marque somente notas com pelo menos um card aceito:
+12. Marque somente notas com pelo menos um card aceito:
 
     ```bash
     uv run python "${extensionPath}/scripts/mednotes/obsidian_note_utils.py" add-tag --tag anki <arquivos...>
     ```
 
-12. Quando houver dados estruturados, gere o resumo final:
+13. Quando houver dados estruturados, gere o resumo final:
 
     ```bash
     uv run python "${extensionPath}/scripts/mednotes/flashcard_report.py" final --input -
@@ -113,3 +139,6 @@ antes de `/flashcards`.
 - Anki Desktop com AnkiConnect precisa responder em `http://127.0.0.1:8765`.
 - Todo card vindo de Markdown precisa preencher o campo `Obsidian` com o
   deeplink portátil do manifest.
+- Os modelos `Medicina` e `Medicina Cloze` são gerenciados via MCP a partir de
+  `${extensionPath}/knowledge/anki-templates/`. Não edite os templates
+  manualmente no Anki Desktop — eles são sobrescritos no próximo run.

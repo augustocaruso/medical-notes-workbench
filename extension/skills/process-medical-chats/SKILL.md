@@ -38,8 +38,9 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
   publish ou linker no mesmo turno.
 - Para lotes explícitos, use `plan-subagents --limit <N>` e processe somente os
   `work_items` retornados, em `batches`. `--limit` é tamanho do lote, não teto
-  de paralelismo; quando o usuário pedir máximo paralelismo, use
-  `--max-concurrency <N>` igual ao lote, salvo limitação operacional explícita.
+  de paralelismo. O default prudente é 5 subagents em paralelo; use
+  `--max-concurrency 2` ou `--max-concurrency 3` em modo econômico e só passe
+  valor maior que 5 quando o usuário pedir explicitamente.
 
 ## Fluxo
 
@@ -71,28 +72,29 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
 6. Para chats pendentes, rode:
 
    ```bash
-   uv run python "<med_ops.py>" plan-subagents --phase triage --max-concurrency <N> --limit <N>
+   uv run python "<med_ops.py>" plan-subagents --phase triage --limit <N>
    ```
 
-   Use `--limit` quando o usuário pediu um lote finito (por exemplo, 10). Para
-   máximo paralelismo dentro do lote, use o mesmo valor em `--max-concurrency`;
-   se não houver pedido explícito, o default conservador da CLI é aceitável.
-   Para cada `work_item.raw_file` retornado, lance no máximo um
-   `med-chat-triager`, seguindo `batches`. Não leia vários raw chats no agente
-   principal para substituir o triager. Depois aplique `triage` ou `discard` em
-   série via `med_ops.py`, seguindo `canonical_parent_commands` do plano. Se a
-   próxima ação era apenas triagem, pare aqui com resumo e nova próxima ação.
+   Use `--limit` quando o usuário pediu um lote finito (por exemplo, 10). Omita
+   `--max-concurrency` para usar o default conservador de 5; em plano humilde,
+   prefira `--max-concurrency 2` ou `--max-concurrency 3`. Para cada
+   `work_item.raw_file` retornado, lance no máximo um `med-chat-triager`,
+   seguindo `batches`. Não leia vários raw chats no agente principal para
+   substituir o triager. Depois aplique `triage` ou `discard` em série via
+   `med_ops.py`, seguindo `canonical_parent_commands` do plano. Se a próxima
+   ação era apenas triagem, pare aqui com resumo e nova próxima ação.
 7. Atualize `list-triados --summary`. Para chats triados, rode:
 
    ```bash
-   uv run python "<med_ops.py>" plan-subagents --phase architect --max-concurrency <N> --temp-root <tmp-agents> --limit <N>
+   uv run python "<med_ops.py>" plan-subagents --phase architect --temp-root <tmp-agents> --limit <N>
    ```
 
    Omita `--limit` somente quando o usuário pediu o workflow completo. Para cada
    `work_item.raw_file` retornado, lance no máximo um `med-knowledge-architect`,
-   seguindo `batches`. Para máximo paralelismo, use `--max-concurrency` igual ao
-   lote. Passe `work_id`, `raw_file`, `temp_dir`, taxonomia canônica, árvore real
-   e snapshot do catálogo. Cada architect escreve somente no próprio `temp_dir`.
+   seguindo `batches`. Omita `--max-concurrency` para usar o default de 5, ou
+   reduza para 2/3 em modo econômico. Passe `work_id`, `raw_file`, `temp_dir`,
+   taxonomia canônica, árvore real e snapshot do catálogo. Cada architect
+   escreve somente no próprio `temp_dir`.
    Use `canonical_parent_commands` do plano para validação, fix, staging,
    dry-run e publish; não invente nomes alternativos de flags.
 8. Antes de staging, valide cada nota temporária:

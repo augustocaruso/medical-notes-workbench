@@ -8,6 +8,64 @@ copia local existe porque subagents Gemini CLI nao conseguem chamar slash
 prompts MCP e puxar o conteudo para o proprio contexto. Este documento define
 as decisoes de design da extensao Medical Notes Workbench.
 
+## Modelos Anki Gerenciados
+
+A skill mantém **dois** note types no Anki, ambos provisionados via Anki MCP a
+partir dos arquivos em `extension/knowledge/anki-templates/`:
+
+- `Medicina` (Q&A, `isCloze: false`) — campos `Frente`, `Verso`, `Verso Extra`,
+  `Obsidian`. Cards de pergunta/resposta clássica.
+- `Medicina Cloze` (cloze, `isCloze: true`) — campos `Texto`, `Verso Extra`,
+  `Obsidian`. O campo `Texto` carrega `{{c1::...}}`, `{{c2::...}}`. Um card é
+  gerado por grupo de cloze.
+
+**Roteamento por card:** o subagent decide o modelo por candidato. Use
+`Medicina Cloze` quando o card é definição/fato encadeado/enumeração curta
+(Twenty Rules #5, #9). Use `Medicina` quando faz mais sentido reformular como
+pergunta com resposta atômica. Cada `candidate_card` precisa declarar
+`note_model` igual ao nome do modelo escolhido.
+
+**Provisão dos modelos:** antes de gravar cards, a skill chama
+`mcp_anki-mcp_modelNames` + `mcp_anki-mcp_modelFieldNames` para os dois nomes
+acima e roda:
+
+```bash
+uv run python ${extensionPath}/scripts/mednotes/flashcards/install_models.py ensure --existing - --output -
+```
+
+O JSON resultante traz uma lista `actions` com chamadas `mcp_anki-mcp_createModel`
+(quando o modelo não existe) ou `mcp_anki-mcp_updateModelTemplates` +
+`mcp_anki-mcp_updateModelStyling` (quando o HTML/CSS divergiu da versão local).
+Se algum modelo aparecer como `incompatible` (mesmo nome, campos diferentes),
+pare e peça ao usuário para apagar/renomear no Anki Desktop antes de continuar.
+
+Os arquivos HTML/CSS em `extension/knowledge/anki-templates/` são fonte de
+verdade. Não edite os modelos manualmente no Anki Desktop — qualquer alteração
+local é sobrescrita no próximo run.
+
+## Regras De Conteúdo Para Cards Bonitos
+
+Os templates só dão consistência visual; conteúdo limpo é responsabilidade da
+skill. Aplique sempre:
+
+- **Frente Q&A:** uma pergunta atômica, idealmente até 120 caracteres. Sem
+  ponto-final desnecessário, sem prefixo "Pergunta:".
+- **Verso Q&A:** 1-2 frases curtas, direto ao ponto. Não repita a pergunta,
+  não comece com "A resposta é".
+- **Verso Extra (ambos modelos):** raciocínio, contexto, mnemônicos, fontes
+  curtas. Comece com `\n\n` em texto puro ou `<br><br>` em HTML para preservar
+  o espaço visual exigido pelos templates. Use bullets `<ul><li>` ou `-` para
+  enumerações curtas. Nunca repita o Verso/cloze.
+- **Cloze (`Texto`):** enunciado fluente. Máximo 2-3 grupos `{{cN::...}}` por
+  card. Cada cloze deve esconder uma unidade atômica de informação; nunca um
+  parágrafo inteiro. Mantenha contexto suficiente para que o cloze fechado
+  ainda permita ler o resto da frase com sentido.
+- **Obsidian:** sempre o deeplink puro (`obsidian://open?vault=...&file=...`).
+  O template renderiza como botão "Abrir no Obsidian" no rodapé.
+- **Sem markdown solto:** evite headings (`#`, `##`), negrito Markdown
+  (`**...**`) e código com crase. Use HTML quando precisar de ênfase
+  (`<strong>`, `<em>`, `<code>`); o Anki não converte Markdown.
+
 ## Especificacoes De Design
 
 1. Hierarquia de decks: reproduza fielmente a estrutura de diretorios do
@@ -165,9 +223,13 @@ formular cards candidatos antes de chamar o Anki MCP. O formato minimo e:
 ```json
 {
   "source_manifest": {},
-  "preferred_model": "Medicina",
+  "preferred_models": {
+    "qa": "Medicina",
+    "cloze": "Medicina Cloze"
+  },
   "models": {
-    "Medicina": ["Frente", "Verso", "Verso Extra", "Obsidian"]
+    "Medicina": ["Frente", "Verso", "Verso Extra", "Obsidian"],
+    "Medicina Cloze": ["Texto", "Verso Extra", "Obsidian"]
   },
   "candidate_cards": [
     {
@@ -181,10 +243,24 @@ formular cards candidatos antes de chamar o Anki MCP. O formato minimo e:
         "Verso Extra": "\n\n...",
         "Obsidian": "obsidian://open?vault=...&file=..."
       }
+    },
+    {
+      "source_path": "/path/nota.md",
+      "source_content_sha256": "sha256-da-nota",
+      "deck": "Wiki_Medicina::Cardiologia::Ponte_Miocardica",
+      "note_model": "Medicina Cloze",
+      "fields": {
+        "Texto": "A {{c1::ponte miocárdica}} envolve mais frequentemente a {{c2::DA}}.",
+        "Verso Extra": "\n\nDescrita pela primeira vez em 1737.",
+        "Obsidian": "obsidian://open?vault=...&file=..."
+      }
     }
   ]
 }
 ```
+
+`preferred_model` (singular) ainda é aceito como atalho legado quando todos os
+cards são Q&A. Para o fluxo padrão, use `preferred_models` com as duas chaves.
 
 Antes de gravar no Anki, filtre duplicados locais:
 
@@ -262,12 +338,20 @@ O JSON de entrada deve representar o resultado de `modelNames` +
 
 ```json
 {
-  "Medicina": ["Frente", "Verso", "Verso Extra", "Obsidian"]
+  "Medicina": ["Frente", "Verso", "Verso Extra", "Obsidian"],
+  "Medicina Cloze": ["Texto", "Verso Extra", "Obsidian"]
 }
 ```
 
-Se nenhum modelo tiver `Frente`, `Verso`, `Verso Extra` e `Obsidian`, pare antes
-de gravar e mostre os campos disponiveis ao usuario.
+Para validar os dois modelos juntos, use `validate-set`:
+
+```bash
+uv run python ${extensionPath}/scripts/mednotes/anki_model_validator.py validate-set --models-json <models.json>
+```
+
+Se algum dos dois modelos faltar campos obrigatórios, pare antes de gravar e
+rode `flashcards/install_models.py ensure` para instalar/atualizar os modelos
+faltantes.
 
 ## Sincronizacao Das Twenty Rules
 

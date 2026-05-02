@@ -76,27 +76,64 @@ def _anki_note_for(card: dict[str, Any], model_name: str) -> dict[str, Any]:
 
 def _find_query_for(card: dict[str, Any]) -> str:
     obsidian = _field(card, "Obsidian")
-    front = _field(card, "Frente")
     deck = str(card.get("deck") or "")
+    note_model = str(card.get("note_model") or "")
+    is_cloze = note_model == anki_model_validator.DEFAULT_CLOZE_MODEL or bool(
+        _field(card, "Texto")
+    )
     parts = []
     if deck:
         parts.append(f'deck:"{deck}"')
     if obsidian:
         parts.append(f'Obsidian:"{obsidian}"')
-    if front:
-        parts.append(f'Frente:"{front}"')
+    if is_cloze:
+        text = _field(card, "Texto")
+        if text:
+            parts.append(f'Texto:"{text}"')
+    else:
+        front = _field(card, "Frente")
+        if front:
+            parts.append(f'Frente:"{front}"')
     return " ".join(parts)
 
 
+def _payload_uses_model_set(payload: dict[str, Any]) -> bool:
+    if isinstance(payload.get("preferred_models"), dict):
+        return True
+    candidates = payload.get("candidate_cards")
+    if isinstance(candidates, list):
+        for card in candidates:
+            if not isinstance(card, dict):
+                continue
+            if str(card.get("note_model") or "") == anki_model_validator.DEFAULT_CLOZE_MODEL:
+                return True
+    return False
+
+
+def _anki_note_for_card(card: dict[str, Any], default_model: str) -> dict[str, Any]:
+    return _anki_note_for(card, default_model)
+
+
 def prepare_write_plan(payload: dict[str, Any], index: dict[str, Any]) -> dict[str, Any]:
-    model_validation = anki_model_validator.validate_models(
-        _models_payload(payload),
-        preferred_model=payload.get("preferred_model"),
-    )
+    use_model_set = _payload_uses_model_set(payload)
+    if use_model_set:
+        preferred_models = payload.get("preferred_models") or {}
+        model_validation = anki_model_validator.validate_model_set(
+            _models_payload(payload),
+            preferred_qa_model=preferred_models.get("qa") or anki_model_validator.DEFAULT_QA_MODEL,
+            preferred_cloze_model=preferred_models.get("cloze") or anki_model_validator.DEFAULT_CLOZE_MODEL,
+        )
+        default_model_name = str(model_validation.get("qa", {}).get("model") or "")
+    else:
+        model_validation = anki_model_validator.validate_models(
+            _models_payload(payload),
+            preferred_model=payload.get("preferred_model"),
+        )
+        default_model_name = str(model_validation.get("model") or "")
     source_status = flashcard_index.source_status(_source_manifest(payload), index)
     index_check = flashcard_index.check_candidates(payload, index)
     new_cards = index_check["new_cards"] if model_validation["ok"] else []
-    model_name = str(model_validation.get("model") or "")
+    model_name = default_model_name
 
     changed_sources = [
         item for item in source_status["sources"] if item.get("status") == "changed"

@@ -109,6 +109,53 @@ def test_prepare_apply_flow_with_mocked_anki_mcp(tmp_path: Path):
     assert json.loads(second_prepare.stdout)["summary"]["duplicate_count"] == 1
 
 
+def test_prepare_routes_cloze_cards_to_cloze_model(tmp_path: Path):
+    payload = {
+        "preferred_models": {"qa": "Medicina", "cloze": "Medicina Cloze"},
+        "models": {
+            "Medicina": ["Frente", "Verso", "Verso Extra", "Obsidian"],
+            "Medicina Cloze": ["Texto", "Verso Extra", "Obsidian"],
+        },
+        "source_manifest": {
+            "notes": [
+                {
+                    "path": "/vault/Cardio/Ponte.md",
+                    "vault_relative_path": "Cardio/Ponte.md",
+                    "content_sha256": "sha-v1",
+                    "deck": "Wiki_Medicina::Cardio::Ponte",
+                    "deeplink": "obsidian://open?vault=Wiki_Medicina&file=Cardio%2FPonte.md",
+                }
+            ]
+        },
+        "candidate_cards": [
+            {
+                "source_path": "/vault/Cardio/Ponte.md",
+                "source_content_sha256": "sha-v1",
+                "deck": "Wiki_Medicina::Cardio::Ponte",
+                "note_model": "Medicina Cloze",
+                "fields": {
+                    "Texto": "A {{c1::ponte miocardica}} envolve mais a {{c2::DA}}.",
+                    "Verso Extra": "\n\nDescrita em 1737.",
+                    "Obsidian": "obsidian://open?vault=Wiki_Medicina&file=Cardio%2FPonte.md",
+                },
+            }
+        ],
+    }
+
+    result = _run("prepare", "--index", str(tmp_path / "index.json"), "--input", "-", input_json=payload)
+
+    assert result.returncode == 0, result.stderr
+    plan = json.loads(result.stdout)
+    assert plan["blocked"] is False
+    assert plan["model_validation"]["ok"] is True
+    assert plan["model_validation"]["qa"]["model"] == "Medicina"
+    assert plan["model_validation"]["cloze"]["model"] == "Medicina Cloze"
+    assert plan["anki_notes"][0]["modelName"] == "Medicina Cloze"
+    query = plan["anki_find_queries"][0]["query"]
+    assert 'Texto:"A {{c1::ponte miocardica}}' in query
+    assert "Frente:" not in query
+
+
 def test_prepare_blocks_when_model_is_missing_required_fields(tmp_path: Path):
     payload = _run_payload()
     payload["models"] = {"Basic": ["Front", "Back"]}
