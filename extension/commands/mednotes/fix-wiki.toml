@@ -1,4 +1,4 @@
-description = "Audita e corrige a saude da Wiki_Medicina: estilo, reescritas e grafo."
+description = "Audita e corrige a saude da Wiki_Medicina: taxonomia, estilo, grafo, linker e higiene."
 prompt = '''
 Audite ou corrija a saúde da Wiki_Medicina.
 
@@ -10,12 +10,14 @@ Use `knowledge/workflow-output-contract.md` para o resumo visível.
 Invariantes do launcher:
 - Modo padrão é reparar: rode `uv run python scripts/mednotes/med_ops.py fix-wiki --apply --backup --json`.
 - Se o usuário passar `--dry-run`, rode `uv run python scripts/mednotes/med_ops.py fix-wiki --dry-run --json`.
-- O apply faz style/YAML fix, `graph_fix` seguro e linker em série.
-- "Blocker" não é resposta final: classifique em IO externo, decisão clínica,
-  rota automática/orquestrável ou bug do reparo.
+- O apply orquestra movimentos determinísticos de taxonomia com recibo,
+  style/YAML fix, `graph_fix`, linker quando desbloqueado e higiene final.
+- Leia `status`, `next_command`, `rollback_command` e
+  `human_decision_required`; "blocker" genérico não é resposta final.
 - Se houver `requires_llm_rewrite: true`, use `plan-subagents --phase style-rewrite --max-concurrency 3` e `apply-style-rewrite`.
-- Se houver `taxonomy_action_required`, resolva com `taxonomy-migrate` plano/recibo/rollback; não mova pasta manualmente.
-- Backup tem ciclo de vida: manter 3 por nota e apagar os com mais de 14 dias.
+- Se `human_decision_required=true`, pare e mostre `human_decisions`.
+- Se `taxonomy_action_required` persistir, revise; migração segura usa `taxonomy-migrate`.
+- Backup tem ciclo de vida: `.bak`/`.rewrite` saem do vault; confira `hygiene_after`.
 - Use `/mednotes:link` para linkagem pura.
 - Não mostre JSON bruto por padrão; resuma arquivos que mudariam/mudaram,
   blockers, backups, grafo/linker e reescritas necessárias.
