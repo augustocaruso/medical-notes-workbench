@@ -27,11 +27,23 @@ Ao terminar um workflow, responda com:
 5. **Próxima ação**: confirmação necessária, comando seguro seguinte ou decisão
    que o usuário precisa tomar.
 
+O resumo humano deve refletir explicitamente os campos operacionais do JSON:
+`phase`, `status`, `blocked_reason`, `next_action`, `required_inputs` e
+`human_decision_required`. Nao apresente a fase seguinte como executada quando
+ela apenas apareceu como proxima acao segura.
+
 Quando a próxima ação for um lote parcial, deixe a fase explícita e limitada
 (`triagem`, `arquitetura`, `publish dry-run`, etc.). Se o usuário confirmar uma
 próxima ação limitada, o turno seguinte deve executar somente essa fase e parar
 com novo resumo; confirmação de triagem não autoriza avançar para arquitetura ou
 publicação.
+
+Se `status=blocked`, diga o `blocked_reason` em linguagem humana e aponte o
+`next_action` seguro. Se `human_decision_required=true`, a resposta não deve
+encerrar o trabalho: ela deve perguntar qual caminho o humano escolhe, usando
+as opções de `human_decisions`, e depois continuar pela rota segura indicada
+assim que houver resposta. Se `required_inputs` estiver incompleto, a resposta
+deve deixar claro qual insumo faltou antes de qualquer mutação.
 
 Use emojis para escaneabilidade, não para decorar cada frase. Evite mais de um
 emoji por bullet.

@@ -15,6 +15,7 @@ from wiki.linking import graph_audit, run_linker
 from wiki.raw_chats import atomic_write_text, create_backup
 from wiki.style import _requires_style_rewrite, fix_wiki_style, validate_wiki_style
 from wiki.taxonomy import apply_taxonomy_migration, taxonomy_audit, taxonomy_migration_plan
+from wiki.workflow_guardrails import FIX_WIKI_REQUIRED_INPUTS, annotate_payload
 
 
 def _style_rewrite_plan_if_needed(config: MedConfig, audit: dict[str, Any]) -> dict[str, Any] | None:
@@ -417,7 +418,19 @@ def fix_wiki_health(
         hygiene_cleanup=hygiene_cleanup,
     )
 
-    report = {
+    blocked_reason = ""
+    if write_error_count:
+        blocked_reason = "write_errors"
+    elif requires_llm_rewrite_count:
+        blocked_reason = "requires_llm_rewrite"
+    elif graph_error_count:
+        blocked_reason = "graph_blockers"
+    elif taxonomy_action_required:
+        blocked_reason = "taxonomy_action_required"
+    elif human_decision_required:
+        blocked_reason = "human_decision_required"
+
+    report = annotate_payload({
         **style_fix,
         "schema": WIKI_HEALTH_FIX_SCHEMA,
         "run_id": run_id,
@@ -503,7 +516,14 @@ def fix_wiki_health(
                 "ignored_items": ["attachments", "_Mock_Embeds", "_Índice_Medicina.md"],
             },
         },
-    }
+    },
+        phase="fix_wiki_apply" if apply else "fix_wiki_dry_run",
+        status=status,
+        blocked_reason=blocked_reason,
+        next_action=next_command or blocker_resolution.get("next_action") or "",
+        required_inputs=FIX_WIKI_REQUIRED_INPUTS,
+        human_decision_required=human_decision_required,
+    )
     report["compact_report_path"] = str(run_dir / "compact-report.json")
     report["full_report_path"] = str(run_dir / "full-report.json")
     report["run_state_path"] = str(run_dir / "run_state.json")
@@ -590,12 +610,39 @@ def _human_decisions(blocker_resolution: dict[str, Any]) -> list[dict[str, Any]]
     for group in blocker_resolution.get("groups", []):
         if not isinstance(group, dict) or group.get("automatic", False):
             continue
+        kind = group.get("route", "manual_review")
+        options: list[dict[str, str]]
+        if kind == "duplicate_merge_required":
+            options = [
+                {"id": "merge_keep_canonical", "label": "Fundir e manter uma nota canônica"},
+                {"id": "rename_split_topics", "label": "Renomear para separar tópicos distintos"},
+            ]
+        elif kind == "taxonomy_review_required":
+            options = [
+                {"id": "choose_taxonomy", "label": "Escolher a taxonomia correta"},
+                {"id": "defer_move", "label": "Adiar migração e manter como está"},
+            ]
+        elif kind == "io_retry":
+            options = [
+                {"id": "retry_now", "label": "Liberar arquivo e tentar novamente"},
+                {"id": "stop_and_inspect", "label": "Parar para inspecionar o bloqueio externo"},
+            ]
+        else:
+            options = [
+                {"id": "continue_safely", "label": "Escolher a rota segura sugerida"},
+                {"id": "stop_and_review", "label": "Parar e revisar manualmente"},
+            ]
         decisions.append(
             {
-                "kind": group.get("route", "manual_review"),
+                "kind": kind,
                 "question": group.get("reason", "Revisão humana necessária."),
+                "prompt": (
+                    "Escolha o caminho humano para este blocker; depois continue o workflow pela rota segura indicada."
+                ),
+                "options": options,
                 "items": group.get("sample", [])[:5],
                 "next_action": group.get("next_action", ""),
+                "continue_after_choice": group.get("next_action", ""),
             }
         )
         if len(decisions) >= 5:
@@ -607,7 +654,9 @@ def _compact_report(report: dict[str, Any]) -> dict[str, Any]:
     return {
         "schema": report.get("schema"),
         "run_id": report.get("run_id"),
+        "phase": report.get("phase"),
         "status": report.get("status"),
+        "blocked_reason": report.get("blocked_reason"),
         "safe_for_agent": report.get("safe_for_agent"),
         "summary": report.get("summary"),
         "wiki_dir": report.get("wiki_dir"),
@@ -624,6 +673,8 @@ def _compact_report(report: dict[str, Any]) -> dict[str, Any]:
         "taxonomy": report.get("final_validation", {}).get("taxonomy", {}),
         "human_decision_required": report.get("human_decision_required"),
         "human_decisions": report.get("human_decisions", []),
+        "next_action": report.get("next_action"),
+        "required_inputs": report.get("required_inputs", []),
         "next_command": report.get("next_command"),
         "resume_command": report.get("resume_command"),
         "rollback_command": report.get("rollback_command"),
@@ -636,12 +687,16 @@ def _run_state(report: dict[str, Any]) -> dict[str, Any]:
     return {
         "schema": "medical-notes-workbench.fix-wiki-run-state.v1",
         "run_id": report.get("run_id"),
+        "phase": report.get("phase"),
         "status": report.get("status"),
+        "blocked_reason": report.get("blocked_reason"),
         "wiki_dir": report.get("wiki_dir"),
+        "next_action": report.get("next_action"),
         "next_command": report.get("next_command"),
         "resume_command": report.get("resume_command"),
         "rollback_command": report.get("rollback_command"),
         "human_decision_required": report.get("human_decision_required"),
+        "required_inputs": report.get("required_inputs", []),
         "compact_report_path": report.get("compact_report_path"),
         "full_report_path": report.get("full_report_path"),
     }

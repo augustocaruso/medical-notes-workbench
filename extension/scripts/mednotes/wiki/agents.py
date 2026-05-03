@@ -14,6 +14,13 @@ from wiki.link_terms import normalize_key
 from wiki.note_plan import CREATE_NOTE_ACTION, note_plan_summary, parse_triage_note_plan
 from wiki.raw_chats import list_by_status, read_note_meta
 from wiki.style import validate_wiki_style
+from wiki.workflow_guardrails import (
+    PROCESS_CHATS_REQUIRED_INPUTS,
+    STYLE_REWRITE_REQUIRED_INPUTS,
+    annotate_payload,
+    note_target_index,
+    plan_status,
+)
 
 DEFAULT_PROCESS_CHATS_MAX_CONCURRENCY = 5
 DEFAULT_STYLE_REWRITE_MAX_CONCURRENCY = 3
@@ -28,21 +35,6 @@ def _slug(value: str) -> str:
 
 def _chunked(items: list[dict[str, Any]], size: int) -> list[list[dict[str, Any]]]:
     return [items[index : index + size] for index in range(0, len(items), size)]
-
-
-def _wiki_note_target_index(wiki_dir: Path) -> dict[str, list[str]]:
-    targets: dict[str, list[str]] = {}
-    if not wiki_dir.exists():
-        return targets
-    for path in sorted(wiki_dir.rglob("*.md"), key=lambda item: item.as_posix()):
-        if not path.is_file() or path.name.startswith("."):
-            continue
-        try:
-            display = path.relative_to(wiki_dir).as_posix()
-        except ValueError:
-            display = str(path)
-        targets.setdefault(normalize_key(path.stem), []).append(display)
-    return targets
 
 
 def _planned_create_targets(note_plan: dict[str, Any]) -> list[dict[str, str]]:
@@ -80,7 +72,7 @@ def _plan_architect_subagents(
     temp_root: Path,
     limit: int | None,
 ) -> dict[str, Any]:
-    existing_targets = _wiki_note_target_index(config.wiki_dir)
+    existing_targets = note_target_index(config.wiki_dir, as_relative=True)
     parsed_items: list[dict[str, Any]] = []
     blocked_items: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -109,6 +101,7 @@ def _plan_architect_subagents(
         except ValidationError as exc:
             item["blocked_reason"] = "missing_or_invalid_note_plan"
             item["note_plan_error"] = str(exc)
+            item["next_action"] = "Refaça a triagem com --note-plan exaustivo antes de planejar arquitetura."
             blocked_items.append(item)
             continue
 
@@ -167,6 +160,7 @@ def _plan_architect_subagents(
         except MedOpsError as exc:
             item["blocked_reason"] = "missing_or_invalid_artifact_manifest"
             item["artifact_manifest_error"] = str(exc)
+            item["next_action"] = "Corrija o manifesto HTML do Gemini ou remova a dependência antes de lançar architects."
             blocked_items.append(item)
             continue
         item["artifact_manifest_count"] = len(artifact_manifests)
@@ -180,7 +174,11 @@ def _plan_architect_subagents(
         {"batch": batch_index, "max_concurrency": concurrency, "items": batch}
         for batch_index, batch in enumerate(_chunked(work_items, concurrency), start=1)
     ]
-    return {
+    status, next_action, human_decision_required = plan_status(
+        item_count=len(work_items),
+        blocked_item_count=len(blocked_items),
+    )
+    return annotate_payload({
         "schema": SUBAGENT_PLAN_SCHEMA,
         "phase": "architect",
         "agent": spec["agent"],
@@ -211,7 +209,14 @@ def _plan_architect_subagents(
         ],
         "serial_after": spec["serial_after"],
         "canonical_parent_commands": spec["canonical_parent_commands"],
-    }
+    },
+        phase="architect",
+        status=status,
+        blocked_reason="preconditions_failed" if blocked_items and not work_items else "",
+        next_action=next_action,
+        required_inputs=PROCESS_CHATS_REQUIRED_INPUTS,
+        human_decision_required=human_decision_required,
+    )
 
 
 def plan_subagents(
@@ -425,7 +430,11 @@ def plan_subagents(
         {"batch": batch_index, "max_concurrency": concurrency, "items": batch}
         for batch_index, batch in enumerate(_chunked(work_items, concurrency), start=1)
     ]
-    return {
+    status, next_action, human_decision_required = plan_status(
+        item_count=len(work_items),
+        blocked_item_count=len(blocked_items),
+    )
+    return annotate_payload({
         "schema": SUBAGENT_PLAN_SCHEMA,
         "phase": phase,
         "agent": spec["agent"],
@@ -455,4 +464,11 @@ def plan_subagents(
         ],
         "serial_after": spec["serial_after"],
         "canonical_parent_commands": spec["canonical_parent_commands"],
-    }
+    },
+        phase=phase,
+        status=status,
+        blocked_reason="preconditions_failed" if blocked_items and not work_items else "",
+        next_action=next_action,
+        required_inputs=STYLE_REWRITE_REQUIRED_INPUTS if phase == "style-rewrite" else PROCESS_CHATS_REQUIRED_INPUTS,
+        human_decision_required=human_decision_required,
+    )

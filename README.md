@@ -32,6 +32,11 @@ manifesto `gemini-md-export.artifact-html-manifest.v1` com HTML interativo,
 o grupo de notas staged daquele raw chat precisa listar e embeber esses
 arquivos como HTML isolado antes de `publish-batch`.
 
+Nos workflows Wiki, o JSON operacional agora deve deixar explícitos, quando
+aplicável, `phase`, `status`, `blocked_reason`, `next_action`,
+`required_inputs` e `human_decision_required`, para que agente, hooks e testes
+consigam bloquear antes de mutação e resumir a fase correta ao usuário.
+
 Referências:
 
 - [CLI](docs/reference/cli.md)

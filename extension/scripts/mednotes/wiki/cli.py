@@ -49,6 +49,7 @@ from wiki.api import (
     validate_config,
 )
 from wiki.publish_receipts import clear_publish_dry_run, record_publish_dry_run, require_publish_dry_run
+from wiki.workflow_guardrails import LINK_REQUIRED_INPUTS, annotate_payload
 
 
 def _add_common(parser: argparse.ArgumentParser, *, suppress_defaults: bool = False) -> None:
@@ -107,6 +108,18 @@ def _compact_linker_payload(result: dict[str, object]) -> dict[str, object]:
             "error_count": graph.get("error_count"),
             "warning_count": graph.get("warning_count"),
         }
+    blocker_count = int(result.get("blocker_count", 0) or 0)
+    parse_error = bool(result.get("parse_error"))
+    error = bool(result.get("error"))
+    status = "failed" if parse_error or error else "blocked" if blocker_count else "completed"
+    blocked_reason = "graph_blockers" if blocker_count else "linker_error" if parse_error or error else ""
+    next_action = (
+        "Rodar /mednotes:fix-wiki --dry-run para resolver blockers semânticos antes do linker real."
+        if blocker_count
+        else "Inspecionar stderr/stdout do linker antes de tentar novamente."
+        if parse_error or error
+        else ""
+    )
     compact = {
         "ok": result.get("ok"),
         "error": result.get("error"),
@@ -134,7 +147,15 @@ def _compact_linker_payload(result: dict[str, object]) -> dict[str, object]:
     stderr = result.get("stderr")
     if stderr:
         compact["stderr"] = stderr
-    return compact
+    return annotate_payload(
+        compact,
+        phase="run_linker_dry_run" if result.get("dry_run") else "run_linker_apply",
+        status=status,
+        blocked_reason=blocked_reason,
+        next_action=next_action,
+        required_inputs=LINK_REQUIRED_INPUTS,
+        human_decision_required=bool(blocker_count),
+    )
 
 
 def _ensure_utf8_stdio() -> None:
@@ -466,7 +487,10 @@ def main(argv: list[str] | None = None) -> int:
             _json(result)
         elif args.command == "run-linker":
             result = run_linker(config, dry_run=args.dry_run)
-            _json(result if args.full else _compact_linker_payload(result))
+            payload = _compact_linker_payload(result)
+            if args.full:
+                payload = {**result, **{key: payload[key] for key in ("phase", "status", "blocked_reason", "next_action", "required_inputs", "human_decision_required")}}
+            _json(payload)
             if result.get("error") or result.get("parse_error"):
                 return EXIT_MISSING if result.get("returncode") == EXIT_MISSING else EXIT_LINKER
             if not result.get("dry_run") and result.get("returncode", 0) != 0:
@@ -489,7 +513,16 @@ def main(argv: list[str] | None = None) -> int:
                     artifact_dir=config.artifact_dir,
                 )
                 report["artifact_validation"] = artifact_report
-            _json(report)
+            _json(
+                annotate_payload(
+                    report,
+                    phase="validate_note",
+                    status="blocked" if report["errors"] else "completed",
+                    blocked_reason="validation_errors" if report["errors"] else "",
+                    next_action="Corrigir a nota e validar novamente." if report["errors"] else "",
+                    required_inputs=["content", "title", "raw_file"],
+                )
+            )
             if report["errors"]:
                 return EXIT_VALIDATION
         elif args.command == "fix-note":
@@ -499,7 +532,16 @@ def main(argv: list[str] | None = None) -> int:
                 _path(args.output),
                 raw_file=_path(args.raw_file) if args.raw_file else None,
             )
-            _json(report)
+            _json(
+                annotate_payload(
+                    report,
+                    phase="fix_note",
+                    status="blocked" if report["errors"] else "completed",
+                    blocked_reason="validation_errors" if report["errors"] else "",
+                    next_action="Aplicar o output normalizado ou escalar para rewrite clínico se persistir." if not report["errors"] else "Revisar o conteúdo e rodar fix-note novamente.",
+                    required_inputs=["content", "title", "output", "raw_file"],
+                )
+            )
             if report["errors"]:
                 return EXIT_VALIDATION
         elif args.command == "validate-wiki":

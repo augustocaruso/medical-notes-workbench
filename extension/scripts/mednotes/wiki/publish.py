@@ -21,6 +21,7 @@ from wiki.taxonomy import (
     resolve_target_for_note,
     safe_title,
 )
+from wiki.workflow_guardrails import PUBLISH_REQUIRED_INPUTS, annotate_payload, note_target_index
 
 
 def resolve_collision(path: Path, mode: str, reserved: set[Path]) -> Path:
@@ -112,14 +113,8 @@ def _note_target_key(path: Path) -> str:
 
 
 def _wiki_note_targets(wiki_dir: Path) -> dict[str, list[Path]]:
-    targets: dict[str, list[Path]] = {}
-    if not wiki_dir.exists():
-        return targets
-    for path in sorted(wiki_dir.rglob("*.md"), key=lambda item: item.as_posix()):
-        if not path.is_file() or path.name.startswith("."):
-            continue
-        targets.setdefault(_note_target_key(path), []).append(path)
-    return targets
+    raw_targets = note_target_index(wiki_dir, as_relative=False)
+    return {key: [path for path in values if isinstance(path, Path)] for key, values in raw_targets.items()}
 
 
 def _display_path(path: Path, wiki_dir: Path) -> str:
@@ -318,7 +313,7 @@ def publish_batch(
     created: list[str] = []
     raw_updates: list[dict[str, Any]] = []
     if dry_run:
-        return {
+        return annotate_payload({
             "dry_run": True,
             "backup": backup,
             "manifest": str(manifest),
@@ -327,7 +322,12 @@ def publish_batch(
             "planned_batches": plan,
             "created": [],
             "raw_updates": [],
-        }
+        },
+            phase="publish_dry_run",
+            status="preview",
+            next_action="Revisar o plano e então rodar publish-batch sem --dry-run com o mesmo manifest.",
+            required_inputs=PUBLISH_REQUIRED_INPUTS,
+        )
 
     try:
         for batch in plan:
@@ -350,7 +350,7 @@ def publish_batch(
             f"Created notes before failure: {created}. Error: {exc}"
         ) from exc
 
-    return {
+    return annotate_payload({
         "dry_run": False,
         "backup": backup,
         "manifest": str(manifest),
@@ -360,7 +360,12 @@ def publish_batch(
         "raw_updates": raw_updates,
         "created_count": len(created),
         "processed_raw_count": len(raw_updates),
-    }
+    },
+        phase="publish_apply",
+        status="completed",
+        next_action="Rodar run-linker uma única vez para atualizar links e índice após o lote.",
+        required_inputs=PUBLISH_REQUIRED_INPUTS,
+    )
 
 
 def stage_note(
@@ -427,4 +432,14 @@ def stage_note(
         result["coverage_path"] = str(coverage_path)
     if taxonomy_resolution is not None:
         result["taxonomy_resolution"] = taxonomy_resolution.to_json(config.wiki_dir, title=title)
-    return result
+    return annotate_payload(
+        result,
+        phase="stage_note",
+        status="preview" if dry_run else "completed",
+        next_action=(
+            "Adicionar as demais notas/coberturas ao manifest antes do publish-batch --dry-run."
+            if not dry_run
+            else "Se a nota estiver correta, repetir stage-note sem --dry-run."
+        ),
+        required_inputs=["raw_file", "taxonomy", "title", "content_path", "coverage_path"],
+    )

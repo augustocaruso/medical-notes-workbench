@@ -33,8 +33,14 @@ plano/recibo/rollback e limpeza final de higiene do vault.
    com `write_error_count`/`write_errors`, pula o linker real e sai com erro de
    IO em vez de despejar traceback.
 4. Repita o ciclo de reparo apenas quando o JSON trouxer `next_command`.
-   Se `human_decision_required=true`, pare e mostre as decisões listadas; não
-   improvise merge, renome semântico ou apagamento de nota.
+   Se `human_decision_required=true`, não encerre o trabalho de forma seca:
+   pergunte ao humano qual caminho seguir usando `human_decisions[*].prompt` e
+   `human_decisions[*].options`, depois continue pela rota segura descrita em
+   `continue_after_choice`/`next_action`. Não improvise merge, renome semântico
+   ou apagamento de nota sem essa resposta.
+   O payload operacional também precisa ser lido por `phase`, `status`,
+   `blocked_reason`, `next_action` e `required_inputs`; o resumo final deve
+   bater com esses campos.
 5. Se `requires_llm_rewrite` vier verdadeiro, planejar:
    `uv run python scripts/mednotes/med_ops.py plan-subagents --phase style-rewrite --max-concurrency 3 --temp-root <tmp-rewrites>`
 6. Cada reescrita vai para arquivo temporario e entra pelo gate:
@@ -67,6 +73,9 @@ plano/recibo/rollback e limpeza final de higiene do vault.
 - Se `linker_skipped_reason` vier preenchido, a resposta final não pode usar
   status de concluído; deve dizer qual decisão humana/externa ainda impede o
   fechamento ou qual `next_command` foi retornado.
+- Mudanças observáveis em `fix-wiki` devem declarar explicitamente:
+  fase alterada, pre-condição nova, JSON afetado e teste de regressão do caso
+  patológico correspondente.
 - Não deixa `.bak` ou `.rewrite` dentro do vault; a limpeza aparece em
   `hygiene_cleanup`, `hygiene_after` e `backup_cleanup`.
 - Não move pastas manualmente; qualquer taxonomia é via `taxonomy-migrate` com

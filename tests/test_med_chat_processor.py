@@ -433,6 +433,10 @@ def test_plan_subagents_chunks_pending_chats_without_duplicate_owners(tmp_path):
 
     assert plan["schema"] == wiki_api.SUBAGENT_PLAN_SCHEMA
     assert plan["phase"] == "triage"
+    assert plan["status"] == "ready"
+    assert plan["blocked_reason"] == ""
+    assert plan["required_inputs"] == ["raw_file", "note_plan", "coverage_path"]
+    assert plan["human_decision_required"] is False
     assert plan["agent"] == "med-chat-triager"
     assert plan["max_concurrency"] == 2
     assert plan["item_count"] == 5
@@ -535,6 +539,9 @@ def test_plan_subagents_architect_blocks_existing_normalized_wiki_duplicate(tmp_
 
     assert plan["item_count"] == 0
     assert plan["blocked_item_count"] == 1
+    assert plan["status"] == "blocked"
+    assert plan["blocked_reason"] == "preconditions_failed"
+    assert plan["human_decision_required"] is True
     blocked = plan["blocked_items"][0]
     assert blocked["blocked_reason"] == "duplicate_create_note_targets"
     assert blocked["duplicate_targets"][0]["conflict_type"] == "existing_wiki_note"
@@ -554,6 +561,7 @@ def test_plan_subagents_architect_blocks_duplicate_planned_titles_before_spawnin
 
     assert plan["item_count"] == 0
     assert plan["blocked_item_count"] == 2
+    assert plan["status"] == "blocked"
     assert {item["blocked_reason"] for item in plan["blocked_items"]} == {"duplicate_create_note_targets"}
     for item in plan["blocked_items"]:
         duplicate = next(target for target in item["duplicate_targets"] if target["conflict_type"] == "planned_in_batch")
@@ -569,6 +577,7 @@ def test_plan_subagents_architect_blocks_triados_without_note_plan(tmp_path):
 
     assert plan["item_count"] == 0
     assert plan["blocked_item_count"] == 1
+    assert plan["status"] == "blocked"
     assert plan["blocked_items"][0]["blocked_reason"] == "missing_or_invalid_note_plan"
     assert "note_plan" in plan["blocked_items"][0]["note_plan_error"]
 
@@ -822,6 +831,8 @@ def test_publish_batch_dry_run_writes_nothing(tmp_path):
     result = wiki_api.publish_batch(manifest, _config(raw_dir, wiki_dir), dry_run=True)
 
     assert result["dry_run"] is True
+    assert result["phase"] == "publish_dry_run"
+    assert result["status"] == "preview"
     assert result["created"] == []
     assert result["planned_batches"][0]["notes"][0]["target_path"].endswith("1. Clínica Médica/Psiquiatria/ISRS.md")
     assert not (wiki_dir / "1. Clínica Médica" / "Psiquiatria" / "ISRS.md").exists()
@@ -849,6 +860,9 @@ def test_stage_note_allows_artifact_to_be_covered_by_another_note(tmp_path):
     )
 
     validation = result["artifact_validation"]
+    assert result["phase"] == "stage_note"
+    assert result["status"] == "completed"
+    assert result["required_inputs"] == ["raw_file", "taxonomy", "title", "content_path", "coverage_path"]
     assert validation["required"] is True
     assert validation["included_artifact_count"] == 0
     assert validation["missing_artifact_count"] == 1
@@ -1349,7 +1363,11 @@ def test_commit_batch_cli_alias_still_works(tmp_path):
     )
 
     assert result.returncode == 0
-    assert json.loads(result.stdout)["dry_run"] is True
+    payload = json.loads(result.stdout)
+    assert payload["dry_run"] is True
+    assert payload["phase"] == "publish_dry_run"
+    assert payload["status"] == "preview"
+    assert payload["required_inputs"] == ["manifest", "coverage_path", "dry_run_receipt"]
 
 
 def test_publish_batch_cli_enforces_dry_run_receipt(tmp_path):
@@ -1391,11 +1409,17 @@ def test_publish_batch_cli_enforces_dry_run_receipt(tmp_path):
     dry_payload = json.loads(dry_run.stdout)
     assert dry_payload["dry_run"] is True
     assert "dry_run_receipt" in dry_payload
+    assert dry_payload["phase"] == "publish_dry_run"
+    assert dry_payload["status"] == "preview"
+    assert dry_payload["required_inputs"] == ["manifest", "coverage_path", "dry_run_receipt"]
 
     published = subprocess.run(base, text=True, capture_output=True, check=False, env=env)
     assert published.returncode == 0, published.stderr
     payload = json.loads(published.stdout)
     assert payload["dry_run"] is False
+    assert payload["phase"] == "publish_apply"
+    assert payload["status"] == "completed"
+    assert payload["required_inputs"] == ["manifest", "coverage_path", "dry_run_receipt"]
     assert payload["created_count"] == 1
     assert json.loads((tmp_path / "state" / "publish-dry-run-receipts.json").read_text(encoding="utf-8"))["receipts"] == {}
 
@@ -1635,6 +1659,10 @@ def test_run_linker_cli_reports_missing_wiki_as_failure(tmp_path):
     assert result.returncode == wiki_api.EXIT_MISSING
     payload = json.loads(result.stdout)
     assert payload["error"] == f"Wiki dir não encontrado: {missing_wiki}"
+    assert payload["phase"] == "run_linker_dry_run"
+    assert payload["status"] == "failed"
+    assert payload["blocked_reason"] == "linker_error"
+    assert payload["required_inputs"] == ["wiki_dir", "catalog_path", "linker_path"]
 
 
 def test_graph_audit_and_linker_dry_run_return_structured_reports(tmp_path):
@@ -1684,6 +1712,10 @@ def test_run_linker_cli_compacts_large_plan_by_default(tmp_path):
     assert result.returncode == 0
     payload = json.loads(result.stdout)
     assert payload["links_planned"] == 1
+    assert payload["phase"] == "run_linker_dry_run"
+    assert payload["status"] == "completed"
+    assert payload["blocked_reason"] == ""
+    assert payload["required_inputs"] == ["wiki_dir", "catalog_path", "linker_path"]
     assert payload["blocker_summary"] == []
     assert payload["blockers_sample"] == []
     assert "plans" not in payload
@@ -1724,6 +1756,10 @@ def test_run_linker_cli_summarizes_graph_blockers(tmp_path):
     summary = {item["code"]: item for item in payload["blocker_summary"]}
     assert summary["dangling_link"]["count"] == 3
     assert summary["duplicate_stem"]["count"] == 1
+    assert payload["phase"] == "run_linker_apply"
+    assert payload["status"] == "blocked"
+    assert payload["blocked_reason"] == "graph_blockers"
+    assert payload["human_decision_required"] is True
     assert payload["index_files_changed"] == 1
     assert payload["index_refreshed_while_blocked"] is True
     assert len(payload["blockers_sample"]) <= 10

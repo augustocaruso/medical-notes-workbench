@@ -13,6 +13,24 @@ quando solicitado.
 - Incluir caminhos resolvidos quando uma operacao puder escrever arquivos.
 - Preferir listas vazias a falhas para ausencia normal de resultados.
 - Usar erro fatal para cota paga esgotada ou operacao que poderia repetir custo.
+- Em workflows publicos, expor campos operacionais estaveis quando fizer sentido:
+  `status`, `phase`, `blocked_reason`, `next_action`, `required_inputs` e
+  `human_decision_required`.
+
+## Matriz De Invariantes Operacionais
+
+- `process-chats`: antes de mutar, exigir `note_plan` exaustivo, inventario
+  `coverage_path` compativel, targets unicos por normalizacao de acento/caixa e
+  manifests HTML validos quando houver artefatos Gemini.
+- `publish-batch`: publish real so vale com recibo recente de
+  `publish-batch --dry-run` para o mesmo manifest/cwd/caminhos/opcoes.
+- `fix-wiki`: o comando deve aplicar rotas deterministicas antes de encerrar e
+  bloquear o linker real quando houver `write_errors`, `requires_llm_rewrite`,
+  blockers de grafo ou decisao humana pendente.
+- `link`: roda apenas grafo/linker/indice; nao corrige estilo, YAML,
+  publicacao ou taxonomia.
+- Mudanca observavel em workflow publico deve declarar fase alterada,
+  pre-condicoes novas, JSON afetado e teste de regressao correspondente.
 
 ## Familias Atuais
 
@@ -85,6 +103,12 @@ não aplica o linker real. O campo `linker_skipped_reason` deve apontar a causa
 operacional, por exemplo `write_errors`, `requires_llm_rewrite`,
 `graph_blockers` ou `taxonomy_action_required`.
 
+Quando `human_decision_required=true`, `human_decisions` deve carregar não só a
+decisão pendente, mas a pergunta ao humano e o caminho de continuação:
+`prompt`, `options`, `next_action` e `continue_after_choice`. O agente não deve
+tratar isso como encerramento; deve coletar a escolha humana e seguir pela rota
+segura indicada.
+
 Relatórios do linker podem incluir `links_rewritten` e `plans[].rewrites`.
 Esses campos indicam canonicalização determinística de WikiLinks existentes com
 base no catálogo; o texto visível é preservado e apenas o target muda.
@@ -95,7 +119,10 @@ base no catálogo; o texto visível é preservado e apenas o target muda.
 `canonical_parent_commands` com templates dos comandos seriais canônicos que o
 agente principal deve usar depois que subagents retornarem. Esses templates são
 contrato operacional, não alias de conveniência: slash commands devem seguir os
-nomes e flags públicos documentados pela CLI.
+nomes e flags públicos documentados pela CLI. O payload tambem deve expor
+`phase`, `status`, `blocked_reason`, `next_action`, `required_inputs` e
+`human_decision_required` para deixar claro se o lote esta pronto, parcialmente
+bloqueado ou totalmente bloqueado antes do spawn.
 
 ## Cobertura De Raw Chats
 
@@ -111,6 +138,9 @@ de `existing_title`.
 `med-knowledge-architect` antes de staged notes, derivado do `note_plan` da
 triagem. Campos mínimos: `schema`, `raw_file`, `exhaustive: true` e `items`.
 Itens `create_note` devem bater com o `note_plan` e com os títulos staged.
+`stage-note` e `publish-batch` devem refletir essa exigência em
+`required_inputs` e falhar antes de escrita/publicação quando a cobertura estiver
+ausente, divergente ou incompleta.
 
 ## Artefatos HTML Do Gemini
 

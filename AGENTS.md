@@ -87,13 +87,21 @@ Referências:
 ## Desenvolvimento
 
 - Mantenha dependências runtime mínimas.
+- Mudança observável em workflow/CLI deve ser entregue em 3 camadas:
+  contrato, implementação e docs/testes.
 - Mudanças em `frontmatter.py`, `insert.py`, `cli.py` e `med_ops.py` exigem
   testes.
 - Adapters de fonte precisam de teste com fixture HTTP local.
 - Subcomandos CLI devem emitir JSON parseável na stdout em sucesso.
+- Workflows públicos devem expor, quando fizer sentido, `status`, `phase`,
+  `blocked_reason`, `next_action`, `required_inputs` e
+  `human_decision_required`.
 - Respostas visíveis no Gemini CLI devem resumir JSON/logs conforme
   `extension/knowledge/workflow-output-contract.md`, sem despejar JSON bruto por
   padrão.
+- Em revisão de workflow/CLI, confirme pelo menos: quebrou contrato? mudou
+  fase? há bloqueio antes de mutar? há teste para o caso patológico? o resumo
+  ao usuário bate com o JSON?
 - Mudança observável deve atualizar README, docs canônicos e os espelhos
   `AGENTS.md`/`CLAUDE.md` quando necessário.
 - Antes de fechar tarefa: `uv run python -m pytest`.

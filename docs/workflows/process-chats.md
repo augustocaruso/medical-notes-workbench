@@ -53,9 +53,13 @@ e escrita clinica por unidade isolada.
     resultado precisa ser conferido por `index_files_changed` e
     `index_entries_planned`, porque esse passo atualiza o `_Índice_Medicina`.
     Se o linker bloquear links semânticos por grafo, o índice ainda deve ser
-    atualizado; a próxima ação padrão é `/mednotes:fix-wiki --dry-run`. Deixe
-    fusão/deleção manual apenas para duplicatas não-idênticas que o fix-wiki não
-    consegue resolver.
+   atualizado; a próxima ação padrão é `/mednotes:fix-wiki --dry-run`. Deixe
+   fusão/deleção manual apenas para duplicatas não-idênticas que o fix-wiki não
+   consegue resolver.
+12. Em JSON, trate `phase`, `status`, `blocked_reason`, `next_action`,
+   `required_inputs` e `human_decision_required` como contrato operacional do
+   workflow. A fase seguinte só é autorizada quando a fase atual terminar sem
+   blocker pendente.
 
 ## Limites
 
@@ -76,6 +80,9 @@ e escrita clinica por unidade isolada.
   `note_plan`, cobertura que não bate com o `note_plan`, notas staged fora da
   cobertura, ou alvo Obsidian que duplica nome existente por normalização de
   acento/caixa.
+- Mudanças observáveis no workflow devem ser entregues em 3 camadas:
+  contrato, implementação e docs/testes. Em revisão, declare fase alterada,
+  pre-condição nova, JSON afetado e teste adversarial correspondente.
 - `plan-subagents --phase architect` bloqueia antes de gastar tokens de escrita
   quando um `create_note` duplica nota existente ou outro raw chat planejado por
   normalização de acento/caixa.

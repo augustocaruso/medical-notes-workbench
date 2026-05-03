@@ -708,12 +708,18 @@ def test_fix_wiki_turns_remaining_graph_blockers_into_resolution_routes(tmp_path
     assert duplicate_route["count"] == 1
     assert duplicate_route["sample"][0]["code"] == "duplicate_stem"
     assert "fundir conteúdo" in duplicate_route["next_action"]
+    assert payload["phase"] == "fix_wiki_apply"
     assert payload["status"] == "blocked"
+    assert payload["blocked_reason"] == "graph_blockers"
     assert payload["safe_for_agent"] is True
     assert payload["human_decision_required"] is True
+    assert payload["required_inputs"] == ["wiki_dir", "catalog_path", "linker_path"]
     assert payload["next_command"] is None
     assert payload["resume_command"]
     assert payload["human_decisions"][0]["kind"] == "duplicate_merge_required"
+    assert "Escolha o caminho humano" in payload["human_decisions"][0]["prompt"]
+    assert payload["human_decisions"][0]["options"][0]["id"] == "merge_keep_canonical"
+    assert payload["human_decisions"][0]["continue_after_choice"] == payload["human_decisions"][0]["next_action"]
     assert Path(payload["compact_report_path"]).exists()
     assert Path(payload["full_report_path"]).exists()
 

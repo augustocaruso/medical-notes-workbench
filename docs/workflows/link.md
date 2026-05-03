@@ -19,6 +19,10 @@ todas as notas Markdown publicadas.
    se o indice seria criado/atualizado e quantas notas entrariam nele.
 5. Reportar arquivos alterados, links inseridos, links reescritos, indice,
    catalogo usado, blockers e avisos do graph audit.
+6. Tratar `phase`, `status`, `blocked_reason`, `next_action`,
+   `required_inputs` e `human_decision_required` como contrato operacional do
+   retorno. Se o índice for atualizado enquanto houver blockers semânticos, o
+   resumo deve dizer isso explicitamente.
 
 ## Limites
 
@@ -28,3 +32,5 @@ todas as notas Markdown publicadas.
 - Reescrever WikiLinks existentes somente quando o catálogo apontar de forma
   unívoca que o alvo antigo é alias de um alvo canônico.
 - Nao fazer linkagem manual por regex fora do script.
+- Mudança observável no linker deve declarar fase alterada, blocker novo e teste
+  adversarial correspondente.
