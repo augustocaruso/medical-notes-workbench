@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import http from "node:http";
 
-import { ankiConnectUrl, ankiStartTimeoutMs, quiet } from "./runtime.mjs";
+import { ankiAutoStart, ankiConnectUrl, ankiStartTimeoutMs, quiet } from "./runtime.mjs";
 
 export function isAnkiTool(payload) {
   const toolName = String(payload.tool_name || payload.toolName || payload.name || "");
@@ -194,6 +194,7 @@ export async function waitForAnkiConnect(timeoutMs) {
 export async function ensureAnkiBefore(payload) {
   if (!isAnkiTool(payload)) return quiet();
   if (await ankiConnectReady()) return quiet();
+  if (!ankiAutoStart) return quiet();
 
   console.error("AnkiConnect is not ready. Trying a bounded Anki preflight before Anki MCP tool use.");
   const launched = await launchAnki();

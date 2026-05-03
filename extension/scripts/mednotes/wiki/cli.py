@@ -44,9 +44,11 @@ from wiki.api import (
     taxonomy_migration_plan,
     taxonomy_tree,
     validate_note_style_file,
+    validate_note_artifacts,
     validate_wiki_style,
     validate_config,
 )
+from wiki.publish_receipts import clear_publish_dry_run, record_publish_dry_run, require_publish_dry_run
 
 
 def _add_common(parser: argparse.ArgumentParser, *, suppress_defaults: bool = False) -> None:
@@ -56,6 +58,7 @@ def _add_common(parser: argparse.ArgumentParser, *, suppress_defaults: bool = Fa
     parser.add_argument("--wiki-dir", default=default, help="Override Wiki_Medicina directory.")
     parser.add_argument("--linker-path", default=default, help="Override med-auto-linker script path.")
     parser.add_argument("--catalog-path", default=default, help="Override CATALOGO_WIKI.json path.")
+    parser.add_argument("--artifact-dir", default=default, help="Directory containing gemini-md-export HTML artifact manifests.")
 
 
 def _add_taxonomy_creation_mode(parser: argparse.ArgumentParser) -> None:
@@ -132,6 +135,16 @@ def _compact_linker_payload(result: dict[str, object]) -> dict[str, object]:
     if stderr:
         compact["stderr"] = stderr
     return compact
+
+
+def _ensure_utf8_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8")
+            except (OSError, ValueError):
+                pass
 
 
 def _issue_summary(issues: list[object], *, sample_size: int = 3) -> list[dict[str, object]]:
@@ -315,6 +328,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _ensure_utf8_stdio()
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
@@ -413,17 +427,43 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
         elif args.command in {"publish-batch", "commit-batch"}:
-            _json(
-                publish_batch(
-                    _path(args.manifest),
+            manifest = _path(args.manifest)
+            if args.command == "commit-batch" and not args.dry_run:
+                raise ValidationError(
+                    "commit-batch e apenas alias de compatibilidade. Use publish-batch --dry-run, revise, depois publish-batch."
+                )
+            if not args.dry_run:
+                require_publish_dry_run(
+                    manifest,
                     config,
                     collision=args.collision,
-                    dry_run=args.dry_run,
-                    backup=args.backup,
                     allow_new_taxonomy_leaf=args.allow_new_taxonomy_leaf,
                     require_coverage=args.require_coverage,
                 )
+            result = publish_batch(
+                manifest,
+                config,
+                collision=args.collision,
+                dry_run=args.dry_run,
+                backup=args.backup,
+                allow_new_taxonomy_leaf=args.allow_new_taxonomy_leaf,
+                require_coverage=args.require_coverage,
             )
+            if args.dry_run:
+                receipt = record_publish_dry_run(
+                    manifest,
+                    config,
+                    collision=args.collision,
+                    allow_new_taxonomy_leaf=args.allow_new_taxonomy_leaf,
+                    require_coverage=args.require_coverage,
+                )
+                result["dry_run_receipt"] = {
+                    "path": str(manifest),
+                    "expires_at": receipt["expires_at"],
+                }
+            else:
+                clear_publish_dry_run(manifest)
+            _json(result)
         elif args.command == "run-linker":
             result = run_linker(config, dry_run=args.dry_run)
             _json(result if args.full else _compact_linker_payload(result))
@@ -442,6 +482,13 @@ def main(argv: list[str] | None = None) -> int:
                 args.title,
                 raw_file=_path(args.raw_file) if args.raw_file else None,
             )
+            if args.raw_file:
+                artifact_report = validate_note_artifacts(
+                    _path(args.content).read_text(encoding="utf-8"),
+                    raw_file=_path(args.raw_file),
+                    artifact_dir=config.artifact_dir,
+                )
+                report["artifact_validation"] = artifact_report
             _json(report)
             if report["errors"]:
                 return EXIT_VALIDATION
@@ -463,9 +510,10 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "fix-wiki":
             if args.apply and args.dry_run:
                 raise ValidationError("Use either --apply or --dry-run, not both")
+            effective_apply = args.apply and not args.dry_run
             report = fix_wiki_health(
                 config,
-                apply=args.apply and not args.dry_run,
+                apply=effective_apply,
                 backup=args.backup,
                 backup_retention_days=args.backup_retention_days,
                 backup_max_per_file=args.backup_max_per_file,
@@ -473,7 +521,22 @@ def main(argv: list[str] | None = None) -> int:
             _json(report)
             if report.get("write_error_count", 0):
                 return EXIT_IO
-            if report["error_count"] or report.get("graph_error_count", 0) or report.get("taxonomy_action_required"):
+            hygiene_cleanup = report.get("hygiene_cleanup")
+            if isinstance(hygiene_cleanup, dict) and hygiene_cleanup.get("error_count", 0):
+                return EXIT_IO
+            if not effective_apply:
+                if report.get("taxonomy_action_required") or report.get("human_decision_required"):
+                    return EXIT_VALIDATION
+                return EXIT_OK
+            if report.get("status") == "failed":
+                return EXIT_IO
+            if (
+                report["error_count"]
+                or report.get("graph_error_count", 0)
+                or report.get("taxonomy_action_required")
+                or report.get("requires_llm_rewrite_count", 0)
+                or report.get("human_decision_required")
+            ):
                 return EXIT_VALIDATION
             linker_apply = report.get("linker_apply")
             if isinstance(linker_apply, dict) and linker_apply.get("returncode", 0) != 0:

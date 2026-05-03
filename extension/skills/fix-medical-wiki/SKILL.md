@@ -45,9 +45,12 @@ canônico de notas Wiki, reescritas necessárias e grafo.
 
    Se o usuário passar `--wiki-dir`, `MED_WIKI_DIR` ou um caminho de Wiki, use
    esse destino.
-3. Resuma `file_count`, `changed_count`, `written_count`, `error_count`,
-   `taxonomy_action_required`, `taxonomy_issue_count`, `graph_error_count`,
-   `write_error_count`, `requires_llm_rewrite_count`,
+3. Resuma `status`, `summary`, `total_changed_count`, `file_count`,
+   `changed_count`, `written_count`, `error_count`,
+   `taxonomy_action_required`, `taxonomy_issue_count`,
+   `taxonomy_applied_move_count`, `graph_error_count`, `write_error_count`,
+   `requires_llm_rewrite_count`, `hygiene_after.bak_or_rewrite`,
+   `hygiene_after.empty_dirs`, `next_command`, `rollback_command`,
    `linker_dry_run.links_planned`, `linker_dry_run.links_rewritten`,
    `blocker_resolution`, `backup_policy` e `backup_cleanup`. Quando uma mudança
    vier só de YAML,
@@ -62,20 +65,17 @@ canônico de notas Wiki, reescritas necessárias e grafo.
    mostre poucos exemplos de `write_errors`, explique que o linker real foi
    pulado com `linker_skipped_reason: write_errors` e peça liberar iCloud,
    Obsidian, antivírus ou outro processo antes de retentar.
-4. Depois do fix determinístico aplicado, leia `taxonomy_audit`, `style_audit`,
-   `graph_fix`, `graph_audit`, `linker_dry_run`, `linker_apply` e
-   `graph_audit_final` no JSON retornado. Se `linker_skipped_reason` for
-   `graph_blockers`, `taxonomy_action_required` ou `blocker_resolution`, não
-   pare como se fosse resultado final: leia `blocker_resolution.groups`, execute
-   a rota de resolução e repita `fix-wiki --apply --backup --json`. Se
+4. Depois do fix determinístico aplicado, leia `taxonomy_initial_plan`,
+   `taxonomy_apply`, `taxonomy_audit`, `style_audit`, `graph_fix`,
+   `graph_audit`, `linker_dry_run`, `linker_apply`, `graph_audit_final` e
+   `final_validation` no JSON retornado. O `fix-wiki` já aplica movimentos
+   determinísticos de taxonomia antes do linker; não rode `taxonomy-migrate`
+   manualmente para casos já cobertos por `taxonomy_apply`.
+5. Repita o ciclo apenas se `next_command` vier preenchido. Se
+   `human_decision_required=true`, pare e mostre `human_decisions`. Se
    `graph_fix.duplicates` ou `blocker_resolution` trouxer
    `duplicate_merge_required`, trate como decisão clínica/humana; não peça a
    outro agente para apagar uma das notas sem revisar conteúdo.
-5. Repita o ciclo até estabilizar: se uma rodada aplicar mudanças, reescritas,
-   taxonomia, blocker_resolution ou linker, rode `fix-wiki --apply --backup
-   --json` novamente após o subpasso correspondente. Encerre só quando não
-   houver mudanças determinísticas pendentes e os bloqueios restantes forem
-   decisões clínicas explicitamente listadas.
 6. Se qualquer relatório exigir reescrita LLM, planeje automaticamente:
 
    ```bash
@@ -114,20 +114,16 @@ canônico de notas Wiki, reescritas necessárias e grafo.
 
     Isso revalida estilo e roda o workflow de grafo/linker em cima do conteúdo
     reescrito.
-11. Se `taxonomy_action_required` for true, resolva dentro deste mesmo workflow
-    usando `taxonomy-migrate`, nunca movimentos manuais:
-
-    ```bash
-    uv run python "<med_ops.py>" taxonomy-migrate --dry-run --plan-output <plano.json>
-    ```
-
-    Se o plano não tiver blockers, aplique com `taxonomy-migrate --apply --plan
-    <plano.json> --receipt <recibo.json>`, depois rode `fix-wiki --apply
-    --backup --json` novamente. Rollback deve usar o recibo.
-12. Política de backup: o `fix-wiki` mantém por padrão no máximo 3 backups por
-    nota e remove backups com mais de 14 dias. Use `--backup-max-per-file` e
-    `--backup-retention-days` apenas se o usuário pedir outra retenção. Sempre
-    resuma `backup_cleanup.deleted_count`.
+11. Se `taxonomy_action_required` ainda for true depois de `fix-wiki --apply`,
+    os movimentos seguros já foram aplicados e a pendência restante exige
+    revisão humana/semântica. Use `human_decisions`, `blocker_resolution.groups`
+    e `rollback_command` se a migração aplicada precisar ser revertida.
+12. Política de backup: o `fix-wiki` arquiva `.bak` e `.rewrite` fora do vault
+    em `~/.gemini/backup_archive/fix-wiki/<data>/<run_id>/...`. Sempre resuma
+    `hygiene_after.bak_or_rewrite`, `hygiene_after.empty_dirs` e
+    `backup_cleanup.archived_count`. O campo
+    `backup_cleanup.deleted_count` continua existindo por compatibilidade, mas
+    backups não devem permanecer no vault.
 13. Responda usando o contrato de saída: status emoji, contagens, arquivos
     alterados, notas reescritas, links inseridos, backups criados, blockers de
     grafo, problemas de hierarquia e próximas ações.
@@ -141,4 +137,5 @@ canônico de notas Wiki, reescritas necessárias e grafo.
 - Não escreva manualmente sobre a Wiki; use `fix-wiki` ou
   `apply-style-rewrite`.
 - Não mova pastas manualmente; migração de hierarquia é sempre
-  `taxonomy-migrate` com plano, recibo e rollback.
+  `taxonomy-migrate` com plano, recibo e rollback, orquestrada pelo
+  `fix-wiki` quando o destino for determinístico.

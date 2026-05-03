@@ -8,34 +8,8 @@
             "name": "mednotes-ensure-anki",
             "type": "command",
             "command": "node \"${extensionPath}${/}scripts${/}hooks${/}mednotes_hook.mjs\" ensure-anki-before",
-            "timeout": 30000,
-            "description": "Runs a bounded Anki preflight before Anki MCP tool use."
-          }
-        ]
-      },
-      {
-        "matcher": "run_shell_command",
-        "hooks": [
-          {
-            "name": "mednotes-med-ops-guard",
-            "type": "command",
-            "command": "node \"${extensionPath}${/}scripts${/}hooks${/}mednotes_hook.mjs\" med-ops-before",
-            "timeout": 5000,
-            "description": "Blocks unsafe med_ops publish calls before shell execution."
-          }
-        ]
-      }
-    ],
-    "AfterTool": [
-      {
-        "matcher": "run_shell_command",
-        "hooks": [
-          {
-            "name": "mednotes-med-ops-audit",
-            "type": "command",
-            "command": "node \"${extensionPath}${/}scripts${/}hooks${/}mednotes_hook.mjs\" med-ops-after",
-            "timeout": 5000,
-            "description": "Records successful med_ops dry-runs and invalidates receipts after publish."
+            "timeout": 10000,
+            "description": "Optionally starts Anki before Anki MCP tool use when MEDNOTES_ANKI_AUTO_START=1."
           }
         ]
       }

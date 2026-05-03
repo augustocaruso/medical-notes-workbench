@@ -6,6 +6,15 @@ Use this module, or the narrower ``wiki.*`` modules, for Python imports.
 from __future__ import annotations
 
 from wiki.agents import plan_subagents
+from wiki.artifacts import (
+    ARTIFACT_HTML_MANIFEST_SCHEMA,
+    ARTIFACT_HTML_VALIDATION_SCHEMA,
+    chat_id_from_raw,
+    discover_artifact_manifests,
+    required_artifacts_for_raw,
+    validate_artifact_batch,
+    validate_note_artifacts,
+)
 from wiki.common import (
     EXIT_IO,
     EXIT_LINKER,
@@ -43,6 +52,12 @@ from wiki.coverage import (
 )
 from wiki.graph_fixes import GRAPH_FIX_SCHEMA, fix_wiki_graph
 from wiki.health import fix_wiki_health
+from wiki.hygiene import (
+    WIKI_HYGIENE_CLEANUP_SCHEMA,
+    WIKI_HYGIENE_SCHEMA,
+    cleanup_wiki_hygiene,
+    collect_wiki_hygiene,
+)
 from wiki.linking import graph_audit, run_linker
 from wiki.note_plan import (
     TRIAGE_NOTE_PLAN_SCHEMA,
@@ -56,6 +71,13 @@ from wiki.publish import (
     resolve_collision,
     stage_note,
     write_new_note,
+)
+from wiki.publish_receipts import (
+    PUBLISH_DRY_RUN_RECEIPTS_SCHEMA,
+    clear_publish_dry_run,
+    publish_receipts_path,
+    record_publish_dry_run,
+    require_publish_dry_run,
 )
 from wiki.raw_chats import (
     BACKUP_CLEANUP_SCHEMA,
@@ -114,11 +136,16 @@ __all__ = [
     "EXIT_VALIDATION",
     "MIGRATION_PLAN_SCHEMA",
     "MIGRATION_RECEIPT_SCHEMA",
+    "PUBLISH_DRY_RUN_RECEIPTS_SCHEMA",
     "RAW_COVERAGE_SCHEMA",
+    "ARTIFACT_HTML_MANIFEST_SCHEMA",
+    "ARTIFACT_HTML_VALIDATION_SCHEMA",
     "TRIAGE_NOTE_PLAN_SCHEMA",
     "SUBAGENT_PLAN_SCHEMA",
     "BLOCKER_RESOLUTION_SCHEMA",
     "WIKI_HEALTH_FIX_SCHEMA",
+    "WIKI_HYGIENE_CLEANUP_SCHEMA",
+    "WIKI_HYGIENE_SCHEMA",
     "GRAPH_FIX_SCHEMA",
     "BACKUP_CLEANUP_SCHEMA",
     "CollisionError",
@@ -136,7 +163,12 @@ __all__ = [
     "apply_taxonomy_migration",
     "atomic_write_text",
     "canonical_taxonomy_tree",
+    "chat_id_from_raw",
+    "clear_publish_dry_run",
+    "cleanup_wiki_hygiene",
+    "collect_wiki_hygiene",
     "create_backup",
+    "discover_artifact_manifests",
     "fix_note_style_file",
     "fix_wiki_health",
     "fix_wiki_graph",
@@ -152,13 +184,17 @@ __all__ = [
     "plan_publish_batch",
     "plan_subagents",
     "publish_batch",
+    "publish_receipts_path",
     "prune_backup_files",
     "raw_summary",
     "read_note_meta",
+    "record_publish_dry_run",
+    "required_artifacts_for_raw",
     "resolve_collision",
     "resolve_config",
     "resolve_target_for_note",
     "resolve_taxonomy",
+    "require_publish_dry_run",
     "rollback_taxonomy_migration",
     "run_linker",
     "safe_title",
@@ -171,7 +207,9 @@ __all__ = [
     "taxonomy_tree",
     "update_frontmatter",
     "validate_config",
+    "validate_artifact_batch",
     "validate_note_style_file",
+    "validate_note_artifacts",
     "validate_raw_coverage",
     "validate_raw_coverage_structure",
     "validate_wiki_note_contract",

@@ -7,9 +7,11 @@ import unicodedata
 from pathlib import Path
 from typing import Any
 
-from wiki.common import SUBAGENT_PLAN_SCHEMA, ValidationError
+from wiki.artifacts import discover_artifact_manifests
+from wiki.common import SUBAGENT_PLAN_SCHEMA, MedOpsError, ValidationError
 from wiki.config import MedConfig
-from wiki.note_plan import note_plan_summary, parse_triage_note_plan
+from wiki.link_terms import normalize_key
+from wiki.note_plan import CREATE_NOTE_ACTION, note_plan_summary, parse_triage_note_plan
 from wiki.raw_chats import list_by_status, read_note_meta
 from wiki.style import validate_wiki_style
 
@@ -26,6 +28,190 @@ def _slug(value: str) -> str:
 
 def _chunked(items: list[dict[str, Any]], size: int) -> list[list[dict[str, Any]]]:
     return [items[index : index + size] for index in range(0, len(items), size)]
+
+
+def _wiki_note_target_index(wiki_dir: Path) -> dict[str, list[str]]:
+    targets: dict[str, list[str]] = {}
+    if not wiki_dir.exists():
+        return targets
+    for path in sorted(wiki_dir.rglob("*.md"), key=lambda item: item.as_posix()):
+        if not path.is_file() or path.name.startswith("."):
+            continue
+        try:
+            display = path.relative_to(wiki_dir).as_posix()
+        except ValueError:
+            display = str(path)
+        targets.setdefault(normalize_key(path.stem), []).append(display)
+    return targets
+
+
+def _planned_create_targets(note_plan: dict[str, Any]) -> list[dict[str, str]]:
+    targets: list[dict[str, str]] = []
+    for item in note_plan.get("items", []):
+        if item.get("action") != CREATE_NOTE_ACTION:
+            continue
+        title = str(item.get("staged_title") or item.get("title") or "").strip()
+        if not title:
+            continue
+        targets.append(
+            {
+                "id": str(item.get("id") or "").strip(),
+                "title": title,
+                "target_key": normalize_key(title),
+            }
+        )
+    return targets
+
+
+def _duplicate_next_action() -> str:
+    return (
+        "Revise o note_plan antes de arquitetura: converta duplicatas para "
+        "covered_by_existing ou consolide fontes em um unico create_note."
+    )
+
+
+def _plan_architect_subagents(
+    config: MedConfig,
+    spec: dict[str, Any],
+    rows: list[dict[str, Any]],
+    *,
+    total_available_count: int,
+    concurrency: int,
+    temp_root: Path,
+    limit: int | None,
+) -> dict[str, Any]:
+    existing_targets = _wiki_note_target_index(config.wiki_dir)
+    parsed_items: list[dict[str, Any]] = []
+    blocked_items: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    for index, row in enumerate(rows, start=1):
+        raw_file = str(row["path"])
+        raw_key = str(Path(raw_file).expanduser())
+        if raw_key in seen:
+            continue
+        seen.add(raw_key)
+        work_id = f"architect-{index:03d}-{_slug(Path(raw_file).stem)}"
+        item: dict[str, Any] = {
+            "work_id": work_id,
+            "agent": spec["agent"],
+            "item_type": spec["item_type"],
+            "raw_file": raw_file,
+            "owner_key": raw_key,
+            "titulo_triagem": row.get("titulo_triagem", ""),
+            "fonte_id": row.get("fonte_id", ""),
+        }
+        try:
+            raw_plan = read_note_meta(Path(raw_file)).get("note_plan", "")
+            if not raw_plan:
+                raise ValidationError("Raw chat missing triage note_plan; rerun triage with --note-plan")
+            note_plan = parse_triage_note_plan(raw_plan, Path(raw_file))
+        except ValidationError as exc:
+            item["blocked_reason"] = "missing_or_invalid_note_plan"
+            item["note_plan_error"] = str(exc)
+            blocked_items.append(item)
+            continue
+
+        item["note_plan"] = note_plan
+        item.update(note_plan_summary(note_plan))
+        targets = _planned_create_targets(note_plan)
+        duplicate_targets: list[dict[str, Any]] = []
+        for target in targets:
+            matches = existing_targets.get(target["target_key"], [])
+            if matches:
+                duplicate_targets.append(
+                    {
+                        **target,
+                        "conflict_type": "existing_wiki_note",
+                        "existing_paths": matches[:5],
+                    }
+                )
+        parsed_items.append({"item": item, "targets": targets, "duplicate_targets": duplicate_targets})
+
+    planned_by_key: dict[str, list[dict[str, str]]] = {}
+    for parsed in parsed_items:
+        item = parsed["item"]
+        for target in parsed["targets"]:
+            planned_by_key.setdefault(target["target_key"], []).append(
+                {
+                    "raw_file": str(item["raw_file"]),
+                    "work_id": str(item["work_id"]),
+                    "id": target["id"],
+                    "title": target["title"],
+                }
+            )
+
+    work_items: list[dict[str, Any]] = []
+    for parsed in parsed_items:
+        item = parsed["item"]
+        duplicate_targets = list(parsed["duplicate_targets"])
+        for target in parsed["targets"]:
+            planned_matches = planned_by_key.get(target["target_key"], [])
+            if len(planned_matches) > 1:
+                duplicate_targets.append(
+                    {
+                        **target,
+                        "conflict_type": "planned_in_batch",
+                        "planned_matches": planned_matches,
+                    }
+                )
+        if duplicate_targets:
+            item["blocked_reason"] = "duplicate_create_note_targets"
+            item["duplicate_targets"] = duplicate_targets
+            item["next_action"] = _duplicate_next_action()
+            blocked_items.append(item)
+            continue
+
+        try:
+            artifact_manifests = discover_artifact_manifests(Path(item["raw_file"]), artifact_dir=config.artifact_dir)
+        except MedOpsError as exc:
+            item["blocked_reason"] = "missing_or_invalid_artifact_manifest"
+            item["artifact_manifest_error"] = str(exc)
+            blocked_items.append(item)
+            continue
+        item["artifact_manifest_count"] = len(artifact_manifests)
+        item["artifact_count"] = sum(len(manifest.artifacts) for manifest in artifact_manifests)
+        if artifact_manifests:
+            item["artifact_manifests"] = [manifest.to_json() for manifest in artifact_manifests]
+        item["temp_dir"] = str(temp_root / item["work_id"])
+        work_items.append(item)
+
+    batches = [
+        {"batch": batch_index, "max_concurrency": concurrency, "items": batch}
+        for batch_index, batch in enumerate(_chunked(work_items, concurrency), start=1)
+    ]
+    return {
+        "schema": SUBAGENT_PLAN_SCHEMA,
+        "phase": "architect",
+        "agent": spec["agent"],
+        "unit": spec["unit"],
+        "max_concurrency": concurrency,
+        "item_count": len(work_items),
+        "total_available_count": total_available_count,
+        "blocked_item_count": len(blocked_items),
+        "blocked_items": blocked_items,
+        "limit": limit,
+        "truncated": limit is not None and len(rows) < total_available_count,
+        "parallel_safe": len(work_items) > 1,
+        "work_items": work_items,
+        "batches": batches,
+        "rules": [
+            "Spawn at most one subagent per work_item.raw_file.",
+            "Never spawn multiple subagents for the same raw chat or generated note.",
+            "Do not split one raw chat across multiple med-knowledge-architect agents.",
+            "Architect work_items must follow the triage-authored note_plan exactly.",
+            "Architect planning blocks create_note targets that duplicate existing Wiki notes or another planned raw chat after accent/case normalization.",
+            "Every architect result must include an exhaustive raw coverage inventory before staging.",
+            "If artifact_manifests is non-empty, the staged note group for that raw chat must cover every listed HTML artifact; each note carrying one must include embed/link/provenance.",
+            "Do not launch more subagents than item_count or max_concurrency.",
+            "If item_count is 0 or 1, there is no useful fan-out for this phase.",
+            "When limit is set, spawn only the returned work_items",
+            "Rerun planning after serial consolidation before launching more.",
+            "Run serial consolidation after each batch returns.",
+        ],
+        "serial_after": spec["serial_after"],
+        "canonical_parent_commands": spec["canonical_parent_commands"],
+    }
 
 
 def plan_subagents(
@@ -176,6 +362,18 @@ def plan_subagents(
     total_available_count = len(rows)
     if limit is not None:
         rows = rows[:limit]
+    if phase == "architect":
+        if temp_root is None:
+            raise ValidationError("Internal error: architect temp_root was not resolved")
+        return _plan_architect_subagents(
+            config,
+            spec,
+            rows,
+            total_available_count=total_available_count,
+            concurrency=concurrency,
+            temp_root=temp_root,
+            limit=limit,
+        )
     work_items: list[dict[str, Any]] = []
     blocked_items: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -208,6 +406,17 @@ def plan_subagents(
                 continue
             item["note_plan"] = note_plan
             item.update(note_plan_summary(note_plan))
+            try:
+                artifact_manifests = discover_artifact_manifests(Path(raw_file), artifact_dir=config.artifact_dir)
+            except MedOpsError as exc:
+                item["blocked_reason"] = "missing_or_invalid_artifact_manifest"
+                item["artifact_manifest_error"] = str(exc)
+                blocked_items.append(item)
+                continue
+            item["artifact_manifest_count"] = len(artifact_manifests)
+            item["artifact_count"] = sum(len(manifest.artifacts) for manifest in artifact_manifests)
+            if artifact_manifests:
+                item["artifact_manifests"] = [manifest.to_json() for manifest in artifact_manifests]
         if temp_root is not None:
             item["temp_dir"] = str(temp_root / work_id)
         work_items.append(item)
@@ -237,6 +446,7 @@ def plan_subagents(
             "Do not split one raw chat across multiple med-knowledge-architect agents.",
             "Architect work_items must follow the triage-authored note_plan exactly.",
             "Every architect result must include an exhaustive raw coverage inventory before staging.",
+            "If artifact_manifests is non-empty, the staged note group for that raw chat must cover every listed HTML artifact; each note carrying one must include embed/link/provenance.",
             "Do not launch more subagents than item_count or max_concurrency.",
             "If item_count is 0 or 1, there is no useful fan-out for this phase.",
             "When limit is set, spawn only the returned work_items",

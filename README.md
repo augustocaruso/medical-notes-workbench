@@ -27,7 +27,10 @@ Runbooks detalhados:
 
 `/mednotes:process-chats` exige `note_plan` exaustivo já na triagem e cobertura
 derivada desse plano antes de publicar, para que chats longos gerem todas as
-notas duráveis em vez de um subconjunto representativo.
+notas duráveis em vez de um subconjunto representativo. Quando o chat fonte tem
+manifesto `gemini-md-export.artifact-html-manifest.v1` com HTML interativo,
+o grupo de notas staged daquele raw chat precisa listar e embeber esses
+arquivos como HTML isolado antes de `publish-batch`.
 
 Referências:
 

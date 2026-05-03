@@ -19,6 +19,8 @@ quando solicitado.
 - `medical-notes-workbench.subagent-plan.v1`
 - `medical-notes-workbench.triage-note-plan.v1`
 - `medical-notes-workbench.raw-coverage.v1`
+- `gemini-md-export.artifact-html-manifest.v1`
+- `medical-notes-workbench.artifact-html-validation.v1`
 - `medical-notes-workbench.taxonomy-migration-plan.v1`
 - `medical-notes-workbench.taxonomy-migration-receipt.v1`
 - `medical-notes-workbench.wiki-health-fix.v1`
@@ -26,6 +28,9 @@ quando solicitado.
 - `medical-notes-workbench.wiki-graph-fix.v1`
 - `medical-notes-workbench.wiki-graph-audit.v1`
 - `medical-notes-workbench.backup-cleanup.v1`
+- `medical-notes-workbench.wiki-hygiene.v1`
+- `medical-notes-workbench.wiki-hygiene-cleanup.v1`
+- `medical-notes-workbench.fix-wiki-run-state.v1`
 - `medical-notes-workbench.flashcard-sources.v1`
 - `medical-notes-workbench.flashcard-write-plan.v1`
 - `medical-notes-workbench.flashcard-report.v1`
@@ -42,6 +47,28 @@ ou mais escritas falharam mesmo após retry local, normalmente por lock de
 Obsidian, iCloud Drive, antivírus ou outro processo. Em `fix-wiki`, qualquer
 erro desse tipo pula o linker real com `linker_skipped_reason: write_errors` e
 retorna código de IO.
+
+## Fix-Wiki Orquestrado
+
+`medical-notes-workbench.wiki-health-fix.v1` é o contrato do `fix-wiki`.
+Além dos relatórios detalhados de estilo, grafo, linker e taxonomia, ele deve
+expor campos operacionais estáveis para agentes:
+
+- `status`: `completed`, `completed_with_warnings`, `blocked` ou `failed`;
+- `summary`: frase curta sobre o resultado;
+- `next_command`, `resume_command` e `rollback_command`;
+- `human_decision_required` e `human_decisions`;
+- `hygiene_before`, `hygiene_pre_cleanup`, `hygiene_cleanup` e
+  `hygiene_after`;
+- `final_validation.graph`, `final_validation.hygiene` e
+  `final_validation.taxonomy`;
+- `compact_report_path`, `full_report_path` e `run_state_path`.
+
+Movimentos determinísticos de taxonomia são planejados e aplicados pelo próprio
+`fix-wiki --apply --backup --json` usando o mesmo mecanismo de
+`taxonomy-migrate`, com recibo e `rollback_command`. Backups `.bak` e arquivos
+`.rewrite` não devem permanecer dentro do vault; eles são arquivados fora da
+Wiki em `~/.gemini/backup_archive/fix-wiki/<data>/<run_id>/`.
 
 ## Resolução De Blockers
 
@@ -84,3 +111,33 @@ de `existing_title`.
 `med-knowledge-architect` antes de staged notes, derivado do `note_plan` da
 triagem. Campos mínimos: `schema`, `raw_file`, `exhaustive: true` e `items`.
 Itens `create_note` devem bater com o `note_plan` e com os títulos staged.
+
+## Artefatos HTML Do Gemini
+
+`gemini-md-export.artifact-html-manifest.v1` é produzido pelo
+`gemini-md-export` quando um chat possui artefatos interativos exportados como
+HTML isolado. O workbench trata `savedCount > 0` como insumo obrigatório:
+`plan-subagents --phase architect`, `validate-note`, `stage-note` e
+`publish-batch` descobrem manifests `artifact-<chatId>-manifest.json` pelo
+`fonte_id` do raw chat. A busca usa `artifact_dir` quando configurado e também
+locais próximos do raw chat.
+
+O grupo de notas staged derivado de um raw chat com artefatos precisa incluir,
+no conjunto, cada arquivo `.html` listado no manifesto. A nota que carregar um
+artefato deve incluir:
+
+- um `<iframe src="file:///...">` apontando para o arquivo HTML isolado;
+- um link Markdown auditável para o mesmo `file:///...`;
+- um comentário `gemini-artifact` com `chat_id`, caminho do `manifest`, caminho
+  do `file` e `sha256`.
+
+O Markdown nunca deve inlinear o HTML capturado. Se o arquivo faltar, não for
+`.html`, tiver hash diferente, ou o grupo de notas staged não declarar todos os
+artefatos, o workflow bloqueia antes de considerar o raw chat pronto.
+
+`medical-notes-workbench.artifact-html-validation.v1` aparece no JSON de
+`validate-note`, `stage-note` e no plano de `publish-batch --dry-run` para
+resumir `required`, contagem de manifests e arquivos, caminhos usados e hashes.
+Em `validate-note`/`stage-note`, ausência de um artefato na nota individual é
+informativa; o bloqueio de cobertura completa acontece no batch do
+`publish-batch`.

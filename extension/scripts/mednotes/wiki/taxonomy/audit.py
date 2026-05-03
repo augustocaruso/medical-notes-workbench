@@ -15,6 +15,10 @@ from wiki.taxonomy.schema import (
     canonical_taxonomy_tree,
 )
 
+IGNORED_TOP_LEVEL_DIRS = {"attachments", "_Mock_Embeds"}
+IGNORED_ROOT_NOTES = {"_Índice_Medicina.md"}
+
+
 def taxonomy_tree(wiki_dir: Path, max_depth: int = 0) -> dict[str, Any]:
     if not wiki_dir.exists():
         raise MissingPathError(f"Wiki dir not found: {wiki_dir}")
@@ -74,6 +78,8 @@ def taxonomy_audit(wiki_dir: Path) -> dict[str, Any]:
     destinations: dict[str, list[str]] = {}
 
     for directory in top_level_dirs:
+        if directory.name in IGNORED_TOP_LEVEL_DIRS:
+            continue
         folded = _fold_taxonomy_segment(directory.name)
         rel_source = directory.relative_to(wiki_dir).as_posix()
         if folded in roots:
@@ -117,12 +123,14 @@ def taxonomy_audit(wiki_dir: Path) -> dict[str, Any]:
         rel = path.relative_to(wiki_dir)
         if any(part.startswith(".") for part in rel.parts):
             continue
+        if len(rel.parts) == 1 and path.name in IGNORED_TOP_LEVEL_DIRS:
+            continue
         by_folded.setdefault(_fold_taxonomy_segment(path.name), []).append(rel.as_posix())
     for folded, paths in sorted(by_folded.items()):
         if len(paths) > 1:
             duplicate_directory_groups.append({"key": folded, "paths": paths})
 
-    root_notes = sorted(path.name for path in wiki_dir.glob("*.md") if path.is_file())
+    root_notes = sorted(path.name for path in wiki_dir.glob("*.md") if path.is_file() and path.name not in IGNORED_ROOT_NOTES)
     return {
         "wiki_dir": str(wiki_dir),
         "canonical_taxonomy": canonical_taxonomy_tree(),

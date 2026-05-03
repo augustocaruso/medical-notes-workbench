@@ -90,3 +90,7 @@ raw_dir = ""
 wiki_dir = ""
 catalog_path = "~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json"
 linker_path = ""
+# Opcional: pasta onde o gemini-md-export salva manifests/HTML de artefatos.
+# Quando vazio, med_ops procura manifests artifact-<chatId>-manifest.json junto
+# ao raw chat e em subpastas artifacts proximas.
+artifact_dir = ""

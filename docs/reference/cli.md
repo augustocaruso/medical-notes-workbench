@@ -27,23 +27,35 @@ Todos os exemplos assumem `uv run python`. Em instalações da extensão, config
 ## Wiki operations
 
 - `uv run python scripts/mednotes/med_ops.py validate`
+- Passe `--artifact-dir <dir>` quando os manifests HTML do `gemini-md-export`
+  ficarem fora do `Chats_Raw`; caso contrário o CLI procura
+  `artifact-<chatId>-manifest.json` junto ao raw chat e em pastas `artifacts`
+  próximas.
 - `uv run python scripts/mednotes/wiki_tree.py --max-depth 4 --audit` (JSON)
 - `uv run python scripts/mednotes/wiki_tree.py --max-depth 4 --audit --format text` (árvore legível)
 - `uv run python scripts/mednotes/med_ops.py list-pending [--summary] [--limit N]`
 - `uv run python scripts/mednotes/med_ops.py list-triados [--summary] [--limit N]`
 - `uv run python scripts/mednotes/med_ops.py plan-subagents --phase triage|architect|style-rewrite [--limit N] [--max-concurrency N]`
-  (`triage`/`architect`: default 5; `style-rewrite`: default 3)
+  (`triage`/`architect`: default 5; `style-rewrite`: default 3; `architect`
+  bloqueia `create_note` duplicado antes de lançar subagents)
 - `uv run python scripts/mednotes/med_ops.py triage --note-plan note-plan.json`
 - `uv run python scripts/mednotes/med_ops.py discard`
 - `uv run python scripts/mednotes/med_ops.py validate-note|fix-note`
 - `uv run python scripts/mednotes/med_ops.py stage-note --coverage coverage.json`
 - `uv run python scripts/mednotes/med_ops.py publish-batch --dry-run`
 - `uv run python scripts/mednotes/med_ops.py publish-batch`
-  (`publish-batch` exige cobertura por padrão; `--skip-coverage` é override de
-  emergência/desenvolvimento)
+  (`publish-batch` real exige recibo recente do dry-run para o mesmo manifest,
+  cwd, caminhos resolvidos e opcoes; `publish-batch` tambem exige cobertura por
+  padrão e bloqueia alvos Obsidian duplicados por normalização de acento/caixa;
+  `--skip-coverage` é override de emergência/desenvolvimento)
 - `uv run python scripts/mednotes/med_ops.py validate-wiki`
 - `uv run python scripts/mednotes/med_ops.py fix-wiki --dry-run --json`
 - `uv run python scripts/mednotes/med_ops.py fix-wiki --apply --backup --json`
+  (`fix-wiki --apply` orquestra migrações determinísticas de taxonomia,
+  style/YAML fix, graph fix, linker quando desbloqueado e higiene final; a
+  saída inclui `status`, `next_command`, `human_decision_required`,
+  `rollback_command` e caminhos para relatórios em
+  `~/.gemini/medical-notes-workbench/runs/<run_id>/`)
 - `uv run python scripts/mednotes/med_ops.py taxonomy-canonical|taxonomy-tree|taxonomy-audit|taxonomy-resolve|taxonomy-migrate`
 - `uv run python scripts/mednotes/med_ops.py graph-audit|run-linker [--full]`
 

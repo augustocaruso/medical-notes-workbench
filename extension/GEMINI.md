@@ -52,12 +52,18 @@ operational JSON is for agents, hooks, and tests unless the user asks for it.
   (`medical-notes-workbench.triage-note-plan.v1`) plus a matching coverage
   inventory (`medical-notes-workbench.raw-coverage.v1`) attached as
   `coverage_path`.
+- Gemini interactive artifacts exported as
+  `gemini-md-export.artifact-html-manifest.v1` are mandatory when savedCount is
+  greater than zero: each raw-chat note group must cover every `.html` file; the
+  note carrying an artifact must iframe/link it and preserve a
+  `gemini-artifact` provenance comment. Never paste captured HTML into Markdown.
 - Wiki_Medicina taxonomy is category folders only; `title` becomes the `.md`
   filename. Use the fixed 5 big areas from `knowledge/knowledge-architect.md`
   and the current tree from `scripts/mednotes/wiki_tree.py --max-depth 4 --audit --format text`.
-- `/mednotes:fix-wiki` repairs deterministic Wiki health issues; taxonomy
-  folder migrations, when needed, must go through `taxonomy-migrate` with plan,
-  receipt, and rollback.
+- `/mednotes:fix-wiki` repairs deterministic Wiki health issues in one cycle:
+  taxonomy moves with plan/receipt/rollback, style/YAML, graph fix, linker and
+  hygiene cleanup. If it returns `human_decision_required=true`, stop and show
+  the listed decisions.
 - Wiki_Medicina note style, taxonomy, related-note, and footer requirements live
   in `knowledge/knowledge-architect.md`; do not duplicate them from memory.
 - Flashcards use `/flashcards`, the global existing `anki-mcp` server, and

@@ -1,19 +1,7 @@
-import os from "node:os";
-import path from "node:path";
-
 export const ankiConnectUrl = (process.env.ANKI_CONNECT_URL || "http://127.0.0.1:8765").replace(/\/+$/, "");
 export const stdinTimeoutMs = clampInt(process.env.MEDNOTES_HOOK_STDIN_TIMEOUT_MS, 500, 100, 2000);
-export const ankiStartTimeoutMs = clampInt(process.env.MEDNOTES_ANKI_START_TIMEOUT_MS, 20000, 1000, 20000);
-export const publishDryRunTtlMs = clampInt(
-  process.env.MEDNOTES_PUBLISH_DRY_RUN_TTL_MS,
-  30 * 60 * 1000,
-  1000,
-  24 * 60 * 60 * 1000,
-);
-export const hookStateDir =
-  process.env.MEDNOTES_HOOK_STATE_DIR ||
-  path.join(os.homedir(), ".gemini", "medical-notes-workbench", "hooks");
-export const dryRunStateFile = path.join(hookStateDir, "med-ops-dry-runs.json");
+export const ankiStartTimeoutMs = clampInt(process.env.MEDNOTES_ANKI_START_TIMEOUT_MS, 8000, 1000, 15000);
+export const ankiAutoStart = /^(1|true|yes)$/i.test(process.env.MEDNOTES_ANKI_AUTO_START || "");
 
 export function clampInt(value, fallback, min, max) {
   const parsed = Number(value);
@@ -82,29 +70,4 @@ export function readPayload(timeoutMs = stdinTimeoutMs) {
     process.stdin.on("error", () => finish({}));
     process.stdin.resume();
   });
-}
-
-export function responseText(value) {
-  if (value == null) return "";
-  if (typeof value === "string") return value;
-  if (Array.isArray(value)) return value.map(responseText).filter(Boolean).join("\n");
-  if (typeof value === "object") {
-    return Object.values(value).map(responseText).filter(Boolean).join("\n");
-  }
-  return String(value);
-}
-
-export function toolSucceeded(payload) {
-  const response = payload?.tool_response || payload?.toolResponse || {};
-  if (response?.error) return false;
-  const text = responseText(response).toLowerCase();
-  if (/\bexit\s*code\s*[:=]\s*[1-9]/.test(text)) return false;
-  if (/\breturncode\s*["']?\s*[:=]\s*[1-9]/.test(text)) return false;
-  return true;
-}
-
-export function responseConfirmsDryRun(payload) {
-  const response = payload?.tool_response || payload?.toolResponse || {};
-  const text = responseText(response);
-  return /["']?dry_run["']?\s*:\s*true\b/i.test(text);
 }

@@ -28,12 +28,20 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
 
 - Nunca edite YAML/status de raw chats manualmente.
 - Nunca sobrescreva nota existente silenciosamente.
-- Sempre rode `publish-batch --dry-run` antes de `publish-batch` real.
+- Sempre rode `publish-batch --dry-run` antes de `publish-batch` real. O CLI
+  grava um recibo e bloqueia o publish se manifest, cwd, caminhos ou opcoes
+  mudarem.
 - Todo raw chat triado como medicina precisa de `note_plan` exaustivo
   `medical-notes-workbench.triage-note-plan.v1`; o architect deve derivar a
   cobertura `medical-notes-workbench.raw-coverage.v1` desse plano. O
   `publish-batch` bloqueia manifest sem `coverage_path`, raw sem `note_plan`,
-  cobertura divergente ou notas staged fora do plano.
+  cobertura divergente, notas staged fora do plano ou alvo Obsidian duplicado
+  por normalização de acento/caixa.
+- Se existir manifesto `gemini-md-export.artifact-html-manifest.v1` com
+  `savedCount > 0` para o `fonte_id` do raw chat, os HTMLs são obrigatórios:
+  o grupo de notas staged do raw chat deve cobrir todos os artefatos. A nota que
+  carregar um artefato deve iframe/linkar o arquivo e incluir comentário
+  `gemini-artifact` com `chat_id`, `manifest`, `file` e `sha256`.
 - Rode o workflow de grafo/linker uma única vez ao final do lote.
 - O agente principal consolida estado compartilhado em série: `triage`,
   `discard`, `stage-note`, catálogo, dry-run, publish e linker.
@@ -101,7 +109,10 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
    seguindo `batches`. Omita `--max-concurrency` para usar o default de 5, ou
    reduza para 2/3 em modo econômico. Passe `work_id`, `raw_file`, `temp_dir`,
    `note_plan`, taxonomia canônica, árvore real e snapshot do catálogo. Cada
-   architect escreve somente no próprio `temp_dir`.
+   architect escreve somente no próprio `temp_dir`. Se houver `blocked_items`
+   com `duplicate_create_note_targets`, não lance `med-knowledge-architect`;
+   revise a triagem para consolidar fontes ou marcar itens como
+   `covered_by_existing`.
    Use `canonical_parent_commands` do plano para validação, fix, staging,
    dry-run e publish; não invente nomes alternativos de flags.
    Cada architect deve escrever um `coverage.json` no `temp_dir` que corresponda
@@ -119,7 +130,10 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
    `fix-note` para erros determinísticos/remediáveis e, depois de uma reescrita
    LLM, como normalizador final. Isso inclui YAML variável gerado pelo agente: o
    fix deve reduzir o frontmatter da Wiki a `aliases`, `tags` e `images_*`, ou
-   removê-lo quando todos estiverem vazios.
+   removê-lo quando todos estiverem vazios. Se `artifact_manifests` veio no
+   work item, a validação individual só bloqueia HTML inlineado ou inclusão
+   parcial/inválida; a cobertura completa do grupo é bloqueada no
+   `publish-batch --dry-run`.
 9. Monte um único manifest para o lote atual apenas com `stage-note --coverage
    <coverage.json>`. O `stage-note` aceita vários raw chats no mesmo manifest e
    cria `batches` internamente; não crie um manifest por raw chat salvo se o
@@ -135,7 +149,7 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
     uv run python "<med_ops.py>" publish-batch --manifest <manifest.json> --dry-run
     ```
 
-    Revise colisões, destinos e `taxonomy_new_dirs`.
+    Revise colisões, duplicatas normalizadas, destinos e `taxonomy_new_dirs`.
 12. Acione `med-publish-guard` com o manifest e o dry-run. Publique apenas se
     ele retornar `approve`.
 13. Rode `publish-batch` real uma única vez para o mesmo manifest e, somente
@@ -166,6 +180,9 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
 - A primeira entrega de conteúdo é da triagem: o `note_plan` dirige todas as
   notas. Todos os itens `create_note` precisam aparecer na cobertura e no
   manifest; toda nota staged precisa estar no `note_plan`.
+- O planner de arquitetura bloqueia `create_note` duplicado contra a Wiki
+  existente ou contra outro raw chat do lote por normalização de acento/caixa;
+  esses bloqueios devem ser resolvidos antes de gastar tokens de architect.
 - Se houver 0 ou 1 item, use zero ou um subagent; não crie paralelismo artificial.
 - Quando `plan-subagents` retornar `truncated: true`, termine a fase atual antes
   de planejar o próximo lote; não misture itens fora do plano limitado.

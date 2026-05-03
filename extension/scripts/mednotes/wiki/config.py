@@ -28,6 +28,7 @@ class MedConfig:
     wiki_dir: Path
     linker_path: Path
     catalog_path: Path
+    artifact_dir: Path | None = None
 
 
 def _path(value: str | os.PathLike[str]) -> Path:
@@ -82,6 +83,11 @@ def resolve_config(args: argparse.Namespace) -> MedConfig:
         value = cli_value or os.getenv(env) or section.get(name) or default
         return _path(str(value))
 
+    def pick_optional(name: str, env: str) -> Path | None:
+        cli_value = getattr(args, name, None)
+        value = cli_value or os.getenv(env) or section.get(name)
+        return _path(str(value)) if value else None
+
     linker_value = getattr(args, "linker_path", None) or os.getenv("MED_LINKER_PATH") or section.get("linker_path")
     if linker_value:
         linker_path = _path(str(linker_value))
@@ -94,6 +100,7 @@ def resolve_config(args: argparse.Namespace) -> MedConfig:
         wiki_dir=pick("wiki_dir", "MED_WIKI_DIR", DEFAULT_WIKI_DIR),
         linker_path=linker_path,
         catalog_path=pick("catalog_path", "MED_CATALOG_PATH", DEFAULT_CATALOG_PATH),
+        artifact_dir=pick_optional("artifact_dir", "MED_ARTIFACT_DIR"),
     )
 
 
@@ -109,6 +116,8 @@ def validate_config(config: MedConfig) -> dict[str, Any]:
         "wiki_dir_exists": config.wiki_dir.exists(),
         "catalog_path": str(config.catalog_path),
         "catalog_path_exists": config.catalog_path.exists(),
+        "artifact_dir": str(config.artifact_dir) if config.artifact_dir else "",
+        "artifact_dir_exists": bool(config.artifact_dir and config.artifact_dir.exists()),
         "linker_path": str(config.linker_path),
         "linker_path_exists": config.linker_path.exists(),
     }

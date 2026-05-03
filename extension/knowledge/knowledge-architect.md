@@ -87,6 +87,33 @@ tags:
 Não substitua esse rodapé por URL absoluta local, deeplink do Obsidian,
 `Fonte`, `Original`, índice sem acento, ou qualquer outro texto.
 
+## Artefatos Interativos Do Gemini
+
+Quando o parent fornecer `artifact_manifests` de schema
+`gemini-md-export.artifact-html-manifest.v1`, cada HTML listado é insumo
+obrigatório do conjunto de notas daquele raw chat. Não cole o HTML no Markdown.
+Distribua os artefatos nas notas onde fizerem sentido; a nota que carregar um
+artefato deve incluir o arquivo como iframe e link auditável, preservando o
+`.html` isolado:
+
+```markdown
+## 🧬 Artefato Interativo
+<iframe src="file:///CAMINHO/DO/ARTEFATO.html" width="100%" height="820" loading="lazy"></iframe>
+
+[abrir artefato HTML](file:///CAMINHO/DO/ARTEFATO.html)
+
+<!-- gemini-artifact
+chat_id: <chatId>
+manifest: <artifact-manifest-path>
+file: <artifact-html-path>
+sha256: <hash>
+-->
+```
+
+Se algum artefato exigido pelo manifesto não puder ser incluído em nenhuma nota
+do grupo, bloqueie o raw chat e explique quais arquivos faltaram. Não tente
+contornar autenticação, cookies, sandbox, CORS ou permissões do navegador.
+
 ## 🇧🇷 Protocolo de Divergência (Brasil vs. Internacional)
 - **Regra de Ouro:** Se houver divergência entre o UpToDate e as Diretrizes Brasileiras, destaque ambas, mas sinalize qual a conduta esperada para provas brasileiras (ENARE/SES-DF).
 - **Nuances de Bancas:** Inclua avisos específicos sobre "pegadinhas" conhecidas das bancas prioritárias.
@@ -121,4 +148,9 @@ Distribuicao canonica: `1. Clínica Médica` inclui Cardiologia, Dermatologia, E
   exaustivamente todos os temas médicos duráveis do raw chat. Cada tema vira uma
   nota (`create_note`) ou recebe motivo explícito de já estar coberto/ser ruído;
   o architect segue esse plano, não um subconjunto representativo.
+- **Deduplicação antes da arquitetura:** `create_note` não pode duplicar outro
+  item por normalização de acento/caixa, nem duplicar nota já existente na Wiki
+  ou outro raw chat planejado no mesmo lote. Se `plan-subagents --phase
+  architect` retornar `duplicate_create_note_targets`, revise o `note_plan`
+  antes de lançar subagents.
 - **Ancoragem:** Todas as notas devem terminar com o link `[[_Índice_Medicina]]`.

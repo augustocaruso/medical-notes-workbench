@@ -57,7 +57,8 @@ Referências:
 - YAML de notas Wiki é canônico: preserve `aliases`, `tags` e metadados
   `images_*`; omita o bloco somente quando todos estiverem vazios.
 - Nunca edite YAML/status de raw chats manualmente; use `med_ops.py`.
-- Sempre rode `publish-batch --dry-run` antes de publish real.
+- Sempre rode `publish-batch --dry-run` antes de publish real; o CLI valida um
+  recibo recente do dry-run para o mesmo manifest/caminhos/opções.
 - `fix-wiki` deve resolver problemas determinísticos da Wiki; migração de
   pastas é sempre `taxonomy-migrate` com plano, recibo e rollback.
 - `link` não corrige estilo, YAML ou publicação.
@@ -67,6 +68,16 @@ Referências:
   (`medical-notes-workbench.triage-note-plan.v1`) e cobertura derivada dele
   (`medical-notes-workbench.raw-coverage.v1`); `publish-batch` não deve marcar
   chat como processado sem `note_plan`, `coverage_path` e notas staged batendo.
+- `publish-batch` deve bloquear alvos Obsidian duplicados por normalização de
+  acento/caixa, tanto contra a Wiki existente quanto dentro do mesmo manifest.
+- `plan-subagents --phase architect` deve bloquear `create_note` duplicado
+  antes de lançar architects, para evitar gastar tokens escrevendo nota repetida.
+- Artefatos interativos do Gemini exportados como
+  `gemini-md-export.artifact-html-manifest.v1` são obrigatórios quando
+  `savedCount > 0`: o grupo de notas derivado do raw chat deve cobrir todos os
+  `.html`; a nota que carregar um artefato deve iframe/linkar o arquivo e
+  incluir comentário `gemini-artifact` com `chat_id`, `manifest`, `file` e
+  `sha256`; nunca inlinear HTML capturado no Markdown.
 - `/flashcards` usa o MCP global `anki-mcp`, não cria comando local
   `/twenty_rules`, não adiciona tags Anki e marca tag Obsidian `anki` somente
   depois de sucesso real no Anki.

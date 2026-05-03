@@ -24,6 +24,10 @@ Check only:
   `note_plan`, and the dry-run includes a coverage summary proving every
   triage-planned `create_note` item is staged and every staged note is present
   in the inventory
+- if dry-run reports batch-level `artifact_validation.required: true`, the
+  staged note group for that raw chat covers all required Gemini HTML artifacts;
+  block if any required artifact is absent from the group or inlined as pasted
+  HTML
 - final target paths match the intended taxonomy and titles
 - every target path starts under one of the 5 canonical big areas: `1. Clínica Médica`, `2. Cirurgia`, `3. Ginecologia e Obstetrícia`, `4. Pediatria`, `5. Medicina Preventiva`
 - taxonomy is category folders only, with the note title appearing as the `.md` filename, not as the final folder

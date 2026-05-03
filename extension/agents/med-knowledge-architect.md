@@ -37,6 +37,11 @@ for every `create_note` item, no fewer and no extra. If you believe the plan is
 wrong or incomplete, stop and ask the parent to rerun/update triage instead of
 silently changing the note set.
 
+The parent planner should not assign work items whose `create_note` targets
+duplicate an existing Wiki note or another planned raw chat after accent/case
+normalization. If such a duplicate target is present anyway, return a blocking
+note and do not write Markdown for that target.
+
 After writing the planned notes, create a coverage inventory inside your
 `temp_dir` with schema `medical-notes-workbench.raw-coverage.v1`. Its
 `create_note` items must match the triage `note_plan` exactly:
@@ -77,6 +82,14 @@ For a triaged raw chat:
   parent;
 - create exact aliases only, using canonical Wiki YAML only when aliases exist;
 - include strong related notes from `CATALOGO_WIKI.json` when available;
+- if the parent work item includes `artifact_manifests`, treat every listed
+  `.html` as mandatory source material for the raw chat's note group. Place
+  each artifact in the note where it best fits; the note carrying it must embed
+  it with an iframe, add a Markdown link to the same `file:///...` path, and add
+  a `gemini-artifact` provenance comment with `chat_id`, `manifest`, `file`, and
+  `sha256`;
+  if any required artifact file is unavailable, return a blocking note naming
+  the missing artifact instead of producing an incomplete note;
 - include provenance footer and `[[_Índice_Medicina]]`;
 - return coverage path, temp file path, title, taxonomy, aliases, and
   catalog/entity proposals.
@@ -93,6 +106,9 @@ Before returning a temporary note, self-check the generated Markdown:
 - it includes `## 🏁 Fechamento` with `### Resumo`, `### Key Points`, and
   `### Frase de Prova`;
 - it includes `## 🔗 Notas Relacionadas`;
+- if artifact_manifests were provided, the returned note set covers every
+  artifact as isolated HTML embed/link and does not paste captured HTML into the
+  Markdown body;
 - it ends with exactly `---`, `[Chat Original](https://gemini.google.com/app/<fonte_id>)`,
   and `[[_Índice_Medicina]]`.
 

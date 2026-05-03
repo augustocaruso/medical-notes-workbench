@@ -7,6 +7,7 @@ from typing import Any
 
 from wiki.common import MissingPathError, ValidationError
 from wiki.config import _path
+from wiki.link_terms import normalize_key
 
 TRIAGE_NOTE_PLAN_SCHEMA = "medical-notes-workbench.triage-note-plan.v1"
 CREATE_NOTE_ACTION = "create_note"
@@ -41,7 +42,7 @@ def _normalized_items(items: Any) -> list[dict[str, Any]]:
 
     normalized: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
-    seen_create_titles: set[str] = set()
+    seen_create_titles: dict[str, str] = {}
     for index, raw_item in enumerate(items, start=1):
         if not isinstance(raw_item, dict):
             raise ValidationError(f"Triage note plan item #{index} must be an object")
@@ -65,10 +66,14 @@ def _normalized_items(items: Any) -> list[dict[str, Any]]:
         if action == CREATE_NOTE_ACTION:
             if not staged_title:
                 raise ValidationError(f"Triage note plan item {item_id} missing staged_title")
-            if staged_title in seen_create_titles:
-                raise ValidationError(f"Triage note plan create_note title duplicated: {staged_title}")
+            staged_key = normalize_key(staged_title)
+            if staged_key in seen_create_titles:
+                raise ValidationError(
+                    "Triage note plan create_note title duplicated after accent/case normalization: "
+                    f"{staged_title} conflicts with {seen_create_titles[staged_key]}"
+                )
             item["staged_title"] = staged_title
-            seen_create_titles.add(staged_title)
+            seen_create_titles[staged_key] = staged_title
         else:
             reason = str(raw_item.get("reason") or "").strip()
             if not reason:

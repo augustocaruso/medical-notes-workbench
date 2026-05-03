@@ -27,9 +27,18 @@ atualiza o reset script e reconstrói esse ambiente com Python gerenciado pelo
 `uv` pelo melhor caminho disponível, remove instalações da Python Software
 Foundation e o Python Launcher, limpa PATH e sincroniza o projeto.
 
-Hooks usam uma entrada publica unica, `scripts/hooks/mednotes_hook.mjs`. A logica
-interna fica em `scripts/hooks/mednotes_hook/` para manter guardas, recibos,
-preflight do Anki e runtime JSON separados sem mudar o contrato de `hooks.json`.
+Hooks usam uma entrada publica unica, `scripts/hooks/mednotes_hook.mjs`. Eles
+devem ter matchers estreitos por nome real de ferramenta; nao observe
+`run_shell_command` para tentar interpretar comandos depois. Guardas
+destrutivas pertencem ao proprio CLI deterministico.
+
+O hook empacotado hoje cobre apenas ferramentas Anki MCP
+`mcp_anki(?:-mcp)?_*`. Ele e fail-open e nao abre o Anki por padrao; o auto-start
+so acontece quando `MEDNOTES_ANKI_AUTO_START=1`.
+
+O recibo de `publish-batch --dry-run` fica no estado persistente
+`~/.gemini/medical-notes-workbench/publish-dry-run-receipts.json` e e validado
+pelo `med_ops.py` antes de qualquer `publish-batch` real.
 
 ## Comandos Publicos Preservados
 

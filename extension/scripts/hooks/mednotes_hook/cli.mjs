@@ -2,13 +2,10 @@ import { pathToFileURL } from "node:url";
 
 import { ensureAnkiBefore } from "./anki_preflight.mjs";
 import { diagnose } from "./diagnostics.mjs";
-import { medOpsAfter, medOpsBefore } from "./med_ops_guard.mjs";
 import { quiet, readPayload, writeJson } from "./runtime.mjs";
 
 export async function dispatch(mode, payload) {
   if (mode === "ensure-anki-before") return ensureAnkiBefore(payload);
-  if (mode === "med-ops-before") return medOpsBefore(payload);
-  if (mode === "med-ops-after") return medOpsAfter(payload);
   return quiet();
 }
 

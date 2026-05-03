@@ -15,10 +15,10 @@ Invariantes do launcher:
 - Paralelize apenas work items de `plan-subagents`; um raw chat por subagent.
 - Aplique `triage --note-plan`, `discard`, `stage-note`, catálogo, dry-run, publish e linker em série.
 - Exija `note_plan` da triagem e cobertura derivada dele; use `stage-note --coverage` no manifest único do lote.
+- Se `plan-subagents --phase architect` retornar `artifact_manifests`, cubra os HTMLs no grupo de notas; não inline HTML.
 - Não substitua `med-chat-triager`; cada raw chat planejado pertence a um subagent.
-- Sempre rode `publish-batch --dry-run` antes do publish real.
-- Após `med-publish-guard approve`, publique, rode `run-linker` e confira
-  `index_files_changed`/`index_entries_planned` do `_Índice_Medicina`; se links
-  bloquearem, o índice ainda atualiza e a próxima ação é `/mednotes:fix-wiki --dry-run`.
+- Sempre rode `publish-batch --dry-run`; o CLI exige recibo para mesmo manifest/caminhos/opcoes.
+- Após `med-publish-guard approve`, publique, rode `run-linker` e confira `index_files_changed`/`index_entries_planned`;
+  se links bloquearem, o índice ainda atualiza e a próxima ação é `/mednotes:fix-wiki --dry-run`.
 - Não despeje manifests/JSON bruto; resuma triagem, notas, publish, linker e blockers.
 '''

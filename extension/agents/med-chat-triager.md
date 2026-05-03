@@ -57,6 +57,13 @@ Wiki note and include `existing_title` plus `reason`. Use `not_a_note` only for
 administrative chatter, duplicate fragments, or context that should not become
 a durable note, and include `reason`.
 
+`create_note` titles must be unique after accent/case normalization. Never emit
+two planned notes that differ only by accents, capitalization, spacing, or a
+minor title variant; consolidate them into one `create_note` or mark the
+duplicate fragment as `covered_by_existing`/`not_a_note` with a reason. If the
+parent provides current Wiki/catalog context showing an existing note for the
+topic, prefer `covered_by_existing` instead of planning a new note.
+
 Do not inspect unrelated raw chats, do not coordinate writes with sibling
 agents, and do not mutate files directly. The parent agent must apply changes
 with `med_ops.py triage --note-plan <note-plan.json>` or `med_ops.py discard`.

@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import subprocess
@@ -51,11 +52,12 @@ def _raw_chat(status: str = "triado", fonte_id: str = "chat123", note_titles: li
     return body + "---\nChat\n"
 
 
-def _wiki_note(title: str = "ISRS", fonte_id: str = "chat123") -> str:
+def _wiki_note(title: str = "ISRS", fonte_id: str = "chat123", extra_body: str = "") -> str:
     return (
         f"# {title}\n\n"
         "## 🧬 Visão Geral\n"
         "Conteúdo didático.\n\n"
+        f"{extra_body}"
         "## 🏁 Fechamento\n\n"
         "### Resumo\n"
         "Resumo de alto rendimento.\n\n"
@@ -97,19 +99,66 @@ def _coverage(path: Path, raw: Path, titles: list[str]) -> Path:
     )
 
 
-def _config(raw_dir: Path, wiki_dir: Path, linker_path: Path | None = None):
+def _config(raw_dir: Path, wiki_dir: Path, linker_path: Path | None = None, artifact_dir: Path | None = None):
     return wiki_api.MedConfig(
         raw_dir=raw_dir,
         wiki_dir=wiki_dir,
         linker_path=linker_path or (raw_dir.parent / "missing_linker.py"),
         catalog_path=raw_dir.parent / "missing_catalog.json",
+        artifact_dir=artifact_dir,
     )
+
+
+def _med_ops_env(tmp_path: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    env["MEDNOTES_HOME"] = str(tmp_path / "state")
+    return env
 
 
 def _mkdir_canonical(wiki_dir: Path, taxonomy: str) -> Path:
     path = wiki_dir.joinpath(*taxonomy.split("/"))
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _artifact_manifest(root: Path, chat_id: str, *, source_url: str | None = None) -> tuple[Path, Path, str]:
+    artifact = _write(root / f"artifact-{chat_id}-turn-1-demo.html", "<!doctype html><html><body>demo</body></html>\n")
+    sha = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    manifest = _write(
+        root / f"artifact-{chat_id}-manifest.json",
+        json.dumps(
+            {
+                "schema": "gemini-md-export.artifact-html-manifest.v1",
+                "chatId": chat_id,
+                "sourceUrl": source_url or f"https://gemini.google.com/app/{chat_id}",
+                "savedCount": 1,
+                "artifacts": [
+                    {
+                        "turnIndex": 1,
+                        "file": str(artifact),
+                        "sha256": sha,
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+    )
+    return manifest, artifact, sha
+
+
+def _artifact_block(chat_id: str, manifest: Path, artifact: Path, sha: str) -> str:
+    uri = artifact.resolve().as_uri()
+    return (
+        "## 🧬 Artefato Interativo\n"
+        f'<iframe src="{uri}" width="100%" height="820" loading="lazy"></iframe>\n\n'
+        f"[abrir artefato HTML]({uri})\n\n"
+        "<!-- gemini-artifact\n"
+        f"chat_id: {chat_id}\n"
+        f"manifest: {manifest}\n"
+        f"file: {artifact}\n"
+        f"sha256: {sha}\n"
+        "-->\n\n"
+    )
 
 
 def test_wiki_cli_help_direct(capsys):
@@ -257,6 +306,35 @@ def test_triage_cli_stores_note_plan_and_architect_plan_includes_it(tmp_path):
         "ISRS",
         "Síndrome Serotoninérgica",
     ]
+
+
+def test_triage_note_plan_blocks_accent_insensitive_duplicate_titles(tmp_path):
+    raw = _write(tmp_path / "raw" / "chat.md", "Chat\n")
+    plan = _note_plan(raw, ["Síndrome Serotoninérgica", "Sindrome Serotoninergica"])
+
+    try:
+        wiki_api.serialize_triage_note_plan(plan, raw)
+    except wiki_api.ValidationError as exc:
+        assert "duplicated after accent/case normalization" in str(exc)
+    else:
+        raise AssertionError("triage note_plan should reject normalized duplicate create_note titles")
+
+
+def test_architect_plan_includes_required_gemini_artifacts(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    artifact_dir = tmp_path / "artifacts"
+    raw = _write(raw_dir / "chat.md", _raw_chat(fonte_id="chat-art"))
+    manifest, artifact, sha = _artifact_manifest(artifact_dir, "chat-art")
+
+    plan = wiki_api.plan_subagents(_config(raw_dir, wiki_dir, artifact_dir=artifact_dir), "architect")
+
+    item = plan["work_items"][0]
+    assert item["artifact_manifest_count"] == 1
+    assert item["artifact_count"] == 1
+    assert item["artifact_manifests"][0]["path"] == str(manifest)
+    assert item["artifact_manifests"][0]["artifacts"][0]["file"] == str(artifact)
+    assert item["artifact_manifests"][0]["artifacts"][0]["sha256"] == sha
 
 
 def test_prune_backup_files_limits_backups_per_note(tmp_path):
@@ -416,8 +494,8 @@ def test_plan_subagents_architect_assigns_isolated_temp_dirs(tmp_path):
     raw_dir = tmp_path / "raw"
     wiki_dir = tmp_path / "wiki"
     temp_root = tmp_path / "tmp-agents"
-    _write(raw_dir / "a.md", _raw_chat(status="triado", fonte_id="a1"))
-    _write(raw_dir / "b.md", _raw_chat(status="triado", fonte_id="b2"))
+    _write(raw_dir / "a.md", _raw_chat(status="triado", fonte_id="a1", note_titles=["ISRS"]))
+    _write(raw_dir / "b.md", _raw_chat(status="triado", fonte_id="b2", note_titles=["Fibrilação Atrial"]))
     _write(raw_dir / "ignored.md", "---\nstatus: triado\ntipo: outra\n---\nChat\n")
 
     plan = wiki_api.plan_subagents(
@@ -442,6 +520,44 @@ def test_plan_subagents_architect_assigns_isolated_temp_dirs(tmp_path):
     assert "--note-plan" in "\n".join(wiki_api.plan_subagents(_config(raw_dir, wiki_dir), "triage")["canonical_parent_commands"])
     assert plan["work_items"][0]["note_plan_create_count"] == 1
     assert plan["work_items"][0]["note_plan"]["items"][0]["action"] == "create_note"
+
+
+def test_plan_subagents_architect_blocks_existing_normalized_wiki_duplicate(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    _write(wiki_dir / "1. Clínica Médica" / "Psiquiatria" / "Sindrome Serotoninergica.md", "# Sindrome Serotoninergica\n")
+    _write(
+        raw_dir / "chat.md",
+        _raw_chat(status="triado", fonte_id="dup1", note_titles=["Síndrome Serotoninérgica"]),
+    )
+
+    plan = wiki_api.plan_subagents(_config(raw_dir, wiki_dir), "architect")
+
+    assert plan["item_count"] == 0
+    assert plan["blocked_item_count"] == 1
+    blocked = plan["blocked_items"][0]
+    assert blocked["blocked_reason"] == "duplicate_create_note_targets"
+    assert blocked["duplicate_targets"][0]["conflict_type"] == "existing_wiki_note"
+    assert blocked["duplicate_targets"][0]["existing_paths"] == [
+        "1. Clínica Médica/Psiquiatria/Sindrome Serotoninergica.md"
+    ]
+    assert "note_plan" in blocked["next_action"]
+
+
+def test_plan_subagents_architect_blocks_duplicate_planned_titles_before_spawning(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    _write(raw_dir / "chat-a.md", _raw_chat(status="triado", fonte_id="a", note_titles=["Síndrome Serotoninérgica"]))
+    _write(raw_dir / "chat-b.md", _raw_chat(status="triado", fonte_id="b", note_titles=["Sindrome Serotoninergica"]))
+
+    plan = wiki_api.plan_subagents(_config(raw_dir, wiki_dir), "architect")
+
+    assert plan["item_count"] == 0
+    assert plan["blocked_item_count"] == 2
+    assert {item["blocked_reason"] for item in plan["blocked_items"]} == {"duplicate_create_note_targets"}
+    for item in plan["blocked_items"]:
+        duplicate = next(target for target in item["duplicate_targets"] if target["conflict_type"] == "planned_in_batch")
+        assert {Path(match["raw_file"]).name for match in duplicate["planned_matches"]} == {"chat-a.md", "chat-b.md"}
 
 
 def test_plan_subagents_architect_blocks_triados_without_note_plan(tmp_path):
@@ -712,6 +828,121 @@ def test_publish_batch_dry_run_writes_nothing(tmp_path):
     assert "status: triado" in raw.read_text(encoding="utf-8")
 
 
+def test_stage_note_allows_artifact_to_be_covered_by_another_note(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    artifact_dir = tmp_path / "artifacts"
+    _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
+    raw = _write(raw_dir / "chat.md", _raw_chat(fonte_id="chat-art"))
+    content = _write(tmp_path / "tmp" / "nota.md", _wiki_note(fonte_id="chat-art"))
+    coverage = _coverage(tmp_path / "tmp" / "coverage.json", raw, ["ISRS"])
+    _artifact_manifest(artifact_dir, "chat-art")
+
+    result = wiki_api.stage_note(
+        tmp_path / "manifest.json",
+        raw,
+        "Psiquiatria",
+        "ISRS",
+        content,
+        config=_config(raw_dir, wiki_dir, artifact_dir=artifact_dir),
+        coverage_path=coverage,
+    )
+
+    validation = result["artifact_validation"]
+    assert validation["required"] is True
+    assert validation["included_artifact_count"] == 0
+    assert validation["missing_artifact_count"] == 1
+
+
+def test_publish_batch_blocks_when_note_group_misses_required_artifact(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    artifact_dir = tmp_path / "artifacts"
+    _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
+    raw = _write(raw_dir / "chat.md", _raw_chat(fonte_id="chat-art"))
+    content = _write(tmp_path / "tmp" / "nota.md", _wiki_note(fonte_id="chat-art"))
+    coverage = _coverage(tmp_path / "tmp" / "coverage.json", raw, ["ISRS"])
+    _artifact_manifest(artifact_dir, "chat-art")
+    manifest = _write(
+        tmp_path / "manifest.json",
+        json.dumps(
+            {
+                "raw_file": str(raw),
+                "coverage_path": str(coverage),
+                "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}],
+            },
+            ensure_ascii=False,
+        ),
+    )
+
+    try:
+        wiki_api.publish_batch(
+            manifest,
+            _config(raw_dir, wiki_dir, artifact_dir=artifact_dir),
+            dry_run=True,
+        )
+    except wiki_api.ValidationError as exc:
+        assert "Gemini artifact HTML batch validation failed" in str(exc)
+        assert "missing required Gemini artifact across staged note group" in str(exc)
+    else:
+        raise AssertionError("publish should block when the raw-chat note group misses required artifacts")
+
+
+def test_publish_batch_accepts_required_artifact_once_across_note_group(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    artifact_dir = tmp_path / "artifacts"
+    _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
+    raw = _write(raw_dir / "chat.md", _raw_chat(fonte_id="chat-art", note_titles=["ISRS", "Toxicidade Serotoninérgica"]))
+    artifact_manifest, artifact, sha = _artifact_manifest(artifact_dir, "chat-art")
+    first_content = _write(tmp_path / "tmp" / "isrs.md", _wiki_note(fonte_id="chat-art"))
+    second_content = _write(
+        tmp_path / "tmp" / "nota.md",
+        _wiki_note(
+            title="Toxicidade Serotoninérgica",
+            fonte_id="chat-art",
+            extra_body=_artifact_block("chat-art", artifact_manifest, artifact, sha),
+        ),
+    )
+    coverage = _coverage(tmp_path / "tmp" / "coverage.json", raw, ["ISRS", "Toxicidade Serotoninérgica"])
+    manifest = _write(
+        tmp_path / "manifest.json",
+        json.dumps(
+            {
+                "raw_file": str(raw),
+                "coverage_path": str(coverage),
+                "notes": [
+                    {"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(first_content)},
+                    {
+                        "taxonomy": "Psiquiatria",
+                        "title": "Toxicidade Serotoninérgica",
+                        "content_path": str(second_content),
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        ),
+    )
+
+    dry_run = wiki_api.publish_batch(
+        manifest,
+        _config(raw_dir, wiki_dir, artifact_dir=artifact_dir),
+        dry_run=True,
+    )
+
+    batch_validation = dry_run["planned_batches"][0]["artifact_validation"]
+    assert batch_validation["required"] is True
+    assert batch_validation["covered_artifact_count"] == 1
+    assert batch_validation["missing_artifact_count"] == 0
+    first_note_validation = dry_run["planned_batches"][0]["notes"][0]["artifact_validation"]
+    assert first_note_validation["missing_artifact_count"] == 1
+    validation = dry_run["planned_batches"][0]["notes"][1]["artifact_validation"]
+    assert validation["required"] is True
+    assert validation["manifest_count"] == 1
+    assert validation["artifact_count"] == 1
+    assert validation["included_artifact_count"] == 1
+
+
 def test_stage_note_can_build_one_manifest_for_multiple_raw_chats(tmp_path):
     raw_dir = tmp_path / "raw"
     wiki_dir = tmp_path / "wiki"
@@ -971,6 +1202,69 @@ def test_publish_batch_collision_abort_and_suffix(tmp_path):
     assert (wiki_dir / "1. Clínica Médica" / "Psiquiatria" / "ISRS (2).md").exists()
 
 
+def test_publish_batch_blocks_accent_insensitive_existing_duplicate(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    folder = _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
+    _write(folder / "Sindrome Serotoninergica.md", _wiki_note(title="Sindrome Serotoninergica"))
+    raw = _write(raw_dir / "chat.md", _raw_chat(note_titles=["Síndrome Serotoninérgica"]))
+    title = "Síndrome Serotoninérgica"
+    content = _write(tmp_path / "tmp" / "nota.md", _wiki_note(title=title))
+    coverage = _coverage(tmp_path / "tmp" / "coverage.json", raw, [title])
+    manifest = _write(
+        tmp_path / "manifest.json",
+        json.dumps(
+            {
+                "raw_file": str(raw),
+                "coverage_path": str(coverage),
+                "notes": [{"taxonomy": "Psiquiatria", "title": title, "content_path": str(content)}],
+            },
+            ensure_ascii=False,
+        ),
+    )
+
+    try:
+        wiki_api.publish_batch(manifest, _config(raw_dir, wiki_dir), dry_run=True)
+    except wiki_api.CollisionError as exc:
+        message = str(exc)
+        assert "accent/case normalization" in message
+        assert "Sindrome Serotoninergica.md" in message
+    else:
+        raise AssertionError("publish should block accent-insensitive duplicate targets")
+
+    assert not (folder / "Síndrome Serotoninérgica.md").exists()
+
+
+def test_publish_batch_blocks_accent_insensitive_duplicate_within_manifest(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
+    titles = ["Síndrome Serotoninérgica", "Sindrome Serotoninergica"]
+    raw = _write(raw_dir / "chat.md", "---\nstatus: triado\ntipo: medicina\nfonte_id: chat123\n---\nChat\n")
+    first_content = _write(tmp_path / "tmp" / "nota-1.md", _wiki_note(title=titles[0]))
+    second_content = _write(tmp_path / "tmp" / "nota-2.md", _wiki_note(title=titles[1]))
+    manifest = _write(
+        tmp_path / "manifest.json",
+        json.dumps(
+            {
+                "raw_file": str(raw),
+                "notes": [
+                    {"taxonomy": "Psiquiatria", "title": titles[0], "content_path": str(first_content)},
+                    {"taxonomy": "Psiquiatria", "title": titles[1], "content_path": str(second_content)},
+                ],
+            },
+            ensure_ascii=False,
+        ),
+    )
+
+    try:
+        wiki_api.publish_batch(manifest, _config(raw_dir, wiki_dir), dry_run=True, require_coverage=False)
+    except wiki_api.CollisionError as exc:
+        assert "another note in this publish batch" in str(exc)
+    else:
+        raise AssertionError("publish should block duplicate normalized targets in one batch")
+
+
 def test_publish_batch_blocks_taxonomy_that_repeats_title_folder(tmp_path):
     raw_dir = tmp_path / "raw"
     wiki_dir = tmp_path / "wiki"
@@ -1051,10 +1345,100 @@ def test_commit_batch_cli_alias_still_works(tmp_path):
         text=True,
         capture_output=True,
         check=False,
+        env=_med_ops_env(tmp_path),
     )
 
     assert result.returncode == 0
     assert json.loads(result.stdout)["dry_run"] is True
+
+
+def test_publish_batch_cli_enforces_dry_run_receipt(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
+    raw = _write(raw_dir / "chat.md", _raw_chat())
+    content = _write(tmp_path / "tmp" / "nota.md", _wiki_note())
+    coverage = _coverage(tmp_path / "tmp" / "coverage.json", raw, ["ISRS"])
+    manifest = _write(
+        tmp_path / "manifest.json",
+        json.dumps(
+            {
+                "raw_file": str(raw),
+                "coverage_path": str(coverage),
+                "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}],
+            }
+        ),
+    )
+    env = _med_ops_env(tmp_path)
+    base = [
+        sys.executable,
+        str(MED_OPS_PATH),
+        "--raw-dir",
+        str(raw_dir),
+        "--wiki-dir",
+        str(wiki_dir),
+        "publish-batch",
+        "--manifest",
+        str(manifest),
+    ]
+
+    blocked = subprocess.run(base, text=True, capture_output=True, check=False, env=env)
+    assert blocked.returncode == wiki_api.EXIT_VALIDATION
+    assert "publish-batch --dry-run" in blocked.stderr
+
+    dry_run = subprocess.run([*base, "--dry-run"], text=True, capture_output=True, check=False, env=env)
+    assert dry_run.returncode == 0, dry_run.stderr
+    dry_payload = json.loads(dry_run.stdout)
+    assert dry_payload["dry_run"] is True
+    assert "dry_run_receipt" in dry_payload
+
+    published = subprocess.run(base, text=True, capture_output=True, check=False, env=env)
+    assert published.returncode == 0, published.stderr
+    payload = json.loads(published.stdout)
+    assert payload["dry_run"] is False
+    assert payload["created_count"] == 1
+    assert json.loads((tmp_path / "state" / "publish-dry-run-receipts.json").read_text(encoding="utf-8"))["receipts"] == {}
+
+
+def test_publish_batch_cli_blocks_changed_manifest_after_dry_run(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
+    raw = _write(raw_dir / "chat.md", _raw_chat())
+    content = _write(tmp_path / "tmp" / "nota.md", _wiki_note())
+    coverage = _coverage(tmp_path / "tmp" / "coverage.json", raw, ["ISRS"])
+    manifest = _write(
+        tmp_path / "manifest.json",
+        json.dumps(
+            {
+                "raw_file": str(raw),
+                "coverage_path": str(coverage),
+                "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}],
+            }
+        ),
+    )
+    env = _med_ops_env(tmp_path)
+    base = [
+        sys.executable,
+        str(MED_OPS_PATH),
+        "--raw-dir",
+        str(raw_dir),
+        "--wiki-dir",
+        str(wiki_dir),
+        "publish-batch",
+        "--manifest",
+        str(manifest),
+    ]
+
+    dry_run = subprocess.run([*base, "--dry-run"], text=True, capture_output=True, check=False, env=env)
+    assert dry_run.returncode == 0, dry_run.stderr
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data["notes"][0]["title"] = "ISRS Alterado"
+    manifest.write_text(json.dumps(data), encoding="utf-8")
+
+    blocked = subprocess.run(base, text=True, capture_output=True, check=False, env=env)
+    assert blocked.returncode == wiki_api.EXIT_VALIDATION
+    assert "manifest mudou" in blocked.stderr
 
 
 def test_taxonomy_cli_commands_return_json(tmp_path):
@@ -1442,7 +1826,7 @@ def test_public_med_ops_commands_still_work_after_cli_split(tmp_path):
     ]
 
     for command in commands:
-        result = subprocess.run(command, text=True, capture_output=True, check=False)
+        result = subprocess.run(command, text=True, capture_output=True, check=False, env=_med_ops_env(tmp_path))
         assert result.returncode == 0, result.stderr
         assert isinstance(json.loads(result.stdout), dict)
 

@@ -71,7 +71,6 @@ def test_hooks_are_node_based_for_windows_installations():
     hooks = json.loads((EXTENSION / "hooks" / "hooks.json").read_text(encoding="utf-8"))
     serialized = json.dumps(hooks)
     before_tool = hooks["hooks"]["BeforeTool"]
-    after_tool = hooks["hooks"]["AfterTool"]
 
     assert "python3" not in serialized
     assert "node" in serialized
@@ -81,13 +80,12 @@ def test_hooks_are_node_based_for_windows_installations():
     assert "med_guard.mjs" not in serialized
     assert "SessionStart" not in hooks["hooks"]
     assert "AfterAgent" not in hooks["hooks"]
-    assert {entry["matcher"] for entry in before_tool} == {
-        "^mcp_anki(?:-mcp)?_.*",
-        "run_shell_command",
-    }
+    assert "AfterTool" not in hooks["hooks"]
+    assert {entry["matcher"] for entry in before_tool} == {"^mcp_anki(?:-mcp)?_.*"}
     anki_entry = next(entry for entry in before_tool if entry["matcher"] == "^mcp_anki(?:-mcp)?_.*")
-    assert anki_entry["hooks"][0]["timeout"] == 30000
-    assert {entry["matcher"] for entry in after_tool} == {"run_shell_command"}
+    assert anki_entry["hooks"][0]["timeout"] == 10000
+    assert "MEDNOTES_ANKI_AUTO_START=1" in anki_entry["hooks"][0]["description"]
+    assert "run_shell_command" not in serialized
     assert "*" not in {entry["matcher"] for entry in before_tool}
     assert not list((EXTENSION / "scripts" / "hooks").glob("*.py"))
     assert not (EXTENSION / "scripts" / "hooks" / "ensure_anki.mjs").exists()
@@ -610,24 +608,6 @@ def test_flashcard_module_references_anki_mcp_prompt_and_ingestion_design():
     assert "manage_flashcards" not in agent
 
 
-def _run_hook(mode: str, payload: dict, *, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["node", str(HOOK), mode],
-        input=json.dumps(payload),
-        text=True,
-        capture_output=True,
-        check=False,
-        env=env,
-    )
-
-
-def _hook_env(tmp_path: Path) -> dict[str, str]:
-    env = os.environ.copy()
-    env["MEDNOTES_HOOK_STATE_DIR"] = str(tmp_path / "hook-state")
-    env["MEDNOTES_PUBLISH_DRY_RUN_TTL_MS"] = str(30 * 60 * 1000)
-    return env
-
-
 def test_hook_contract_avoids_blocking_io_and_beforetool_additional_context():
     hook = _hook_source_text()
 
@@ -640,10 +620,7 @@ def test_hook_runtime_is_single_public_entrypoint_with_internal_modules(tmp_path
     expected_modules = {
         "anki_preflight.mjs",
         "cli.mjs",
-        "commands.mjs",
         "diagnostics.mjs",
-        "med_ops_guard.mjs",
-        "receipts.mjs",
         "runtime.mjs",
     }
     hooks = json.loads((EXTENSION / "hooks" / "hooks.json").read_text(encoding="utf-8"))
@@ -667,12 +644,12 @@ def test_hook_runtime_is_single_public_entrypoint_with_internal_modules(tmp_path
         text=True,
         capture_output=True,
         check=False,
-        env=_hook_env(tmp_path),
+        env={**os.environ, "MEDNOTES_ANKI_AUTO_START": "1"},
     )
     assert diagnose.returncode == 0
     payload = json.loads(diagnose.stdout)
-    assert payload["dry_run_receipt_count"] == 0
-    assert payload["hook_state_dir"].endswith("hook-state")
+    assert payload["anki_auto_start"] is True
+    assert payload["anki_start_timeout_ms"] <= 15000
 
 
 def test_ensure_anki_hook_preserves_windows_minimize_strategy():
@@ -687,7 +664,7 @@ def test_ensure_anki_hook_preserves_windows_minimize_strategy():
 
 def test_hook_returns_json_with_open_stdin():
     process = subprocess.Popen(
-        ["node", str(HOOK), "med-ops-before"],
+        ["node", str(HOOK), "ensure-anki-before"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -721,109 +698,6 @@ def test_ensure_anki_hook_ignores_unrelated_tool_calls():
     assert result.stderr == ""
     payload = json.loads(result.stdout)
     assert payload["suppressOutput"] is True
-
-
-def test_med_ops_hook_blocks_legacy_commit():
-    result = _run_hook(
-        "med-ops-before",
-        {
-            "tool_name": "run_shell_command",
-            "tool_input": {"command": f'uv run python "{MED_OPS}" commit'},
-        },
-    )
-
-    assert result.returncode == 0
-    payload = json.loads(result.stdout)
-    assert payload["decision"] == "deny"
-    assert "comando legado" in payload["reason"]
-    assert "publish-batch --dry-run" in payload["reason"]
-
-
-def test_med_ops_hook_blocks_publish_without_dry_run_receipt(tmp_path):
-    manifest = tmp_path / "batch.json"
-    manifest.write_text('{"raw_file": "chat.md", "notes": []}\n', encoding="utf-8")
-
-    result = _run_hook(
-        "med-ops-before",
-        {
-            "tool_name": "run_shell_command",
-            "cwd": str(tmp_path),
-            "tool_input": {"command": f'uv run python "{MED_OPS}" publish-batch --manifest batch.json'},
-        },
-        env=_hook_env(tmp_path),
-    )
-
-    payload = json.loads(result.stdout)
-    assert payload["decision"] == "deny"
-    assert "rode publish-batch --dry-run" in payload["reason"]
-
-
-def test_med_ops_hook_records_dry_run_and_allows_matching_publish(tmp_path):
-    manifest = tmp_path / "batch.json"
-    manifest.write_text('{"raw_file": "chat.md", "notes": []}\n', encoding="utf-8")
-    env = _hook_env(tmp_path)
-    command = f'uv run python "{MED_OPS}" publish-batch --manifest batch.json --dry-run'
-
-    after = _run_hook(
-        "med-ops-after",
-        {
-            "tool_name": "run_shell_command",
-            "cwd": str(tmp_path),
-            "tool_input": {"command": command},
-            "tool_response": {"llmContent": '{"dry_run": true, "created_count": 0}'},
-        },
-        env=env,
-    )
-
-    after_payload = json.loads(after.stdout)
-    assert "systemMessage" in after_payload
-    assert "Dry-run validado" in after_payload["systemMessage"]
-
-    before = _run_hook(
-        "med-ops-before",
-        {
-            "tool_name": "run_shell_command",
-            "cwd": str(tmp_path),
-            "tool_input": {"command": f'uv run python "{MED_OPS}" publish-batch --manifest batch.json'},
-        },
-        env=env,
-    )
-
-    assert json.loads(before.stdout) == {"suppressOutput": True}
-
-
-def test_med_ops_hook_blocks_changed_manifest_after_dry_run(tmp_path):
-    manifest = tmp_path / "batch.json"
-    manifest.write_text('{"raw_file": "chat.md", "notes": []}\n', encoding="utf-8")
-    env = _hook_env(tmp_path)
-
-    _run_hook(
-        "med-ops-after",
-        {
-            "tool_name": "run_shell_command",
-            "cwd": str(tmp_path),
-            "tool_input": {
-                "command": f'uv run python "{MED_OPS}" publish-batch --manifest batch.json --dry-run'
-            },
-            "tool_response": {"llmContent": '{"dry_run": true}'},
-        },
-        env=env,
-    )
-
-    manifest.write_text('{"raw_file": "chat.md", "notes": [{"title": "changed"}]}\n', encoding="utf-8")
-    result = _run_hook(
-        "med-ops-before",
-        {
-            "tool_name": "run_shell_command",
-            "cwd": str(tmp_path),
-            "tool_input": {"command": f'uv run python "{MED_OPS}" publish-batch --manifest batch.json'},
-        },
-        env=env,
-    )
-
-    payload = json.loads(result.stdout)
-    assert payload["decision"] == "deny"
-    assert "manifest mudou" in payload["reason"]
 
 
 def test_knowledge_contracts_are_current_and_factorized():

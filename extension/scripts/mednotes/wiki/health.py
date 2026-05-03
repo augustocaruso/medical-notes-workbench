@@ -1,17 +1,20 @@
 """High-level Wiki health workflow (`fix-wiki`)."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+import json
 from pathlib import Path
 from typing import Any
 
 from wiki.agents import plan_subagents
-from wiki.common import BLOCKER_RESOLUTION_SCHEMA, WIKI_HEALTH_FIX_SCHEMA
-from wiki.config import MedConfig
+from wiki.common import BLOCKER_RESOLUTION_SCHEMA, FileWriteError, WIKI_HEALTH_FIX_SCHEMA
+from wiki.config import MedConfig, _path
 from wiki.graph_fixes import fix_wiki_graph
+from wiki.hygiene import cleanup_wiki_hygiene, collect_wiki_hygiene
 from wiki.linking import graph_audit, run_linker
-from wiki.raw_chats import create_backup, prune_backup_files
+from wiki.raw_chats import atomic_write_text, create_backup
 from wiki.style import _requires_style_rewrite, fix_wiki_style, validate_wiki_style
-from wiki.taxonomy import taxonomy_audit
+from wiki.taxonomy import apply_taxonomy_migration, taxonomy_audit, taxonomy_migration_plan
 
 
 def _style_rewrite_plan_if_needed(config: MedConfig, audit: dict[str, Any]) -> dict[str, Any] | None:
@@ -25,10 +28,57 @@ def _taxonomy_action_issue_count(audit: dict[str, Any]) -> int:
         "proposed_moves",
         "unmapped_top_level_dirs",
         "duplicate_destinations",
-        "duplicate_directory_groups",
         "root_notes",
     )
     return sum(len(audit.get(key, [])) for key in action_keys)
+
+
+def _run_id() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _run_dir(run_id: str) -> Path:
+    return _path(f"~/.gemini/medical-notes-workbench/runs/{run_id}")
+
+
+def _archive_root(run_id: str) -> Path:
+    day = run_id[:8]
+    return _path(f"~/.gemini/backup_archive/fix-wiki/{day}/{run_id}")
+
+
+def _write_json_file(path: Path, data: dict[str, Any]) -> None:
+    atomic_write_text(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+
+
+def _try_write_json_file(path: Path, data: dict[str, Any]) -> str | None:
+    try:
+        _write_json_file(path, data)
+    except (FileWriteError, OSError) as exc:
+        return str(exc)
+    return None
+
+
+def _quote_arg(value: str | Path) -> str:
+    return '"' + str(value).replace('"', '\\"') + '"'
+
+
+def _fix_wiki_command(config: MedConfig, *, apply: bool, backup: bool) -> str:
+    flags = ["--wiki-dir", _quote_arg(config.wiki_dir), "fix-wiki"]
+    flags.append("--apply" if apply else "--dry-run")
+    if backup:
+        flags.append("--backup")
+    flags.append("--json")
+    return "uv run python scripts/mednotes/med_ops.py " + " ".join(str(flag) for flag in flags)
+
+
+def _rollback_command(config: MedConfig, receipt_path: str | None) -> str | None:
+    if not receipt_path:
+        return None
+    return (
+        "uv run python scripts/mednotes/med_ops.py "
+        f"--wiki-dir {_quote_arg(config.wiki_dir)} "
+        f"taxonomy-migrate --rollback --receipt {_quote_arg(receipt_path)}"
+    )
 
 
 def _backup_linker_planned_changes(config: MedConfig, linker_dry_run: dict[str, Any], backup: bool) -> list[str]:
@@ -75,10 +125,13 @@ def _blocker_resolution_plan(
     graph_audit_report: dict[str, Any],
     write_errors: list[dict[str, Any]],
     rewrite_plan: dict[str, Any] | None,
+    taxonomy_plan: dict[str, Any],
     taxonomy_issue_count: int,
 ) -> dict[str, Any]:
     graph_errors = [item for item in graph_audit_report.get("errors", []) if isinstance(item, dict)]
     by_code = _issues_by_code(graph_errors)
+    taxonomy_operations = [item for item in taxonomy_plan.get("operations", []) if isinstance(item, dict)]
+    taxonomy_blocked = [item for item in taxonomy_plan.get("blocked", []) if isinstance(item, dict)]
     groups: list[dict[str, Any]] = []
 
     def add_group(
@@ -183,12 +236,36 @@ def _blocker_resolution_plan(
         next_action="Rodar plan-subagents --phase style-rewrite, aplicar via apply-style-rewrite e repetir fix-wiki.",
     )
 
+    if taxonomy_operations and not apply:
+        add_group(
+            "taxonomy_migrate",
+            count=len(taxonomy_operations),
+            automatic=True,
+            reason="Taxonomia tem movimentos determinísticos que o modo --apply pode executar com recibo e rollback.",
+            next_action="Rodar fix-wiki --apply --backup --json; o workflow vai aplicar movimentos seguros e revalidar.",
+            sample=[
+                {
+                    "source": item.get("source"),
+                    "destination": item.get("destination"),
+                    "reason": item.get("reason"),
+                }
+                for item in taxonomy_operations[:5]
+            ],
+        )
     add_group(
-        "taxonomy_migrate",
-        count=taxonomy_issue_count,
-        automatic=True,
-        reason="Taxonomia precisa ser resolvida com plano, recibo e rollback.",
-        next_action="Rodar taxonomy-migrate --dry-run, aplicar plano sem blockers e repetir fix-wiki.",
+        "taxonomy_review_required",
+        count=len(taxonomy_blocked),
+        automatic=False,
+        reason="A taxonomia restante não tem destino único seguro.",
+        next_action="Revisar os itens do sample, resolver a classificação e rodar fix-wiki --apply --backup --json novamente.",
+        sample=[
+            {
+                "source": item.get("source"),
+                "destination": item.get("destination"),
+                "reason": item.get("blocked_reason") or item.get("reason"),
+            }
+            for item in taxonomy_blocked[:5]
+        ],
     )
 
     return {
@@ -197,6 +274,8 @@ def _blocker_resolution_plan(
         "write_error_count": len(write_errors),
         "requires_llm_rewrite_count": rewrite_count,
         "taxonomy_issue_count": taxonomy_issue_count,
+        "taxonomy_operation_count": len(taxonomy_operations),
+        "taxonomy_blocked_count": len(taxonomy_blocked),
         "group_count": len(groups),
         "groups": groups,
         "has_blockers": bool(groups),
@@ -212,7 +291,40 @@ def fix_wiki_health(
     backup_retention_days: int = 14,
     backup_max_per_file: int = 3,
 ) -> dict[str, Any]:
+    run_id = _run_id()
+    run_dir = _run_dir(run_id)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    archive_root = _archive_root(run_id)
+
+    hygiene_before = collect_wiki_hygiene(config.wiki_dir)
+    hygiene_pre_cleanup = (
+        cleanup_wiki_hygiene(
+            config.wiki_dir,
+            archive_root=archive_root / "preflight",
+            archive_backups=True,
+            remove_rewrites=True,
+            remove_empty_dirs=True,
+        )
+        if apply and (hygiene_before.get("bak_or_rewrite", 0) or hygiene_before.get("empty_dirs", 0))
+        else None
+    )
+    hygiene_after_preflight = collect_wiki_hygiene(config.wiki_dir)
+    taxonomy_initial_report = taxonomy_audit(config.wiki_dir)
+    taxonomy_initial_plan = taxonomy_migration_plan(config.wiki_dir)
+    taxonomy_apply: dict[str, Any] | None = None
+    taxonomy_plan_path: str | None = None
+    taxonomy_receipt_path: str | None = None
+
+    if apply and taxonomy_initial_plan.get("operations"):
+        plan_path = run_dir / "taxonomy-plan.json"
+        receipt_path = run_dir / "taxonomy-receipt.json"
+        _write_json_file(plan_path, taxonomy_initial_plan)
+        taxonomy_plan_path = str(plan_path)
+        taxonomy_receipt_path = str(receipt_path)
+        taxonomy_apply = apply_taxonomy_migration(plan_path, config, receipt_path=receipt_path)
+
     taxonomy_report = taxonomy_audit(config.wiki_dir)
+    taxonomy_plan_after = taxonomy_migration_plan(config.wiki_dir)
     taxonomy_issue_count = _taxonomy_action_issue_count(taxonomy_report)
     style_fix = fix_wiki_style(config.wiki_dir, apply=apply, backup=backup)
     graph_fix = fix_wiki_graph(config.wiki_dir, catalog_path=config.catalog_path, apply=apply, backup=backup)
@@ -220,13 +332,14 @@ def fix_wiki_health(
     write_error_count = len(write_errors)
     style_audit = validate_wiki_style(config.wiki_dir)
     rewrite_plan = _style_rewrite_plan_if_needed(config, style_audit)
-    graph_before = graph_audit(config)
+    graph_before_linker = graph_audit(config)
     linker_dry_run = run_linker(config, dry_run=True)
     blocker_resolution = _blocker_resolution_plan(
         apply=apply,
-        graph_audit_report=graph_before,
+        graph_audit_report=graph_before_linker,
         write_errors=write_errors,
         rewrite_plan=rewrite_plan,
+        taxonomy_plan=taxonomy_plan_after,
         taxonomy_issue_count=taxonomy_issue_count,
     )
     linker_apply: dict[str, Any] | None = None
@@ -238,7 +351,7 @@ def fix_wiki_health(
             linker_skipped_reason = "write_errors"
         elif rewrite_plan and rewrite_plan.get("item_count", 0):
             linker_skipped_reason = "requires_llm_rewrite"
-        elif linker_dry_run.get("blocker_count", 0):
+        elif graph_before_linker.get("error_count", 0) or linker_dry_run.get("blocker_count", 0):
             linker_skipped_reason = "graph_blockers"
         elif not blocker_resolution.get("linker_can_apply", False):
             if taxonomy_issue_count:
@@ -250,33 +363,114 @@ def fix_wiki_health(
             linker_apply = run_linker(config, dry_run=False)
 
     graph_after = graph_audit(config)
-    backup_cleanup = (
-        prune_backup_files(config.wiki_dir, max_per_file=backup_max_per_file, retention_days=backup_retention_days)
-        if apply and backup
+    hygiene_cleanup = (
+        cleanup_wiki_hygiene(
+            config.wiki_dir,
+            archive_root=archive_root / "final",
+            archive_backups=True,
+            remove_rewrites=True,
+            remove_empty_dirs=True,
+        )
+        if apply
         else None
     )
-    return {
+    hygiene_after = collect_wiki_hygiene(config.wiki_dir)
+    backup_cleanup = (
+        {
+            **hygiene_cleanup,
+            "deleted_count": hygiene_cleanup.get("removed_empty_dir_count", 0),
+            "kept_count": 0,
+            "retention_days": backup_retention_days,
+            "max_per_file": backup_max_per_file,
+        }
+        if hygiene_cleanup
+        else None
+    )
+    taxonomy_action_required = bool(taxonomy_issue_count)
+    requires_llm_rewrite_count = sum(1 for item in style_audit.get("reports", []) if item.get("requires_llm_rewrite"))
+    graph_error_count = int(graph_after.get("error_count", 0) or 0)
+    hygiene_error_count = int(hygiene_cleanup.get("error_count", 0) if hygiene_cleanup else 0) + int(
+        hygiene_pre_cleanup.get("error_count", 0) if hygiene_pre_cleanup else 0
+    )
+    human_decision_required = any(
+        bool(group)
+        for group in blocker_resolution.get("groups", [])
+        if isinstance(group, dict) and not group.get("automatic", False)
+    )
+    status = _status(
+        write_error_count=write_error_count,
+        requires_llm_rewrite_count=requires_llm_rewrite_count,
+        graph_error_count=graph_error_count,
+        taxonomy_action_required=taxonomy_action_required,
+        hygiene_error_count=hygiene_error_count,
+        human_decision_required=human_decision_required,
+        warning_count=int(graph_after.get("warning_count", 0) or 0),
+    )
+    rollback_cmd = _rollback_command(config, taxonomy_apply.get("receipt_path") if taxonomy_apply else taxonomy_receipt_path)
+    next_command = None if human_decision_required or status == "completed" else _fix_wiki_command(config, apply=True, backup=backup or apply)
+    total_changed_count = _total_changed_count(
+        style_fix=style_fix,
+        graph_fix=graph_fix,
+        taxonomy_apply=taxonomy_apply,
+        linker_apply=linker_apply,
+        hygiene_pre_cleanup=hygiene_pre_cleanup,
+        hygiene_cleanup=hygiene_cleanup,
+    )
+
+    report = {
         **style_fix,
         "schema": WIKI_HEALTH_FIX_SCHEMA,
+        "run_id": run_id,
+        "run_dir": str(run_dir),
+        "status": status,
+        "summary": _summary(
+            status=status,
+            total_changed_count=total_changed_count,
+            graph_error_count=graph_error_count,
+            taxonomy_action_required=taxonomy_action_required,
+            human_decision_required=human_decision_required,
+        ),
+        "safe_for_agent": True,
+        "next_command": next_command,
+        "resume_command": _fix_wiki_command(config, apply=apply, backup=backup),
+        "rollback_command": rollback_cmd,
+        "human_decision_required": human_decision_required,
+        "human_decisions": _human_decisions(blocker_resolution),
+        "total_changed_count": total_changed_count,
+        "hygiene_before": hygiene_before,
+        "hygiene_pre_cleanup": hygiene_pre_cleanup,
+        "hygiene_after_preflight": hygiene_after_preflight,
+        "hygiene_cleanup": hygiene_cleanup,
+        "hygiene_after": hygiene_after,
         "style_fix": style_fix,
         "graph_fix": graph_fix,
         "style_audit": style_audit,
+        "taxonomy_initial_audit": taxonomy_initial_report,
+        "taxonomy_initial_plan": taxonomy_initial_plan,
+        "taxonomy_plan_path": taxonomy_plan_path,
+        "taxonomy_apply": taxonomy_apply,
+        "taxonomy_receipt_path": taxonomy_apply.get("receipt_path") if taxonomy_apply else taxonomy_receipt_path,
+        "taxonomy_plan_after": taxonomy_plan_after,
         "taxonomy_audit": taxonomy_report,
-        "taxonomy_action_required": bool(taxonomy_issue_count),
+        "taxonomy_action_required": taxonomy_action_required,
         "taxonomy_issue_count": taxonomy_issue_count,
         "taxonomy_missing_canonical_dir_count": len(taxonomy_report.get("missing_canonical_dirs", [])),
         "taxonomy_proposed_move_count": len(taxonomy_report.get("proposed_moves", [])),
+        "taxonomy_initial_proposed_move_count": len(taxonomy_initial_report.get("proposed_moves", [])),
+        "taxonomy_applied_move_count": int(taxonomy_apply.get("applied_count", 0)) if taxonomy_apply else 0,
         "taxonomy_unmapped_top_level_dir_count": len(taxonomy_report.get("unmapped_top_level_dirs", [])),
         "taxonomy_duplicate_destination_count": len(taxonomy_report.get("duplicate_destinations", [])),
         "taxonomy_duplicate_directory_group_count": len(taxonomy_report.get("duplicate_directory_groups", [])),
         "taxonomy_root_note_count": len(taxonomy_report.get("root_notes", [])),
-        "requires_llm_rewrite_count": sum(1 for item in style_audit.get("reports", []) if item.get("requires_llm_rewrite")),
+        "requires_llm_rewrite_count": requires_llm_rewrite_count,
         "style_rewrite_plan": rewrite_plan,
         "write_error_count": write_error_count,
         "write_errors": write_errors,
-        "graph_audit": graph_before,
-        "graph_error_count": graph_before.get("error_count", 0),
-        "graph_warning_count": graph_before.get("warning_count", 0),
+        "graph_audit": graph_before_linker,
+        "graph_audit_before_linker": graph_before_linker,
+        "graph_error_count": graph_error_count,
+        "graph_error_count_before_linker": graph_before_linker.get("error_count", 0),
+        "graph_warning_count": graph_after.get("warning_count", 0),
         "linker_dry_run": linker_dry_run,
         "blocker_resolution": blocker_resolution,
         "linker_apply": linker_apply,
@@ -290,4 +484,164 @@ def fix_wiki_health(
             "max_per_file": backup_max_per_file,
         },
         "backup_cleanup": backup_cleanup,
+        "final_validation": {
+            "graph": {
+                "error_count": graph_error_count,
+                "blocker_count": graph_after.get("blocker_count", graph_error_count),
+                "orphan_count": graph_after.get("metrics", {}).get("orphan_count", 0),
+            },
+            "hygiene": {
+                "bak_or_rewrite": hygiene_after.get("bak_or_rewrite", 0),
+                "empty_dirs": hygiene_after.get("empty_dirs", 0),
+                "duplicate_hash_groups": hygiene_after.get("duplicate_hash_groups", 0),
+                "duplicate_filename_groups": hygiene_after.get("duplicate_filename_groups", 0),
+            },
+            "taxonomy": {
+                "proposed_moves": len(taxonomy_report.get("proposed_moves", [])),
+                "blocked": len(taxonomy_plan_after.get("blocked", [])),
+                "duplicate_directory_groups": len(taxonomy_report.get("duplicate_directory_groups", [])),
+                "ignored_items": ["attachments", "_Mock_Embeds", "_Índice_Medicina.md"],
+            },
+        },
+    }
+    report["compact_report_path"] = str(run_dir / "compact-report.json")
+    report["full_report_path"] = str(run_dir / "full-report.json")
+    report["run_state_path"] = str(run_dir / "run_state.json")
+    report_write_errors = []
+    compact_error = _try_write_json_file(run_dir / "compact-report.json", _compact_report(report))
+    if compact_error:
+        report_write_errors.append({"path": report["compact_report_path"], "error": compact_error})
+    state_error = _try_write_json_file(run_dir / "run_state.json", _run_state(report))
+    if state_error:
+        report_write_errors.append({"path": report["run_state_path"], "error": state_error})
+    full_error = _try_write_json_file(run_dir / "full-report.json", report)
+    if full_error:
+        report_write_errors.append({"path": report["full_report_path"], "error": full_error})
+    report["report_write_error_count"] = len(report_write_errors)
+    report["report_write_errors"] = report_write_errors
+    return report
+
+
+def _status(
+    *,
+    write_error_count: int,
+    requires_llm_rewrite_count: int,
+    graph_error_count: int,
+    taxonomy_action_required: bool,
+    hygiene_error_count: int,
+    human_decision_required: bool,
+    warning_count: int,
+) -> str:
+    if write_error_count or hygiene_error_count:
+        return "failed"
+    if human_decision_required or requires_llm_rewrite_count or graph_error_count or taxonomy_action_required:
+        return "blocked"
+    if warning_count:
+        return "completed_with_warnings"
+    return "completed"
+
+
+def _summary(
+    *,
+    status: str,
+    total_changed_count: int,
+    graph_error_count: int,
+    taxonomy_action_required: bool,
+    human_decision_required: bool,
+) -> str:
+    if status == "completed":
+        return "fix-wiki concluiu sem blockers técnicos."
+    if status == "completed_with_warnings":
+        return "fix-wiki concluiu os reparos determinísticos e deixou apenas warnings não bloqueantes."
+    if human_decision_required:
+        return "fix-wiki aplicou reparos determinísticos e parou em decisões humanas/semânticas."
+    if graph_error_count:
+        return "fix-wiki aplicou reparos determinísticos, mas ainda há blockers de grafo."
+    if taxonomy_action_required:
+        return "fix-wiki aplicou movimentos seguros, mas ainda há taxonomia sem destino único."
+    if total_changed_count:
+        return "fix-wiki aplicou mudanças; rode novamente se houver next_command."
+    return "fix-wiki está bloqueado por pendência operacional."
+
+
+def _total_changed_count(
+    *,
+    style_fix: dict[str, Any],
+    graph_fix: dict[str, Any],
+    taxonomy_apply: dict[str, Any] | None,
+    linker_apply: dict[str, Any] | None,
+    hygiene_pre_cleanup: dict[str, Any] | None,
+    hygiene_cleanup: dict[str, Any] | None,
+) -> int:
+    return (
+        int(style_fix.get("written_count", 0) or 0)
+        + int(graph_fix.get("written_count", 0) or 0)
+        + int(taxonomy_apply.get("applied_count", 0) if taxonomy_apply else 0)
+        + int(linker_apply.get("files_changed", 0) if linker_apply else 0)
+        + int(hygiene_pre_cleanup.get("archived_count", 0) if hygiene_pre_cleanup else 0)
+        + int(hygiene_pre_cleanup.get("removed_empty_dir_count", 0) if hygiene_pre_cleanup else 0)
+        + int(hygiene_cleanup.get("archived_count", 0) if hygiene_cleanup else 0)
+        + int(hygiene_cleanup.get("removed_empty_dir_count", 0) if hygiene_cleanup else 0)
+    )
+
+
+def _human_decisions(blocker_resolution: dict[str, Any]) -> list[dict[str, Any]]:
+    decisions: list[dict[str, Any]] = []
+    for group in blocker_resolution.get("groups", []):
+        if not isinstance(group, dict) or group.get("automatic", False):
+            continue
+        decisions.append(
+            {
+                "kind": group.get("route", "manual_review"),
+                "question": group.get("reason", "Revisão humana necessária."),
+                "items": group.get("sample", [])[:5],
+                "next_action": group.get("next_action", ""),
+            }
+        )
+        if len(decisions) >= 5:
+            break
+    return decisions
+
+
+def _compact_report(report: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": report.get("schema"),
+        "run_id": report.get("run_id"),
+        "status": report.get("status"),
+        "safe_for_agent": report.get("safe_for_agent"),
+        "summary": report.get("summary"),
+        "wiki_dir": report.get("wiki_dir"),
+        "dry_run": report.get("dry_run"),
+        "apply": report.get("apply"),
+        "changed_count": report.get("changed_count"),
+        "total_changed_count": report.get("total_changed_count"),
+        "taxonomy_applied_move_count": report.get("taxonomy_applied_move_count"),
+        "requires_llm_rewrite_count": report.get("requires_llm_rewrite_count"),
+        "linker_applied": report.get("linker_applied"),
+        "linker_skipped_reason": report.get("linker_skipped_reason"),
+        "graph": report.get("final_validation", {}).get("graph", {}),
+        "hygiene": report.get("final_validation", {}).get("hygiene", {}),
+        "taxonomy": report.get("final_validation", {}).get("taxonomy", {}),
+        "human_decision_required": report.get("human_decision_required"),
+        "human_decisions": report.get("human_decisions", []),
+        "next_command": report.get("next_command"),
+        "resume_command": report.get("resume_command"),
+        "rollback_command": report.get("rollback_command"),
+        "compact_report_path": report.get("compact_report_path"),
+        "full_report_path": report.get("full_report_path"),
+    }
+
+
+def _run_state(report: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": "medical-notes-workbench.fix-wiki-run-state.v1",
+        "run_id": report.get("run_id"),
+        "status": report.get("status"),
+        "wiki_dir": report.get("wiki_dir"),
+        "next_command": report.get("next_command"),
+        "resume_command": report.get("resume_command"),
+        "rollback_command": report.get("rollback_command"),
+        "human_decision_required": report.get("human_decision_required"),
+        "compact_report_path": report.get("compact_report_path"),
+        "full_report_path": report.get("full_report_path"),
     }

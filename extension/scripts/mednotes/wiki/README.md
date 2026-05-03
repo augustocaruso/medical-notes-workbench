@@ -18,6 +18,8 @@ Módulos internos:
 - `raw_chats.py`: leitura/listagem/mutação de frontmatter dos chats brutos.
 - `note_plan.py`: contrato exaustivo de notas criado pela triagem.
 - `coverage.py`: inventário exaustivo de temas por raw chat antes do publish.
+- `artifacts.py`: descoberta/validação de manifests HTML do `gemini-md-export`
+  e embeds obrigatórios nas notas Wiki.
 - `taxonomy/`: subdomínio de taxonomia com schema, normalização, resolução,
   auditoria, migração e rollback.
 - `publish.py`: `stage-note`, `publish-batch` e colisões de destino.

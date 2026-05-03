@@ -7,9 +7,11 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from wiki.artifacts import validate_artifact_batch, validate_note_artifacts
 from wiki.common import CollisionError, MedOpsError, MissingPathError, ValidationError, _now_iso
 from wiki.config import MedConfig, _path
 from wiki.coverage import validate_raw_coverage, validate_raw_coverage_structure
+from wiki.link_terms import normalize_key
 from wiki.raw_chats import atomic_write_text, mutate_raw_frontmatter
 from wiki.style import validate_wiki_note_contract
 from wiki.taxonomy import (
@@ -98,6 +100,61 @@ def _paths_match(left: str, right: Path) -> bool:
         return str(left_path) == str(right)
 
 
+def _same_path(left: Path, right: Path) -> bool:
+    try:
+        return left.resolve() == right.resolve()
+    except OSError:
+        return str(left) == str(right)
+
+
+def _note_target_key(path: Path) -> str:
+    return normalize_key(path.stem)
+
+
+def _wiki_note_targets(wiki_dir: Path) -> dict[str, list[Path]]:
+    targets: dict[str, list[Path]] = {}
+    if not wiki_dir.exists():
+        return targets
+    for path in sorted(wiki_dir.rglob("*.md"), key=lambda item: item.as_posix()):
+        if not path.is_file() or path.name.startswith("."):
+            continue
+        targets.setdefault(_note_target_key(path), []).append(path)
+    return targets
+
+
+def _display_path(path: Path, wiki_dir: Path) -> str:
+    try:
+        return path.relative_to(wiki_dir).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _validate_normalized_target_available(
+    target: Path,
+    wiki_dir: Path,
+    existing_targets: dict[str, list[Path]],
+    reserved_targets: dict[str, Path],
+) -> None:
+    target_key = _note_target_key(target)
+    reserved = reserved_targets.get(target_key)
+    if reserved is not None and not _same_path(reserved, target):
+        raise CollisionError(
+            "Target note would duplicate another note in this publish batch after "
+            f"Obsidian target normalization: {_display_path(target, wiki_dir)} conflicts with "
+            f"{_display_path(reserved, wiki_dir)}"
+        )
+
+    conflicts = [path for path in existing_targets.get(target_key, []) if not _same_path(path, target)]
+    if conflicts:
+        conflict_list = ", ".join(_display_path(path, wiki_dir) for path in conflicts[:5])
+        extra = "" if len(conflicts) <= 5 else f" and {len(conflicts) - 5} more"
+        raise CollisionError(
+            "Target note would duplicate an existing Obsidian target after accent/case "
+            f"normalization: {_display_path(target, wiki_dir)} conflicts with {conflict_list}{extra}. "
+            "Use the existing note or merge/rename before publishing."
+        )
+
+
 def _manifest_note_count(data: dict[str, Any]) -> int:
     return sum(len(batch.get("notes", [])) for batch in _manifest_batches(data) if isinstance(batch, dict))
 
@@ -156,6 +213,8 @@ def plan_publish_batch(
 ) -> list[dict[str, Any]]:
     planned_batches: list[dict[str, Any]] = []
     reserved: set[Path] = set()
+    reserved_targets: dict[str, Path] = {}
+    existing_targets = _wiki_note_targets(config.wiki_dir)
     for batch in _manifest_batches(data):
         if not isinstance(batch, dict):
             raise ValidationError("Each manifest batch must be an object")
@@ -175,6 +234,7 @@ def plan_publish_batch(
                 "Manifest batch missing coverage_path; create an exhaustive raw coverage inventory "
                 "and stage notes with stage-note --coverage <coverage.json>"
             )
+        artifact_note_inputs: list[dict[str, str]] = []
         for raw_item in notes_value:
             item = _validate_note_item(raw_item)
             content_path = _path(item["content_path"])
@@ -182,6 +242,18 @@ def plan_publish_batch(
                 raise MissingPathError(f"Content file not found: {content_path}")
             content = content_path.read_text(encoding="utf-8")
             validate_wiki_note_contract(content, title=item["title"], raw_file=raw_file)
+            artifact_validation = validate_note_artifacts(
+                content,
+                raw_file=raw_file,
+                artifact_dir=config.artifact_dir,
+            )
+            artifact_note_inputs.append(
+                {
+                    "title": item["title"],
+                    "content_path": str(content_path),
+                    "content": content,
+                }
+            )
             target, taxonomy_resolution = resolve_target_for_note(
                 config.wiki_dir,
                 item["taxonomy"],
@@ -189,7 +261,9 @@ def plan_publish_batch(
                 allow_new_taxonomy_leaf=allow_new_taxonomy_leaf,
             )
             target = resolve_collision(target, collision, reserved)
+            _validate_normalized_target_available(target, config.wiki_dir, existing_targets, reserved_targets)
             reserved.add(target)
+            reserved_targets[_note_target_key(target)] = target
             notes.append(
                 {
                     "taxonomy": taxonomy_resolution.taxonomy,
@@ -199,9 +273,18 @@ def plan_publish_batch(
                     "title": item["title"],
                     "content_path": str(content_path),
                     "target_path": str(target),
+                    "artifact_validation": artifact_validation,
                 }
             )
-        planned_batch: dict[str, Any] = {"raw_file": str(raw_file), "notes": notes}
+        planned_batch: dict[str, Any] = {
+            "raw_file": str(raw_file),
+            "notes": notes,
+            "artifact_validation": validate_artifact_batch(
+                artifact_note_inputs,
+                raw_file=raw_file,
+                artifact_dir=config.artifact_dir,
+            ),
+        }
         if coverage_path_value:
             coverage_path = _path(str(coverage_path_value))
             planned_batch["coverage_path"] = str(coverage_path)
@@ -298,13 +381,21 @@ def stage_note(
     )
     canonical_taxonomy = taxonomy_resolution.taxonomy if taxonomy_resolution else "/".join(normalize_taxonomy(taxonomy))
     _validate_taxonomy_not_title(tuple(canonical_taxonomy.split("/")), title)
-    safe_title(title)
+    filename = safe_title(title)
+    if taxonomy_resolution is not None and config is not None:
+        target = config.wiki_dir.joinpath(*taxonomy_resolution.parts, f"{filename}.md")
+        _validate_normalized_target_available(target, config.wiki_dir, _wiki_note_targets(config.wiki_dir), {})
     if not raw_file.exists():
         raise MissingPathError(f"Raw file not found: {raw_file}")
     if not content_path.exists():
         raise MissingPathError(f"Content file not found: {content_path}")
     content = content_path.read_text(encoding="utf-8")
     validate_wiki_note_contract(content, title=title, raw_file=raw_file)
+    artifact_validation = validate_note_artifacts(
+        content,
+        raw_file=raw_file,
+        artifact_dir=config.artifact_dir if config is not None else None,
+    )
     if manifest.exists():
         data = _load_manifest(manifest)
     else:
@@ -328,6 +419,7 @@ def stage_note(
         "manifest": str(manifest),
         "dry_run": dry_run,
         "staged": item,
+        "artifact_validation": artifact_validation,
         "note_count": _manifest_note_count(data) + (1 if dry_run else 0),
         "batch_count": len(_manifest_batches(data)),
     }
