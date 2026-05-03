@@ -1,0 +1,21 @@
+description = "Cria uma nota medica didatica em Markdown."
+prompt = """
+Crie uma nota medica didatica em Markdown a partir do pedido do usuario.
+
+Argumentos do usuario: {{args}}
+
+Use a skill `create-medical-note` desta extensão. Ela é o runbook oficial para
+nota didática; para Wiki_Medicina, carregue também `knowledge/knowledge-architect.md`.
+Use `knowledge/workflow-output-contract.md` para terminar com status, destino e
+próxima ação quando salvar arquivo.
+
+Launcher:
+1. Identifique tema, objetivo de estudo, publico-alvo e nivel de detalhe a
+   partir de `{{args}}` e do contexto da conversa.
+2. Se faltar o tema central, pergunte antes de escrever.
+3. Produza Markdown pronto para Obsidian seguindo a skill.
+4. Se fizer sentido, inclua "Pontos visuais sugeridos" para futuro
+   `/mednotes:enrich`.
+5. Se o usuario pedir arquivo, confirme antes de sobrescrever qualquer caminho
+   existente.
+"""

@@ -1,0 +1,20 @@
+description = "Prepara o ambiente Python local do Medical Notes Workbench."
+prompt = '''
+Prepare o Medical Notes Workbench para uso nesta maquina.
+
+Use a extensao instalada em `~/.gemini/extensions/medical-notes-workbench` como raiz padrao. Se esse caminho nao existir, procure um diretorio contendo `gemini-extension.json` com `"name": "medical-notes-workbench"` ou pergunte ao usuario onde a extensao foi instalada.
+Use `~/.gemini/medical-notes-workbench` como diretorio persistente do usuario. Nunca guarde `config.toml`, `.env`, cache ou venv como unica copia dentro da pasta auto-updatable da extensao. Use `uv` para todo Python.
+
+Passos:
+1. Crie o diretorio persistente: Windows PowerShell `New-Item -ItemType Directory -Force "$HOME\.gemini\medical-notes-workbench"`; macOS/Linux `mkdir -p ~/.gemini/medical-notes-workbench`.
+2. Se existir `config.toml` ou `.env` antigo na raiz da extensao, copie para o diretorio persistente antes de editar. Se nao existir config persistente, copie `config.example.toml` para `~/.gemini/medical-notes-workbench/config.toml`.
+3. Confira se `[vault].path` esta preenchido no config persistente. Se estiver vazio, pergunte ao usuario o caminho do vault Obsidian e atualize esse arquivo persistente.
+4. Para processamento de chats, confira `[chat_processor]` no config persistente se o usuario estiver fora do Windows real. No Windows real, raw/wiki/linker ja tem defaults especificos, e o catalogo usa `~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json`.
+5. No Windows, prefira `.\scripts\bootstrap_windows_python_uv.ps1`: ele autoeleva quando possível, atualiza o reset script, instala/usa `uv` pelo melhor caminho disponível, remove Python global da Python Software Foundation/py launcher, limpa PATH, recria a venv persistente e roda checks. Para reset sem remover Python global, rode `.\scripts\reset_windows_python_uv.ps1`.
+6. Para setup manual, configure a venv persistente e sincronize: Windows `$env:UV_PROJECT_ENVIRONMENT = "$HOME\.gemini\medical-notes-workbench\.venv"; uv sync`; macOS/Linux `export UV_PROJECT_ENVIRONMENT="$HOME/.gemini/medical-notes-workbench/.venv"; uv sync`.
+7. Teste com `uv run python -m enricher --help`, depois `uv run python scripts/mednotes/med_ops.py validate --config ~/.gemini/medical-notes-workbench/config.toml` e `uv run python scripts/mednotes/med_linker.py --help`.
+8. Se o usuario quiser SerpAPI, explique: crie uma conta em https://serpapi.com/, abra o dashboard e copie a API key. Depois rode `gemini extensions config medical-notes-workbench SERPAPI_KEY`. Como fallback robusto, coloque `SERPAPI_KEY=...` ou `SERPAPI_API_KEY=...` em `~/.gemini/medical-notes-workbench/.env`. Nao grave segredos na pasta da extensao.
+9. Rode `uv run python -m pytest` apenas se o usuario pedir validacao completa.
+
+Explique em portugues o que foi configurado e o que ainda falta.
+'''

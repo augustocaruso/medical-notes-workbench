@@ -1,0 +1,19 @@
+description = "Roda o linker semântico da Wiki_Medicina."
+prompt = '''
+Rode a linkagem semântica da Wiki_Medicina.
+
+Argumentos do usuário: {{args}}
+
+Use a skill `link-medical-wiki`. Ela é o runbook oficial; o resumo do workflow
+está em `docs/workflows/link.md`.
+Use também `knowledge/workflow-output-contract.md` para responder com resumo
+legível, status com emoji e próxima ação.
+
+Invariantes do launcher:
+- Dry-run primeiro com `med_linker.py --dry-run --json`.
+- Aplique sem `--dry-run` somente se o plano estiver coerente e sem blockers.
+- Não corrija estilo, YAML/status, publicação ou taxonomia neste workflow.
+- Não faça regex manual para linkar notas.
+- Não mostre JSON bruto por padrão; resuma links planejados/inseridos,
+  arquivos afetados, catálogo usado, blockers e warnings.
+'''

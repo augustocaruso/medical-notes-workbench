@@ -1,0 +1,24 @@
+description = "Processa backlog de chats medicos brutos para notas Obsidian."
+prompt = '''
+Processe chats médicos brutos de `Chats_Raw` para `Wiki_Medicina`.
+
+Argumentos do usuário: {{args}}
+
+Use a skill `process-medical-chats`; runbook: `docs/workflows/process-chats.md`.
+Responda pelo contrato `knowledge/workflow-output-contract.md`.
+
+Invariantes do launcher:
+- Rode `med_ops.py validate` e `wiki_tree.py --max-depth 4 --audit --format text`.
+- Use `list-pending --summary` e `list-triados --summary`; não despeje backlog completo.
+- Se o usuário responder a uma "Próxima Ação", execute só essa fase.
+- Para lote explícito, use `plan-subagents --limit <N>`; default máximo 5 subagents.
+- Paralelize apenas work items de `plan-subagents`; um raw chat por subagent.
+- Aplique `triage --note-plan`, `discard`, `stage-note`, catálogo, dry-run, publish e linker em série.
+- Exija `note_plan` da triagem e cobertura derivada dele; use `stage-note --coverage` no manifest único do lote.
+- Se `plan-subagents --phase architect` retornar `artifact_manifests`, cubra os HTMLs no grupo de notas; não inline HTML.
+- Não substitua `med-chat-triager`; cada raw chat planejado pertence a um subagent.
+- Sempre rode `publish-batch --dry-run`; o CLI exige recibo para mesmo manifest/caminhos/opcoes.
+- Após `med-publish-guard approve`, publique, rode `run-linker` e confira `index_files_changed`/`index_entries_planned`;
+  se links bloquearem, o índice ainda atualiza e a próxima ação é `/mednotes:fix-wiki --dry-run`.
+- Não despeje manifests/JSON bruto; resuma triagem, notas, publish, linker e blockers.
+'''

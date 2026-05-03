@@ -1,0 +1,96 @@
+# medical-notes-workbench — copie para config.toml e ajuste.
+#
+# Em instalação Gemini CLI auto-updatable, prefira guardar este arquivo fora da
+# pasta da extensão:
+#   Windows/macOS/Linux: ~/.gemini/medical-notes-workbench/config.toml
+# A pasta ~/.gemini/extensions/medical-notes-workbench pode ser recriada em
+# updates e não deve guardar estado editável do usuário.
+
+[vault]
+# Caminho absoluto do vault Obsidian. Vazio = enricher recusa rodar.
+path = ""
+# Subpasta dentro do vault onde imagens baixadas são gravadas.
+attachments_subdir = "attachments/medicina"
+
+[enrichment]
+# Teto duro de imagens por nota. Cap também é aplicado pelo prompt da etapa 1.
+max_anchors_per_note = 5
+# Resolução máxima do maior lado da imagem (px). Acima disso, redimensiona.
+max_image_dimension = 1600
+# Recodifica para .webp quando a redução de tamanho ultrapassa este percentual.
+webp_min_savings_pct = 30
+# Idioma preferido das figuras retornadas:
+#  - "pt-br": gemini gera 1-2 queries em PT + 1 em EN; SerpAPI usa hl=pt-br&gl=br;
+#            rerank prefere figura com texto em PT (ou sem texto) em empates.
+#  - "en":    queries só em EN; SerpAPI hl=en&gl=us; sem regra de desempate.
+#  - "any":   queries em EN; SerpAPI sem hl/gl. Comportamento default.
+preferred_language = "any"
+
+[sources]
+# Ordem importa apenas para tie-break em re-ranqueamento; busca é paralela.
+enabled = ["wikimedia", "openstax", "nih_open_i", "radiopaedia", "pdf_library", "web_search"]
+# Top-K candidatas por fonte por âncora (controle de custo do re-rank).
+top_k_per_source = 4
+
+[sources.pdf_library]
+# Caminho do índice gerado por scripts/build_pdf_index.py.
+index_path = "~/Documents/medical-notes-workbench/pdf_index.db"
+
+[sources.web_search]
+# "serpapi" ou "bing". Exige a key correspondente no ambiente ou em:
+#   ~/.gemini/medical-notes-workbench/.env
+provider = "serpapi"
+
+[gemini]
+# Consumido APENAS pelo orquestrador `scripts/enrich_notes.py`.
+# O toolbox (subcomandos sections/search/download/insert) não invoca LLM.
+# No Windows, mantenha "gemini" quando o CLI estiver no PATH; o orquestrador
+# resolve automaticamente o shim npm `gemini.cmd` (incluindo `%APPDATA%\npm`).
+# Use caminho absoluto só em máquina onde o PATH esteja quebrado.
+binary = "gemini"
+model_anchors = "gemini-2.5-pro"
+model_rerank = "gemini-2.5-flash"
+# Teto de candidatas (somadas de todas as fontes) que vão pra rerank.
+max_candidates_per_anchor = 8
+# Timeout por chamada ao gemini CLI (anchors e rerank), em segundos.
+timeout_seconds = 120
+# (Multimodal: orquestrador anexa miniaturas via @arquivo no prompt +
+#  --include-directories. Funciona com gemini CLI 0.39+ oficial.)
+
+[download]
+# User-Agent enviado em fetch de bytes (download.py).
+#
+# Default = UA browser-like (Chrome/macOS): destrava sites com anti-bot
+# básico (osmosis, thehealthy, alguns CDNs). Wikimedia também aceita.
+# É tecnicamente "se passar por navegador" — não funciona contra
+# Cloudflare / TLS fingerprint / captcha; e não tente bypassar.
+#
+# Alternativa identificável (mais respeitoso, alinhado com expectativa do
+# Wikimedia e algumas fontes médicas):
+# user_agent = "medical-notes-workbench/0.1 (personal study; https://github.com/augustocaruso/medical-notes-workbench)"
+user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
+[cache]
+# Caminho do SQLite com âncoras, candidatas e índice de imagens baixadas.
+path = "~/Documents/medical-notes-workbench/cache.db"
+# TTL em dias para o cache de candidatas por (source, query).
+candidates_ttl_days = 30
+
+[chat_processor]
+# Caminhos usados pelo pipeline de subagents `/mednotes:process-chats`.
+# Defaults internos preservam o ambiente Windows real do usuario para raw/wiki.
+# O catalogo fica em dados persistentes do Gemini, fora da pasta auto-updatable da extensao:
+#   C:\Users\leona\OneDrive\Chats_Raw
+#   C:\Users\leona\iCloudDrive\iCloud~md~obsidian\Wiki_Medicina
+#   ~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json
+# Preencha aqui apenas quando quiser sobrescrever os defaults ou testar fora do Windows.
+# Se `linker_path` ficar vazio, `med_ops.py` usa `scripts/mednotes/med_linker.py`
+# empacotado na extensao quando disponivel.
+raw_dir = ""
+wiki_dir = ""
+catalog_path = "~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json"
+linker_path = ""
+# Opcional: pasta onde o gemini-md-export salva manifests/HTML de artefatos.
+# Quando vazio, med_ops procura manifests artifact-<chatId>-manifest.json junto
+# ao raw chat e em subpastas artifacts proximas.
+artifact_dir = ""

@@ -1,0 +1,11 @@
+{
+  "name": "medical-notes-workbench",
+  "version": "0.3.0",
+  "description": "Gemini CLI extension packaging for medical notes creation and processing.",
+  "private": true,
+  "scripts": {
+    "build:gemini-cli-extension": "node scripts/run_python.mjs scripts/build_gemini_cli_extension.py",
+    "validate:gemini-cli-extension": "npm run build:gemini-cli-extension && gemini extensions validate dist/gemini-cli-extension",
+    "publish:gemini-cli-extension": "npm run build:gemini-cli-extension && node scripts/run_python.mjs scripts/publish_gemini_cli_extension_branch.py"
+  }
+}
