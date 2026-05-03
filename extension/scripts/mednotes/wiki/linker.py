@@ -551,10 +551,23 @@ def run(
     blockers = list(before_audit.get("errors", []))
     blocked = bool(blockers) and not dry_run
     plan_only = dry_run or blocked
-    plans = [link_file(path, vocabulary, max_links=max_links, dry_run=plan_only, wiki_dir=wiki_dir) for path in files]
+    plans: list[LinkPlan] = []
+    for path in files:
+        is_index_file = is_index_target(path.stem)
+        plans.append(
+            link_file(
+                path,
+                vocabulary,
+                max_links=max_links,
+                dry_run=plan_only and not (blocked and is_index_file),
+                wiki_dir=wiki_dir,
+            )
+        )
     changed = [plan for plan in plans if plan.changed]
     if blocked:
-        changed = []
+        # Graph blockers should prevent semantic link mutations, but the
+        # generated index is deterministic and must stay fresh after publishes.
+        changed = [plan for plan in plans if plan.index_updated]
     summary = {
         "ok": not blockers,
         "blocked": blocked,
@@ -570,6 +583,7 @@ def run(
         "links_rewritten": sum(len(plan.rewrites) for plan in plans),
         "index_files_changed": sum(1 for plan in changed if plan.index_updated),
         "index_entries_planned": sum(plan.index_entries for plan in plans),
+        "index_refreshed_while_blocked": bool(blocked and any(plan.index_updated for plan in changed)),
         "blocker_count": len(blockers),
         "blockers": blockers,
         "graph_audit_before": before_audit,

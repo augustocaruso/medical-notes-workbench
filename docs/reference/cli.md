@@ -33,7 +33,8 @@ Todos os exemplos assumem `uv run python`. Em instalações da extensão, config
 - `uv run python scripts/mednotes/med_ops.py list-triados [--summary] [--limit N]`
 - `uv run python scripts/mednotes/med_ops.py plan-subagents --phase triage|architect|style-rewrite [--limit N] [--max-concurrency N]`
   (`triage`/`architect`: default 5; `style-rewrite`: default 3)
-- `uv run python scripts/mednotes/med_ops.py triage|discard`
+- `uv run python scripts/mednotes/med_ops.py triage --note-plan note-plan.json`
+- `uv run python scripts/mednotes/med_ops.py discard`
 - `uv run python scripts/mednotes/med_ops.py validate-note|fix-note`
 - `uv run python scripts/mednotes/med_ops.py stage-note --coverage coverage.json`
 - `uv run python scripts/mednotes/med_ops.py publish-batch --dry-run`

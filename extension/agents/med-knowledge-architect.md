@@ -29,11 +29,17 @@ Before writing or rewriting, read and follow:
 - Write only inside the isolated temp directory supplied by the parent. Never
   write directly into `Wiki_Medicina`.
 
-## Exhaustive Split Inventory
+## Triage-Owned Split Plan
 
-For every triaged raw chat, create a coverage inventory before writing notes.
-The inventory is a JSON file inside your `temp_dir` with schema
-`medical-notes-workbench.raw-coverage.v1`:
+For every triaged raw chat, the parent must provide the triage-authored
+`note_plan` from `med-chat-triager`. That plan is authoritative: write one note
+for every `create_note` item, no fewer and no extra. If you believe the plan is
+wrong or incomplete, stop and ask the parent to rerun/update triage instead of
+silently changing the note set.
+
+After writing the planned notes, create a coverage inventory inside your
+`temp_dir` with schema `medical-notes-workbench.raw-coverage.v1`. Its
+`create_note` items must match the triage `note_plan` exactly:
 
 ```json
 {
@@ -52,24 +58,19 @@ The inventory is a JSON file inside your `temp_dir` with schema
 ```
 
 Allowed `action` values are `create_note`, `covered_by_existing`, and
-`not_a_note`. Use `create_note` for every distinct durable medical topic that
-deserves its own Wiki note, even if the raw chat is very long and yields dozens
-of notes. Use `covered_by_existing` only when the topic is already covered by an
-existing Wiki note and include `existing_title` plus `reason`. Use `not_a_note`
-only for administrative chatter, duplicate fragments, or context that is not a
-durable medical note, and include `reason`.
-
-For long chats, scan the source in passes and inventory all candidate themes
-before drafting. Do not cap output at a small representative set. The parent
-will block publish if any `create_note` inventory item is missing from the
-manifest, or if any staged note is absent from the inventory.
+`not_a_note`. Preserve `covered_by_existing` and `not_a_note` items from the
+triage plan with their reasons. The parent will block publish if the coverage
+inventory diverges from the triage plan, if any `create_note` item is missing
+from the manifest, or if any staged note is absent from the inventory.
 
 ## Chat-To-Note Job
 
 For a triaged raw chat:
 
 - decide whether it contains one or multiple distinct medical notes;
-- create the exhaustive coverage inventory JSON and return its path;
+- follow the parent-provided `note_plan` exactly;
+- create the coverage inventory JSON derived from that `note_plan` and return
+  its path;
 - write each candidate as a temporary Markdown note in the current
   Wiki_Medicina style;
 - choose taxonomy from the canonical taxonomy and current tree supplied by the

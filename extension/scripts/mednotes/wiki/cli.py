@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from datetime import date
 from pathlib import Path
@@ -37,6 +38,7 @@ from wiki.api import (
     resolve_taxonomy,
     rollback_taxonomy_migration,
     run_linker,
+    serialize_triage_note_plan,
     stage_note,
     taxonomy_audit,
     taxonomy_migration_plan,
@@ -70,6 +72,15 @@ def _add_taxonomy_creation_mode(parser: argparse.ArgumentParser) -> None:
         dest="allow_new_taxonomy_leaf",
         help=argparse.SUPPRESS,
     )
+
+
+def _read_json(path: Path) -> object:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ValidationError(f"JSON file not found: {path}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValidationError(f"Invalid JSON file {path}: {exc}") from exc
 
 
 def _status_payload(rows: list[dict[str, str]], mode: str, args: argparse.Namespace) -> list[dict[str, str]] | dict[str, object]:
@@ -110,6 +121,7 @@ def _compact_linker_payload(result: dict[str, object]) -> dict[str, object]:
         "links_rewritten": result.get("links_rewritten"),
         "index_files_changed": result.get("index_files_changed"),
         "index_entries_planned": result.get("index_entries_planned"),
+        "index_refreshed_while_blocked": result.get("index_refreshed_while_blocked"),
         "blocker_count": result.get("blocker_count"),
         "blocker_summary": _issue_summary(blocker_list),
         "blockers_sample": blocker_list[:10],
@@ -199,6 +211,7 @@ def build_parser() -> argparse.ArgumentParser:
     triage.add_argument("--tipo", default="medicina")
     triage.add_argument("--titulo", required=True)
     triage.add_argument("--fonte-id", default="")
+    triage.add_argument("--note-plan", help="JSON file produced by med-chat-triager with the exhaustive note plan.")
     triage.add_argument("--dry-run", action="store_true")
     triage.add_argument("--backup", action="store_true", help="Create a .bak file before mutating raw chat frontmatter.")
 
@@ -354,16 +367,24 @@ def main(argv: list[str] | None = None) -> int:
             )
             _json(resolved.to_json(config.wiki_dir, title=args.title))
         elif args.command == "triage":
+            updates = {
+                "tipo": args.tipo,
+                "status": "triado",
+                "data_importacao": date.today().isoformat(),
+                "fonte_id": args.fonte_id,
+                "titulo_triagem": args.titulo,
+            }
+            if args.tipo.lower() == "medicina":
+                if not args.note_plan:
+                    raise ValidationError("--note-plan is required when --tipo medicina")
+                updates["note_plan"] = serialize_triage_note_plan(
+                    _read_json(_path(args.note_plan)),
+                    _path(args.raw_file),
+                )
             _json(
                 mutate_raw_frontmatter(
                     _path(args.raw_file),
-                    {
-                        "tipo": args.tipo,
-                        "status": "triado",
-                        "data_importacao": date.today().isoformat(),
-                        "fonte_id": args.fonte_id,
-                        "titulo_triagem": args.titulo,
-                    },
+                    updates,
                     dry_run=args.dry_run,
                     backup=getattr(args, "backup", False),
                 )

@@ -21,16 +21,18 @@ e escrita clinica por unidade isolada.
    pediu lote finito. O default de concorrência é 5 subagents; use
    `--max-concurrency 2` ou `--max-concurrency 3` em modo econômico e só passe
    valor maior que 5 quando o usuário pedir explicitamente.
-5. Aplicar `triage` ou `discard` em serie pelo agente principal.
+5. Aplicar `triage --note-plan <note-plan.json>` ou `discard` em serie pelo
+   agente principal. O `note-plan` é a lista exaustiva de notas que devem nascer
+   daquele chat.
 6. Planejar arquitetura com
    `med_ops.py plan-subagents --phase architect --temp-root <tmp-agents> --limit <N>`
    quando o usuário pediu lote finito. O mesmo teto default de 5 subagents vale
    aqui; omita `--max-concurrency` para usar esse default.
-7. Cada `med-knowledge-architect` deve criar primeiro um inventário de cobertura
-   exaustivo (`medical-notes-workbench.raw-coverage.v1`) para o raw chat:
-   todo tema durável vira `create_note`; itens já cobertos usam
-   `covered_by_existing`; ruído usa `not_a_note` com motivo. Não aceite amostra
-   representativa em chat longo.
+7. Cada `med-knowledge-architect` deve seguir exatamente o `note_plan` da
+   triagem e criar um inventário de cobertura
+   (`medical-notes-workbench.raw-coverage.v1`) derivado dele. Se achar que o
+   plano está incompleto, bloqueie e refaça a triagem; não crie subconjunto nem
+   notas extras silenciosamente.
 8. Validar/fixar notas temporarias com `validate-note` e `fix-note`, incluindo
    YAML canônico da Wiki (`aliases`, `tags`, `images_*`, ou nenhum YAML quando
    todos estiverem vazios).
@@ -38,10 +40,13 @@ e escrita clinica por unidade isolada.
    <coverage.json>`; ele aceita vários raw chats e cria `batches` internamente.
 10. Rodar `publish-batch --dry-run` uma vez para esse manifest, acionar
    `med-publish-guard` e publicar uma vez apenas se aprovado.
-11. Rodar `run-linker` uma unica vez depois do publish do lote inteiro. Se o
-    linker bloquear por grafo, a próxima ação padrão é
-    `/mednotes:fix-wiki --dry-run`; deixe fusão/deleção manual apenas para
-    duplicatas não-idênticas que o fix-wiki não consegue resolver.
+11. Rodar `run-linker` uma unica vez depois do publish do lote inteiro. O
+    resultado precisa ser conferido por `index_files_changed` e
+    `index_entries_planned`, porque esse passo atualiza o `_Índice_Medicina`.
+    Se o linker bloquear links semânticos por grafo, o índice ainda deve ser
+    atualizado; a próxima ação padrão é `/mednotes:fix-wiki --dry-run`. Deixe
+    fusão/deleção manual apenas para duplicatas não-idênticas que o fix-wiki não
+    consegue resolver.
 
 ## Limites
 
@@ -58,7 +63,7 @@ e escrita clinica por unidade isolada.
 - Se `validate-note` retornar `requires_llm_rewrite: true`, use o
   `rewrite_prompt` com `med-knowledge-architect`; `fix-note` é normalizador
   determinístico e não cria seções clínicas ausentes.
-- `publish-batch` bloqueia manifest sem `coverage_path` ou com inventário que
-  não bate com as notas staged; não marque raw chat como `processado` sem essa
+- `publish-batch` bloqueia manifest sem `coverage_path`, raw chat sem
+  `note_plan`, cobertura que não bate com o `note_plan`, ou notas staged fora da
   cobertura.
 - Taxonomia e pasta de categoria; `title` vira o arquivo `.md`.

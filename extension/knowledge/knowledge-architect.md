@@ -114,9 +114,11 @@ Distribuicao canonica: `1. Clínica Médica` inclui Cardiologia, Dermatologia, E
 
 ## 🔗 Estratégia de Interconexão e Triagem
 - **Conectividade:** Conectar a nota a pelo menos 2 temas existentes via `[[Wiki-Links]]`.
-- **Triagem:** Toda nota deve originar-se de um chat triado com um `titulo_triagem` descritivo que ajude na identificação rápida do conteúdo bruto.
-- **Cobertura de Chats Longos:** Antes de escrever notas a partir de `Chats_Raw`,
-  inventarie exaustivamente todos os temas médicos duráveis do raw chat. Cada
-  tema vira uma nota (`create_note`) ou recebe motivo explícito de já estar
-  coberto/ser ruído; não produza apenas um subconjunto representativo.
+- **Triagem:** Toda nota deve originar-se de um chat triado com um
+  `titulo_triagem` e um `note_plan` descritivo/exaustivo que ajude na
+  identificação rápida do conteúdo bruto.
+- **Cobertura de Chats Longos:** Antes da arquitetura, a triagem inventaria
+  exaustivamente todos os temas médicos duráveis do raw chat. Cada tema vira uma
+  nota (`create_note`) ou recebe motivo explícito de já estar coberto/ser ruído;
+  o architect segue esse plano, não um subconjunto representativo.
 - **Ancoragem:** Todas as notas devem terminar com o link `[[_Índice_Medicina]]`.

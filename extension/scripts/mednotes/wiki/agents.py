@@ -9,7 +9,8 @@ from typing import Any
 
 from wiki.common import SUBAGENT_PLAN_SCHEMA, ValidationError
 from wiki.config import MedConfig
-from wiki.raw_chats import list_by_status
+from wiki.note_plan import note_plan_summary, parse_triage_note_plan
+from wiki.raw_chats import list_by_status, read_note_meta
 from wiki.style import validate_wiki_style
 
 DEFAULT_PROCESS_CHATS_MAX_CONCURRENCY = 5
@@ -46,7 +47,7 @@ def plan_subagents(
                 "parent refreshes list-triados before architect planning",
             ],
             "canonical_parent_commands": [
-                'triage: uv run python "<med_ops.py>" triage --raw-file "<raw_file>" --tipo medicina --titulo "<titulo_triagem>" --fonte-id "<fonte_id>"',
+                'triage: uv run python "<med_ops.py>" triage --raw-file "<raw_file>" --tipo medicina --titulo "<titulo_triagem>" --fonte-id "<fonte_id>" --note-plan "<note-plan.json>"',
                 'discard: uv run python "<med_ops.py>" discard --raw-file "<raw_file>" --reason "<reason>"',
             ],
         },
@@ -67,6 +68,7 @@ def plan_subagents(
                 'stage-note: uv run python "<med_ops.py>" stage-note --manifest "<manifest.json>" --raw-file "<raw_file>" --coverage "<coverage.json>" --taxonomy "<taxonomy>" --title "<title>" --content "<temp.md>"',
                 'publish dry-run: uv run python "<med_ops.py>" publish-batch --manifest "<manifest.json>" --dry-run',
                 'publish: uv run python "<med_ops.py>" publish-batch --manifest "<manifest.json>"',
+                'refresh index/linker: uv run python "<med_ops.py>" run-linker --json',
             ],
         },
         "style-rewrite": {
@@ -175,6 +177,7 @@ def plan_subagents(
     if limit is not None:
         rows = rows[:limit]
     work_items: list[dict[str, Any]] = []
+    blocked_items: list[dict[str, Any]] = []
     seen: set[str] = set()
     for index, row in enumerate(rows, start=1):
         raw_file = str(row["path"])
@@ -192,6 +195,19 @@ def plan_subagents(
             "titulo_triagem": row.get("titulo_triagem", ""),
             "fonte_id": row.get("fonte_id", ""),
         }
+        if phase == "architect":
+            try:
+                raw_plan = read_note_meta(Path(raw_file)).get("note_plan", "")
+                if not raw_plan:
+                    raise ValidationError("Raw chat missing triage note_plan; rerun triage with --note-plan")
+                note_plan = parse_triage_note_plan(raw_plan, Path(raw_file))
+            except ValidationError as exc:
+                item["blocked_reason"] = "missing_or_invalid_note_plan"
+                item["note_plan_error"] = str(exc)
+                blocked_items.append(item)
+                continue
+            item["note_plan"] = note_plan
+            item.update(note_plan_summary(note_plan))
         if temp_root is not None:
             item["temp_dir"] = str(temp_root / work_id)
         work_items.append(item)
@@ -208,8 +224,10 @@ def plan_subagents(
         "max_concurrency": concurrency,
         "item_count": len(work_items),
         "total_available_count": total_available_count,
+        "blocked_item_count": len(blocked_items),
+        "blocked_items": blocked_items,
         "limit": limit,
-        "truncated": len(work_items) < total_available_count,
+        "truncated": limit is not None and len(rows) < total_available_count,
         "parallel_safe": len(work_items) > 1,
         "work_items": work_items,
         "batches": batches,
@@ -217,6 +235,7 @@ def plan_subagents(
             "Spawn at most one subagent per work_item.raw_file.",
             "Never spawn multiple subagents for the same raw chat or generated note.",
             "Do not split one raw chat across multiple med-knowledge-architect agents.",
+            "Architect work_items must follow the triage-authored note_plan exactly.",
             "Every architect result must include an exhaustive raw coverage inventory before staging.",
             "Do not launch more subagents than item_count or max_concurrency.",
             "If item_count is 0 or 1, there is no useful fan-out for this phase.",

@@ -63,9 +63,10 @@ Referências:
 - `link` não corrige estilo, YAML ou publicação.
 - `process-chats` publica notas novas com um manifest por lote e roda linker
   uma vez ao final.
-- `process-chats` exige inventário de cobertura exaustivo por raw chat
+- `process-chats` exige `note_plan` exaustivo da triagem
+  (`medical-notes-workbench.triage-note-plan.v1`) e cobertura derivada dele
   (`medical-notes-workbench.raw-coverage.v1`); `publish-batch` não deve marcar
-  chat como processado sem `coverage_path` batendo com as notas staged.
+  chat como processado sem `note_plan`, `coverage_path` e notas staged batendo.
 - `/flashcards` usa o MCP global `anki-mcp`, não cria comando local
   `/twenty_rules`, não adiciona tags Anki e marca tag Obsidian `anki` somente
   depois de sucesso real no Anki.

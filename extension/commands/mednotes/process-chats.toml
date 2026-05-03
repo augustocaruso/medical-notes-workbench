@@ -4,21 +4,21 @@ Processe chats médicos brutos de `Chats_Raw` para `Wiki_Medicina`.
 
 Argumentos do usuário: {{args}}
 
-Use a skill `process-medical-chats`; o runbook oficial está em
-`docs/workflows/process-chats.md`. Responda pelo contrato
-`knowledge/workflow-output-contract.md`.
+Use a skill `process-medical-chats`; runbook: `docs/workflows/process-chats.md`.
+Responda pelo contrato `knowledge/workflow-output-contract.md`.
 
 Invariantes do launcher:
 - Rode `med_ops.py validate` e `wiki_tree.py --max-depth 4 --audit --format text`.
 - Use `list-pending --summary` e `list-triados --summary`; não despeje backlog completo.
 - Se o usuário responder a uma "Próxima Ação", execute só essa fase.
-- Para lote explícito, use `plan-subagents --limit <N>`; default máximo 5
-  subagents. Só passe `--max-concurrency >5` se o usuário pedir explicitamente.
+- Para lote explícito, use `plan-subagents --limit <N>`; default máximo 5 subagents.
 - Paralelize apenas work items de `plan-subagents`; um raw chat por subagent.
-- Aplique `triage`, `discard`, `stage-note`, catálogo, dry-run, publish e linker em série.
-- Exija inventário de cobertura exaustivo; use `stage-note --coverage` no manifest único do lote.
+- Aplique `triage --note-plan`, `discard`, `stage-note`, catálogo, dry-run, publish e linker em série.
+- Exija `note_plan` da triagem e cobertura derivada dele; use `stage-note --coverage` no manifest único do lote.
 - Não substitua `med-chat-triager`; cada raw chat planejado pertence a um subagent.
 - Sempre rode `publish-batch --dry-run` antes do publish real.
-- Publique após `med-publish-guard approve`; rode `run-linker`; se bloquear: `/mednotes:fix-wiki --dry-run`.
+- Após `med-publish-guard approve`, publique, rode `run-linker` e confira
+  `index_files_changed`/`index_entries_planned` do `_Índice_Medicina`; se links
+  bloquearem, o índice ainda atualiza e a próxima ação é `/mednotes:fix-wiki --dry-run`.
 - Não despeje manifests/JSON bruto; resuma triagem, notas, publish, linker e blockers.
 '''

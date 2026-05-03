@@ -29,9 +29,11 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
 - Nunca edite YAML/status de raw chats manualmente.
 - Nunca sobrescreva nota existente silenciosamente.
 - Sempre rode `publish-batch --dry-run` antes de `publish-batch` real.
-- Todo raw chat arquitetado precisa de inventário de cobertura exaustivo
-  `medical-notes-workbench.raw-coverage.v1`; `publish-batch` bloqueia manifest
-  sem `coverage_path` ou com inventário diferente das notas staged.
+- Todo raw chat triado como medicina precisa de `note_plan` exaustivo
+  `medical-notes-workbench.triage-note-plan.v1`; o architect deve derivar a
+  cobertura `medical-notes-workbench.raw-coverage.v1` desse plano. O
+  `publish-batch` bloqueia manifest sem `coverage_path`, raw sem `note_plan`,
+  cobertura divergente ou notas staged fora do plano.
 - Rode o workflow de grafo/linker uma única vez ao final do lote.
 - O agente principal consolida estado compartilhado em série: `triage`,
   `discard`, `stage-note`, catálogo, dry-run, publish e linker.
@@ -83,9 +85,11 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
    prefira `--max-concurrency 2` ou `--max-concurrency 3`. Para cada
    `work_item.raw_file` retornado, lance no máximo um `med-chat-triager`,
    seguindo `batches`. Não leia vários raw chats no agente principal para
-   substituir o triager. Depois aplique `triage` ou `discard` em série via
-   `med_ops.py`, seguindo `canonical_parent_commands` do plano. Se a próxima
-   ação era apenas triagem, pare aqui com resumo e nova próxima ação.
+   substituir o triager. O triager deve devolver `note_plan` exaustivo com todas
+   as notas `create_note` propostas para aquele chat. Grave esse JSON em arquivo
+   temporário e aplique `triage --note-plan <note-plan.json>` ou `discard` em
+   série via `med_ops.py`, seguindo `canonical_parent_commands` do plano. Se a
+   próxima ação era apenas triagem, pare aqui com resumo e nova próxima ação.
 7. Atualize `list-triados --summary`. Para chats triados, rode:
 
    ```bash
@@ -96,13 +100,13 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
    `work_item.raw_file` retornado, lance no máximo um `med-knowledge-architect`,
    seguindo `batches`. Omita `--max-concurrency` para usar o default de 5, ou
    reduza para 2/3 em modo econômico. Passe `work_id`, `raw_file`, `temp_dir`,
-   taxonomia canônica, árvore real e snapshot do catálogo. Cada architect
-   escreve somente no próprio `temp_dir`.
+   `note_plan`, taxonomia canônica, árvore real e snapshot do catálogo. Cada
+   architect escreve somente no próprio `temp_dir`.
    Use `canonical_parent_commands` do plano para validação, fix, staging,
    dry-run e publish; não invente nomes alternativos de flags.
-   Cada architect deve escrever antes um `coverage.json` no `temp_dir`,
-   inventariando todos os temas duráveis do raw chat. Chat longo deve ser
-   varrido em passes; não aceite "top N" nem conjunto representativo.
+   Cada architect deve escrever um `coverage.json` no `temp_dir` que corresponda
+   exatamente ao `note_plan` da triagem. Se o plano parecer insuficiente, bloqueie
+   e volte à triagem; não aceite "top N" nem conjunto representativo.
 8. Antes de staging, valide cada nota temporária:
 
    ```bash
@@ -141,11 +145,14 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
     uv run python "<med_ops.py>" run-linker
     ```
 
-    O `run-linker` faz preflight de grafo, aplica apenas se não houver blockers
-    e retorna auditoria final. Se houver `blocker_count > 0`, não sugira
-    deleção manual como primeira ação: recomende `/mednotes:fix-wiki --dry-run`
-    para limpar links quebrados/self/ambíguos e identificar duplicatas exatas.
-    Duplicatas não-idênticas continuam como decisão humana de fusão.
+    O `run-linker` faz preflight de grafo, atualiza o `_Índice_Medicina` mesmo
+    quando links semânticos ficam bloqueados e retorna auditoria final. Confira
+    `index_files_changed`, `index_entries_planned` e
+    `index_refreshed_while_blocked` no resumo. Se houver `blocker_count > 0`,
+    não sugira deleção manual como primeira ação: recomende
+    `/mednotes:fix-wiki --dry-run` para limpar links quebrados/self/ambíguos e
+    identificar duplicatas exatas. Duplicatas não-idênticas continuam como
+    decisão humana de fusão.
 14. Responda usando o contrato de saída, com status emoji, triados,
     descartados, notas criadas, raw chats processados, canonizações de
     taxonomia, colisões, resultado do linker, warnings de estilo e próxima ação.
@@ -156,9 +163,9 @@ triadas ou continuar o pipeline `/mednotes:process-chats`.
   ou nota final entre dois subagents.
 - Se um raw chat gerar várias notas, o mesmo `med-knowledge-architect` decide
   todas.
-- A primeira entrega do architect é o inventário de cobertura: todos os itens
-  `create_note` precisam aparecer no manifest e toda nota staged precisa estar
-  nesse inventário.
+- A primeira entrega de conteúdo é da triagem: o `note_plan` dirige todas as
+  notas. Todos os itens `create_note` precisam aparecer na cobertura e no
+  manifest; toda nota staged precisa estar no `note_plan`.
 - Se houver 0 ou 1 item, use zero ou um subagent; não crie paralelismo artificial.
 - Quando `plan-subagents` retornar `truncated: true`, termine a fase atual antes
   de planejar o próximo lote; não misture itens fora do plano limitado.

@@ -20,9 +20,10 @@ Review the manifest and `publish-batch --dry-run` output. Return exactly one of:
 Check only:
 
 - the manifest contains every raw chat and every note from the current batch
-- every manifest batch has `coverage_path`, and the dry-run includes a coverage
-  summary proving every `create_note` inventory item is staged and every staged
-  note is present in the inventory
+- every manifest batch has `coverage_path`, every raw chat has triage
+  `note_plan`, and the dry-run includes a coverage summary proving every
+  triage-planned `create_note` item is staged and every staged note is present
+  in the inventory
 - final target paths match the intended taxonomy and titles
 - every target path starts under one of the 5 canonical big areas: `1. Clínica Médica`, `2. Cirurgia`, `3. Ginecologia e Obstetrícia`, `4. Pediatria`, `5. Medicina Preventiva`
 - taxonomy is category folders only, with the note title appearing as the `.md` filename, not as the final folder

@@ -25,9 +25,9 @@ Runbooks detalhados:
 - [link](docs/workflows/link.md)
 - [flashcards](docs/workflows/flashcards.md)
 
-`/mednotes:process-chats` exige inventário de cobertura exaustivo por raw chat
-antes de publicar, para que chats longos gerem todas as notas duráveis em vez
-de um subconjunto representativo.
+`/mednotes:process-chats` exige `note_plan` exaustivo já na triagem e cobertura
+derivada desse plano antes de publicar, para que chats longos gerem todas as
+notas duráveis em vez de um subconjunto representativo.
 
 Referências:
 

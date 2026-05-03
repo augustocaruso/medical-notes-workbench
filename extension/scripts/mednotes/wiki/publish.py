@@ -209,6 +209,7 @@ def plan_publish_batch(
                 coverage_path,
                 raw_file,
                 [str(note["title"]) for note in notes],
+                require_triage_note_plan=require_coverage,
             )
         planned_batches.append(planned_batch)
     return planned_batches

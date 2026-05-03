@@ -17,6 +17,7 @@ quando solicitado.
 ## Familias Atuais
 
 - `medical-notes-workbench.subagent-plan.v1`
+- `medical-notes-workbench.triage-note-plan.v1`
 - `medical-notes-workbench.raw-coverage.v1`
 - `medical-notes-workbench.taxonomy-migration-plan.v1`
 - `medical-notes-workbench.taxonomy-migration-receipt.v1`
@@ -71,9 +72,15 @@ nomes e flags públicos documentados pela CLI.
 
 ## Cobertura De Raw Chats
 
+`medical-notes-workbench.triage-note-plan.v1` é o plano exaustivo criado pelo
+`med-chat-triager` e gravado no frontmatter do raw chat como `note_plan`.
+Campos mínimos: `schema`, `raw_file`, `exhaustive: true` e `items`. Cada item
+tem `id`, `title` e `action`: `create_note`, `covered_by_existing` ou
+`not_a_note`. Itens `create_note` definem as notas que o architect deve criar;
+itens dispensados precisam de `reason`, e `covered_by_existing` também precisa
+de `existing_title`.
+
 `medical-notes-workbench.raw-coverage.v1` é o inventário exaustivo criado pelo
-`med-knowledge-architect` antes de staged notes. Campos mínimos: `schema`,
-`raw_file`, `exhaustive: true` e `items`. Cada item tem `id`, `title` e
-`action`: `create_note`, `covered_by_existing` ou `not_a_note`. Itens
-`create_note` devem bater com os títulos staged; itens dispensados precisam de
-`reason`, e `covered_by_existing` também precisa de `existing_title`.
+`med-knowledge-architect` antes de staged notes, derivado do `note_plan` da
+triagem. Campos mínimos: `schema`, `raw_file`, `exhaustive: true` e `items`.
+Itens `create_note` devem bater com o `note_plan` e com os títulos staged.

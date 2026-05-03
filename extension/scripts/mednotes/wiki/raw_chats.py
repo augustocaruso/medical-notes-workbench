@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from wiki.common import FileWriteError, MissingPathError, ValidationError
+from wiki.note_plan import note_plan_summary, parse_triage_note_plan
 
 _FRONTMATTER_DELIM = "---"
 _KEY_RE = re.compile(r"^([A-Za-z0-9_-]+)\s*:\s*(.*)$")
@@ -34,6 +35,12 @@ def split_frontmatter(text: str) -> tuple[list[str] | None, str]:
 def _strip_quotes(value: str) -> str:
     value = value.strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, str):
+                return parsed
+        except json.JSONDecodeError:
+            pass
         return value[1:-1]
     return value
 
@@ -220,13 +227,20 @@ def list_raw_files(raw_dir: Path) -> list[Path]:
 
 def raw_summary(path: Path) -> dict[str, str]:
     meta = read_note_meta(path)
-    return {
+    result = {
         "path": str(path),
         "status": meta.get("status", ""),
         "tipo": meta.get("tipo", ""),
         "titulo_triagem": meta.get("titulo_triagem", ""),
         "fonte_id": meta.get("fonte_id", ""),
     }
+    raw_plan = meta.get("note_plan", "")
+    if raw_plan:
+        try:
+            result.update({key: str(value) for key, value in note_plan_summary(parse_triage_note_plan(raw_plan, path)).items()})
+        except ValidationError as exc:
+            result["note_plan_error"] = str(exc)
+    return result
 
 
 def list_by_status(raw_dir: Path, mode: str) -> list[dict[str, str]]:

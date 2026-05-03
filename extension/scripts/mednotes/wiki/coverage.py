@@ -7,6 +7,8 @@ from typing import Any
 
 from wiki.common import MissingPathError, ValidationError
 from wiki.config import _path
+from wiki.note_plan import create_note_titles, note_plan_summary, parse_triage_note_plan
+from wiki.raw_chats import read_note_meta
 
 RAW_COVERAGE_SCHEMA = "medical-notes-workbench.raw-coverage.v1"
 CREATE_NOTE_ACTION = "create_note"
@@ -35,7 +37,31 @@ def _load_coverage(path: Path) -> dict[str, Any]:
     return data
 
 
-def validate_raw_coverage_structure(path: Path, raw_file: Path) -> dict[str, Any]:
+def _triage_note_plan(raw_file: Path, *, required: bool) -> dict[str, Any] | None:
+    raw_plan = read_note_meta(raw_file).get("note_plan", "")
+    if not raw_plan:
+        if required:
+            raise ValidationError("Raw chat missing triage note_plan; rerun triage with --note-plan")
+        return None
+    return parse_triage_note_plan(raw_plan, raw_file)
+
+
+def _coverage_create_titles(items: list[dict[str, Any]]) -> set[str]:
+    return {
+        str(item.get("staged_title") or item.get("title") or "").strip()
+        for item in items
+        if item.get("action") == CREATE_NOTE_ACTION and str(item.get("staged_title") or item.get("title") or "").strip()
+    }
+
+
+def _item_signature(item: dict[str, Any]) -> tuple[str, str, str, str]:
+    action = str(item.get("action") or "").strip()
+    title = str(item.get("staged_title") or item.get("title") or "").strip()
+    existing = str(item.get("existing_title") or "").strip()
+    return (str(item.get("id") or "").strip(), action, title, existing)
+
+
+def validate_raw_coverage_structure(path: Path, raw_file: Path, *, require_triage_note_plan: bool = True) -> dict[str, Any]:
     """Validate structure and raw-file binding without checking staged notes."""
 
     data = _load_coverage(path)
@@ -74,7 +100,7 @@ def validate_raw_coverage_structure(path: Path, raw_file: Path) -> dict[str, Any
             raise ValidationError(f"Coverage item {item_id} with action {action} must include existing_title")
         action_counts[action] += 1
 
-    return {
+    result = {
         "schema": RAW_COVERAGE_SCHEMA,
         "coverage_path": str(path),
         "raw_file": str(raw_file),
@@ -84,12 +110,42 @@ def validate_raw_coverage_structure(path: Path, raw_file: Path) -> dict[str, Any
         "covered_by_existing_count": action_counts[COVERED_BY_EXISTING_ACTION],
         "not_a_note_count": action_counts[NOT_A_NOTE_ACTION],
     }
+    note_plan = _triage_note_plan(raw_file, required=require_triage_note_plan)
+    if note_plan:
+        plan_titles = create_note_titles(note_plan)
+        coverage_titles = _coverage_create_titles(items)
+        missing = sorted(plan_titles - coverage_titles)
+        extra = sorted(coverage_titles - plan_titles)
+        if missing:
+            raise ValidationError(
+                "Coverage inventory is missing triage-planned notes: " + ", ".join(missing)
+            )
+        if extra:
+            raise ValidationError(
+                "Coverage inventory has create_note items absent from triage note_plan: " + ", ".join(extra)
+            )
+        plan_signatures = {_item_signature(item) for item in note_plan.get("items", [])}
+        coverage_signatures = {_item_signature(item) for item in items}
+        if plan_signatures != coverage_signatures:
+            raise ValidationError("Coverage inventory does not match triage note_plan items")
+        result.update(note_plan_summary(note_plan))
+    return result
 
 
-def validate_raw_coverage(path: Path, raw_file: Path, staged_titles: list[str]) -> dict[str, Any]:
+def validate_raw_coverage(
+    path: Path,
+    raw_file: Path,
+    staged_titles: list[str],
+    *,
+    require_triage_note_plan: bool = True,
+) -> dict[str, Any]:
     """Validate that the exhaustive inventory and staged manifest agree."""
 
-    summary = validate_raw_coverage_structure(path, raw_file)
+    summary = validate_raw_coverage_structure(
+        path,
+        raw_file,
+        require_triage_note_plan=require_triage_note_plan,
+    )
     data = _load_coverage(path)
     items = data["items"]
     staged = {title.strip() for title in staged_titles if title.strip()}

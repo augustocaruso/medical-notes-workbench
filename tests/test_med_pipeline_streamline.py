@@ -499,6 +499,7 @@ def test_subagent_parallelism_contract_is_explicit_and_sharded_by_note_owner():
     gemini = (EXTENSION / "GEMINI.md").read_text(encoding="utf-8")
     triager = (EXTENSION / "agents" / "med-chat-triager.md").read_text(encoding="utf-8")
     architect = (EXTENSION / "agents" / "med-knowledge-architect.md").read_text(encoding="utf-8")
+    guard = (EXTENSION / "agents" / "med-publish-guard.md").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
@@ -517,6 +518,9 @@ def test_subagent_parallelism_contract_is_explicit_and_sharded_by_note_owner():
     assert "Nunca lançar dois subagents" in process_doc
     assert "preferred semantic emoji set only" in architect
     assert "exactly one raw chat per agent invocation" in triager
+    assert "medical-notes-workbench.triage-note-plan.v1" in triager + process_doc
+    assert "triage --note-plan" in process + process_doc
+    assert "note_plan" in architect + guard
     assert "Never split one raw chat" in architect
     assert "Cada reescrita vai para arquivo temporario" in fix_doc
     assert "Runbooks canônicos" in claude
@@ -855,6 +859,8 @@ def test_knowledge_contracts_are_current_and_factorized():
     assert "backup_cleanup.deleted_count" in fix_skill
     assert "vira o arquivo" in architect + command + skill
     assert "new leaf under an existing parent" in guard
+    assert "triage-note-plan.v1" in skill + process_doc + command
+    assert "coverage_path" in guard
     assert "1. Clínica Médica" in architect + command + agent + guard
     assert "run_shell_command" not in linker
     assert r"C:\Users\leona\.gemini\skills" not in linker

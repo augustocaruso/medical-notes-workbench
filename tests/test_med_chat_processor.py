@@ -20,12 +20,35 @@ from wiki import raw_chats  # noqa: E402
 
 def _write(path: Path, text: str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
+    text = text.replace("__RAW_FILE_PLACEHOLDER__", str(path))
     path.write_text(text, encoding="utf-8")
     return path
 
 
-def _raw_chat(status: str = "triado", fonte_id: str = "chat123") -> str:
-    return f"---\nstatus: {status}\ntipo: medicina\nfonte_id: {fonte_id}\n---\nChat\n"
+def _note_plan(raw: Path | str, titles: list[str]) -> dict:
+    return {
+        "schema": "medical-notes-workbench.triage-note-plan.v1",
+        "raw_file": str(raw),
+        "exhaustive": True,
+        "items": [
+            {
+                "id": f"T{idx:03d}",
+                "title": title,
+                "action": "create_note",
+                "staged_title": title,
+            }
+            for idx, title in enumerate(titles, start=1)
+        ],
+    }
+
+
+def _raw_chat(status: str = "triado", fonte_id: str = "chat123", note_titles: list[str] | None = None) -> str:
+    body = f"---\nstatus: {status}\ntipo: medicina\nfonte_id: {fonte_id}\n"
+    if status == "triado":
+        body += "note_plan: {}\n".format(
+            json.dumps(json.dumps(_note_plan("__RAW_FILE_PLACEHOLDER__", note_titles or ["ISRS"]), ensure_ascii=False), ensure_ascii=False)
+        )
+    return body + "---\nChat\n"
 
 
 def _wiki_note(title: str = "ISRS", fonte_id: str = "chat123") -> str:
@@ -49,6 +72,9 @@ def _wiki_note(title: str = "ISRS", fonte_id: str = "chat123") -> str:
 
 
 def _coverage(path: Path, raw: Path, titles: list[str]) -> Path:
+    text = raw.read_text(encoding="utf-8")
+    plan_text = wiki_api.serialize_triage_note_plan(_note_plan(raw, titles), raw)
+    raw.write_text(wiki_api.update_frontmatter(text, {"note_plan": plan_text}), encoding="utf-8")
     return _write(
         path,
         json.dumps(
@@ -110,6 +136,13 @@ def test_update_frontmatter_creates_and_updates_keys():
     assert "titulo_triagem: Acatisia\n" in updated
 
 
+def test_update_frontmatter_round_trips_json_string_values():
+    payload = json.dumps({"schema": "x", "items": [{"title": "Síndrome Serotoninérgica"}]}, ensure_ascii=False)
+    created = wiki_api.update_frontmatter("Corpo\n", {"note_plan": payload})
+
+    assert wiki_api.parse_frontmatter(created)["note_plan"] == payload
+
+
 def test_default_catalog_path_uses_gemini_persistent_data_dir():
     assert wiki_api.DEFAULT_CATALOG_PATH == "~/.gemini/medical-notes-workbench/CATALOGO_WIKI.json"
 
@@ -150,6 +183,80 @@ def test_triage_can_create_backup_when_requested(tmp_path):
 
     assert result["updated"] is True
     assert Path(result["backup"]).exists()
+
+
+def test_triage_cli_requires_note_plan_for_medicine(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    raw = _write(raw_dir / "chat.md", "Conteudo\n")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(MED_OPS_PATH),
+            "--raw-dir",
+            str(raw_dir),
+            "--wiki-dir",
+            str(wiki_dir),
+            "triage",
+            "--raw-file",
+            str(raw),
+            "--titulo",
+            "Chat longo",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == wiki_api.EXIT_VALIDATION
+    assert "--note-plan is required" in result.stderr
+
+
+def test_triage_cli_stores_note_plan_and_architect_plan_includes_it(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    raw = _write(raw_dir / "chat.md", "Conteudo\n")
+    plan_path = _write(
+        tmp_path / "note-plan.json",
+        json.dumps(_note_plan(raw, ["ISRS", "Síndrome Serotoninérgica"]), ensure_ascii=False),
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(MED_OPS_PATH),
+            "--raw-dir",
+            str(raw_dir),
+            "--wiki-dir",
+            str(wiki_dir),
+            "triage",
+            "--raw-file",
+            str(raw),
+            "--titulo",
+            "Toxicidade serotoninérgica",
+            "--fonte-id",
+            "abc",
+            "--note-plan",
+            str(plan_path),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    meta = wiki_api.read_note_meta(raw)
+    stored = wiki_api.parse_triage_note_plan(meta["note_plan"], raw)
+    assert [item["staged_title"] for item in stored["items"]] == ["ISRS", "Síndrome Serotoninérgica"]
+
+    architect_plan = wiki_api.plan_subagents(_config(raw_dir, wiki_dir), "architect")
+    assert architect_plan["blocked_item_count"] == 0
+    assert architect_plan["work_items"][0]["note_plan_create_count"] == 2
+    assert [item["staged_title"] for item in architect_plan["work_items"][0]["note_plan"]["items"]] == [
+        "ISRS",
+        "Síndrome Serotoninérgica",
+    ]
 
 
 def test_prune_backup_files_limits_backups_per_note(tmp_path):
@@ -332,6 +439,22 @@ def test_plan_subagents_architect_assigns_isolated_temp_dirs(tmp_path):
     assert "--manifest" in joined_commands
     assert "--taxonomy" in joined_commands
     assert "--content" in joined_commands
+    assert "--note-plan" in "\n".join(wiki_api.plan_subagents(_config(raw_dir, wiki_dir), "triage")["canonical_parent_commands"])
+    assert plan["work_items"][0]["note_plan_create_count"] == 1
+    assert plan["work_items"][0]["note_plan"]["items"][0]["action"] == "create_note"
+
+
+def test_plan_subagents_architect_blocks_triados_without_note_plan(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    _write(raw_dir / "legacy.md", "---\nstatus: triado\ntipo: medicina\nfonte_id: old\n---\nChat\n")
+
+    plan = wiki_api.plan_subagents(_config(raw_dir, wiki_dir), "architect")
+
+    assert plan["item_count"] == 0
+    assert plan["blocked_item_count"] == 1
+    assert plan["blocked_items"][0]["blocked_reason"] == "missing_or_invalid_note_plan"
+    assert "note_plan" in plan["blocked_items"][0]["note_plan_error"]
 
 
 def test_plan_subagents_style_rewrite_shards_by_unique_wiki_note(tmp_path):
@@ -688,6 +811,52 @@ def test_publish_batch_blocks_unstaged_coverage_items(tmp_path):
         assert "Síndrome Serotoninérgica" in str(exc)
     else:
         raise AssertionError("publish should block missing staged notes from coverage")
+
+
+def test_publish_batch_blocks_coverage_that_omits_triage_note_plan_items(tmp_path):
+    raw_dir = tmp_path / "raw"
+    wiki_dir = tmp_path / "wiki"
+    _mkdir_canonical(wiki_dir, "1. Clínica Médica/Psiquiatria")
+    raw = _write(raw_dir / "chat.md", _raw_chat())
+    raw.write_text(
+        wiki_api.update_frontmatter(
+            raw.read_text(encoding="utf-8"),
+            {"note_plan": wiki_api.serialize_triage_note_plan(_note_plan(raw, ["ISRS", "Síndrome Serotoninérgica"]), raw)},
+        ),
+        encoding="utf-8",
+    )
+    content = _write(tmp_path / "tmp" / "nota.md", _wiki_note())
+    coverage = _write(
+        tmp_path / "tmp" / "coverage.json",
+        json.dumps(
+            {
+                "schema": "medical-notes-workbench.raw-coverage.v1",
+                "raw_file": str(raw),
+                "exhaustive": True,
+                "items": [{"id": "T001", "title": "ISRS", "action": "create_note", "staged_title": "ISRS"}],
+            },
+            ensure_ascii=False,
+        ),
+    )
+    manifest = _write(
+        tmp_path / "manifest.json",
+        json.dumps(
+            {
+                "raw_file": str(raw),
+                "coverage_path": str(coverage),
+                "notes": [{"taxonomy": "Psiquiatria", "title": "ISRS", "content_path": str(content)}],
+            },
+            ensure_ascii=False,
+        ),
+    )
+
+    try:
+        wiki_api.publish_batch(manifest, _config(raw_dir, wiki_dir), dry_run=True)
+    except wiki_api.ValidationError as exc:
+        assert "missing triage-planned notes" in str(exc)
+        assert "Síndrome Serotoninérgica" in str(exc)
+    else:
+        raise AssertionError("publish should block coverage that does not follow triage note_plan")
 
 
 def test_publish_batch_creates_notes_then_marks_raw_processed_without_backup(tmp_path):
@@ -1171,6 +1340,8 @@ def test_run_linker_cli_summarizes_graph_blockers(tmp_path):
     summary = {item["code"]: item for item in payload["blocker_summary"]}
     assert summary["dangling_link"]["count"] == 3
     assert summary["duplicate_stem"]["count"] == 1
+    assert payload["index_files_changed"] == 1
+    assert payload["index_refreshed_while_blocked"] is True
     assert len(payload["blockers_sample"]) <= 10
     assert "blockers" not in payload
 

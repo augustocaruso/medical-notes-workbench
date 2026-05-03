@@ -44,6 +44,12 @@ from wiki.coverage import (
 from wiki.graph_fixes import GRAPH_FIX_SCHEMA, fix_wiki_graph
 from wiki.health import fix_wiki_health
 from wiki.linking import graph_audit, run_linker
+from wiki.note_plan import (
+    TRIAGE_NOTE_PLAN_SCHEMA,
+    load_triage_note_plan,
+    parse_triage_note_plan,
+    serialize_triage_note_plan,
+)
 from wiki.publish import (
     plan_publish_batch,
     publish_batch,
@@ -109,6 +115,7 @@ __all__ = [
     "MIGRATION_PLAN_SCHEMA",
     "MIGRATION_RECEIPT_SCHEMA",
     "RAW_COVERAGE_SCHEMA",
+    "TRIAGE_NOTE_PLAN_SCHEMA",
     "SUBAGENT_PLAN_SCHEMA",
     "BLOCKER_RESOLUTION_SCHEMA",
     "WIKI_HEALTH_FIX_SCHEMA",
@@ -137,9 +144,11 @@ __all__ = [
     "graph_audit",
     "list_by_status",
     "list_raw_files",
+    "load_triage_note_plan",
     "mutate_raw_frontmatter",
     "normalize_taxonomy",
     "parse_frontmatter",
+    "parse_triage_note_plan",
     "plan_publish_batch",
     "plan_subagents",
     "publish_batch",
@@ -153,6 +162,7 @@ __all__ = [
     "rollback_taxonomy_migration",
     "run_linker",
     "safe_title",
+    "serialize_triage_note_plan",
     "split_frontmatter",
     "stage_note",
     "target_for_note",

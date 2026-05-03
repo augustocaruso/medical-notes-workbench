@@ -220,6 +220,10 @@ def test_linker_blocks_apply_when_graph_has_existing_dangling_link(tmp_path, cap
     assert out["blocked"] is True
     assert out["blocker_count"] == 1
     assert "[[Infarto|IAM]]" not in source.read_text(encoding="utf-8")
+    index = wiki / med_linker.DEFAULT_INDEX_FILENAME
+    assert out["index_files_changed"] == 1
+    assert out["index_refreshed_while_blocked"] is True
+    assert "Total: 2 notas." in index.read_text(encoding="utf-8")
 
 
 def test_linker_run_missing_wiki_returns_4(tmp_path):
